@@ -471,20 +471,23 @@ let translate_fundecl (fdecl: function_decl) =
 (* Returning an option is only a hack to make progress.
    TODO: Proper handling of  decls *)
 let translate_decl (decl: decl) =
-  let loc = Clang.Ast.location_of_node decl |> Clang.Ast.concrete_of_source_location File in
-  let file_loc = loc.filename in
-  if file_loc = "test.c" then
-    match decl.desc with
-    | Function fdecl ->
-      (* TODO: How to handle libc? *)
-      (* TODO: Support multiple files *)
-      Some (translate_fundecl fdecl)
-    | Var _vdecl ->
-        failwith "Var"
-    | _ ->
-        Format.printf "Declaration %a not supported@." Clang.Decl.pp decl;
-        failwith "not supported"
-  else None
+  match decl.desc with
+  | Function fdecl ->
+    (* TODO: How to handle libc? *)
+    (* TODO: Support multiple files *)
+    Some (translate_fundecl fdecl)
+  | Var vdecl ->
+      let _, _, e = translate_vardecl empty_env vdecl in
+      (* Fully qualified lid *)
+      let lid = [], vdecl.var_name in
+      let typ = translate_typ vdecl.var_type in
+      (* TODO: Flags *)
+      let flags = [] in
+      (* TODO: What is the int for? *)
+      Some (DGlobal (flags, lid, 0, typ, e))
+  | _ ->
+      Format.printf "Declaration %a not supported@." Clang.Decl.pp decl;
+      failwith "not supported"
 
 let translate_file file =
   let (name, decls) = file in
