@@ -8,9 +8,9 @@ void test(uint32_t *st, uint32_t y, uint32_t z) {
   uint32_t* st2 = st + 4U;
 }
 
-// const uint32_t
-// chacha20_constants[4U] =
-//   { 0x61707865U, 0x3320646eU, 0x79622d32U, 0x6b206574U };
+const uint32_t
+chacha20_constants[4U] =
+  { 0x61707865U, 0x3320646eU, 0x79622d32U, 0x6b206574U };
 
 void quarter_round(uint32_t *st, uint32_t a, uint32_t b, uint32_t c, uint32_t d)
 {
@@ -90,7 +90,7 @@ static inline void chacha20_core(uint32_t *k, uint32_t *ctx, uint32_t ctr)
   k[12U] = k[12U] + ctr_u32;
 }
 
-uint32_t load32_le(uint8_t* s) { return 0 }
+uint32_t load32_le(uint8_t* s) { return 0; }
 
 void store32_le(uint8_t* s, uint32_t n) { s[0] = 0; }
 
@@ -100,7 +100,7 @@ void chacha20_init(uint32_t *ctx, uint8_t *k, uint8_t *n, uint32_t ctr)
     0U,
     4U,
     1U,
-    uint32_t x = 0U; // TODO: Support top-level vars chacha20_constants[i];
+    uint32_t x = chacha20_constants[i];
     uint32_t *os = ctx;
     os[i] = x;);
   uint32_t *uu____0 = ctx + 4U;

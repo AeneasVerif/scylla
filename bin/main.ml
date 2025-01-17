@@ -1,5 +1,5 @@
 let () =
-  let ast = Scylla.ClangToAst.read_file "test.c" in
+  let ast = Scylla.ClangToAst.read_file "test/test.c" in
   let files = Scylla.ClangToAst.translate_compil_unit ast in
   let files = Krml.Simplify.sequence_to_let#visit_files () files in
   let files = Krml.AstToMiniRust.translate_files files in
