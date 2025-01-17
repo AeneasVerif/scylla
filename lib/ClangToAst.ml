@@ -483,20 +483,38 @@ let translate_decl (decl: decl) =
         failwith "Var"
     | _ ->
         Format.printf "Declaration %a not supported@." Clang.Decl.pp decl;
-        failwith "not supported" 
+        failwith "not supported"
   else None
 
-let read_file () =
-  let command_line_args = ["-DKRML_UNROLL_MAX 0"] in
-  let ast = parse_file ~command_line_args "test.c" in
-  (* Format.printf "@[%a@]@." (Refl.pp [%refl: Clang.Ast.translation_unit] []) ast; *)
-  (* Printf.printf "Trying file %s\n" ast.desc.filename; *)
-  let decls = List.filter_map translate_decl ast.desc.items in
-  let files = ["test", decls] in
-  let files = Krml.Simplify.sequence_to_let#visit_files () files in
-  let files = Krml.AstToMiniRust.translate_files files in
-  let files = Krml.OptimizeMiniRust.cleanup_minirust files in
-  let files = Krml.OptimizeMiniRust.infer_mut_borrows files in
-  let files = Krml.OptimizeMiniRust.simplify_minirust files in
-  Krml.OutputRust.write_all files
+let translate_file file =
+  let (name, decls) = file in
+  (* TODO: Multifile support *)
+  if name != "test.c" then None
+  else
+    Some (name, List.filter_map translate_decl decls)
 
+module FileMap = Map.Make(String)
+
+(* add_to_list is only available starting from OCaml 5.1 *)
+let add_to_list x data m =
+      let add = function None -> Some [data] | Some l -> Some (data :: l) in
+      FileMap.update x add m
+
+let split_into_files (ast: translation_unit) =
+  let add_decl acc decl =
+    let loc = Clang.Ast.location_of_node decl |> Clang.Ast.concrete_of_source_location File in
+    let filename = loc.filename |> Filename.basename in
+    add_to_list filename decl acc
+  in
+  let decl_map = List.fold_left add_decl FileMap.empty ast.desc.items in
+  FileMap.bindings decl_map
+
+let translate_compil_unit (ast: translation_unit) =
+  (* Format.printf "@[%a@]@." (Refl.pp [%refl: Clang.Ast.translation_unit] []) ast; *)
+  let files = split_into_files ast in
+  let files = List.filter_map translate_file files in
+  files
+
+let read_file (filename: string) : translation_unit =
+  let command_line_args = ["-DKRML_UNROLL_MAX 0"] in
+  parse_file ~command_line_args filename
