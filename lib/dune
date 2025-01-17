@@ -1,0 +1,10 @@
+(library
+ (name scylla)
+ (libraries krml clangml)
+ (preprocess
+  (pps ppx_deriving.std)))
+
+(env
+ (_
+  (flags
+   (:standard -w @1-2@3-7@8..12@14..21@23..29-30@31..38-39-40-41@43@57))))
