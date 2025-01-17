@@ -516,7 +516,7 @@ let split_into_files (ast: translation_unit) =
     add_to_list filename decl acc
   in
   let decl_map = List.fold_left add_decl FileMap.empty ast.desc.items in
-  FileMap.bindings decl_map
+  FileMap.bindings decl_map |> List.map (fun (k, l) -> (k, List.rev l))
 
 let translate_compil_unit (ast: translation_unit) =
   (* Format.printf "@[%a@]@." (Refl.pp [%refl: Clang.Ast.translation_unit] []) ast; *)
