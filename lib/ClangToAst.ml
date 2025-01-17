@@ -321,7 +321,7 @@ and translate_expr (env: env) (t: typ) (e: expr) : Krml.Ast.expr =
   Krml.Ast.with_type t (translate_expr' env t e)
 
 let extract_constarray_size (ty: qual_type) = match ty.desc with
-  | ConstantArray {size; _} -> Helpers.mk_uint32 size
+  | ConstantArray {size; _} -> size, Helpers.mk_uint32 size
   | _ -> failwith "Type is not a ConstantArray"
 
 let translate_vardecl (env: env) (vdecl: var_decl_desc) : env * binder * Krml.Ast.expr =
@@ -333,12 +333,18 @@ let translate_vardecl (env: env) (vdecl: var_decl_desc) : env * binder * Krml.As
         Format.printf "Variable %s has no body@." name;
         failwith "Variable declarations without definitions are not supported"
   | Some {desc = InitList l; _} ->
-        let size = extract_constarray_size vdecl.var_type in
-        (* For now, only support arrays with one element initializer *)
-        assert (List.length l = 1);
-        let e = translate_expr env (Helpers.assert_tbuf typ) (List.hd l) in
-        (* TODO: Arrays are not on stack if at top-level *)
-        add_var env name, Helpers.fresh_binder name typ, Krml.Ast.with_type typ (EBufCreate (Krml.Common.Stack, e, size))
+        let size, size_e = extract_constarray_size vdecl.var_type in
+        if List.length l = 1 then
+          (* One element initializer, possibly repeated *)
+          let e = translate_expr env (Helpers.assert_tbuf typ) (List.hd l) in
+          (* TODO: Arrays are not on stack if at top-level *)
+          add_var env name, Helpers.fresh_binder name typ, Krml.Ast.with_type typ (EBufCreate (Krml.Common.Stack, e, size_e))
+        else (
+          assert (List.length l = size);
+          let ty = Helpers.assert_tbuf typ in
+          let es = List.map (translate_expr env ty) l in
+          add_var env name, Helpers.fresh_binder name typ, Krml.Ast.with_type typ (EBufCreateL (Krml.Common.Stack, es))
+        )
   | Some e -> add_var env name, Helpers.fresh_binder name typ, translate_expr env typ e
 
 let rec translate_stmt' (env: env) (t: typ) (s: stmt_desc) : expr' = match s with
@@ -492,9 +498,9 @@ let translate_decl (decl: decl) =
 let translate_file file =
   let (name, decls) = file in
   (* TODO: Multifile support *)
-  if name != "test.c" then None
-  else
-    Some (name, List.filter_map translate_decl decls)
+  if name = "test.c" then
+    Some (Filename.chop_suffix name ".c", List.filter_map translate_decl decls)
+  else None
 
 module FileMap = Map.Make(String)
 
