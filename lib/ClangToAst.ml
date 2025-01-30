@@ -6,6 +6,13 @@ open Clang.Ast
 module K = Krml.Constant
 module Helpers = Krml.Helpers
 
+module FileMap = Map.Make(String)
+
+(* A map from function names to the string list used in their fully qualified
+   name. It is filled at the beginning of the translation, when exploring the
+   translation unit *)
+let name_map = ref FileMap.empty
+
 type env = {
   (* Variables in the context *)
   vars: string list
@@ -20,7 +27,9 @@ let find_var env var =
   try EBound (Krml.KList.index (fun x -> x = var) env.vars) with
   (* This variable is not a local var *)
   (* TODO: More robust check, likely need env for top-level decls *)
-  | Not_found -> EQualified ([], var)
+  | Not_found ->
+      let path = FileMap.find var !name_map in
+      EQualified (path, var)
 
 let get_id_name (dname: declaration_name) = match dname with
   | IdentifierName s -> s
@@ -470,8 +479,8 @@ let translate_fundecl (fdecl: function_decl) =
     | None -> Helpers.eunit
     | Some s -> translate_stmt env ret_type s.desc
   in
-  let decl = Krml.Ast.(DFunction (None, [], 0, 0, ret_type, ([], name), args, body)) in
-  (* KPrint.bprintf "Resulting decl %a\n" PrintAst.pdecl decl; *)
+  let decl = Krml.Ast.(DFunction (None, [], 0, 0, ret_type, (FileMap.find name !name_map, name), args, body)) in
+  (* Krml.KPrint.bprintf "Resulting decl %a\n" Krml.PrintAst.pdecl decl; *)
   decl
 
 (* Returning an option is only a hack to make progress.
@@ -484,8 +493,7 @@ let translate_decl (decl: decl) =
     Some (translate_fundecl fdecl)
   | Var vdecl ->
       let _, _, e = translate_vardecl empty_env vdecl in
-      (* Fully qualified lid *)
-      let lid = [], vdecl.var_name in
+      let lid = FileMap.find vdecl.var_name !name_map, vdecl.var_name in
       let typ = translate_typ vdecl.var_type in
       (* TODO: Flags *)
       let flags = [] in
@@ -502,16 +510,38 @@ let translate_file file =
     Some (Filename.chop_suffix name ".c", List.filter_map translate_decl decls)
   else None
 
-module FileMap = Map.Make(String)
-
 (* add_to_list is only available starting from OCaml 5.1 *)
 let add_to_list x data m =
       let add = function None -> Some [data] | Some l -> Some (data :: l) in
       FileMap.update x add m
 
+let add_lident_mapping (decl: decl) (filename: string) =
+  let sep =
+    (* We need to translate the separator to a char.
+       We assume we are on a system where it is one character (Unix or Windows) *)
+    assert (String.length Filename.dir_sep = 1);
+    String.get Filename.dir_sep 0
+  in
+  let path = Filename.remove_extension filename |> String.split_on_char sep in
+  match decl.desc with
+  | Function fdecl ->
+      let name = get_id_name fdecl.name in
+      name_map := FileMap.update name
+        (function | None -> Some path | Some _ -> Format.printf "Declaration %s appears twice in translation unit" name; failwith "impossible")
+        !name_map
+
+  | Var vdecl ->
+      name_map := FileMap.update vdecl.var_name
+        (function | None -> Some path | Some _ -> Format.printf "Declaration %s appears twice in translation unit" vdecl.var_name; failwith "impossible")
+        !name_map
+
+  (* TODO: Do we need to support this mapping for more decls *)
+  | _ -> ()
+
 let split_into_files (ast: translation_unit) =
   let add_decl acc decl =
     let loc = Clang.Ast.location_of_node decl |> Clang.Ast.concrete_of_source_location File in
+    add_lident_mapping decl loc.filename;
     let filename = loc.filename |> Filename.basename in
     add_to_list filename decl acc
   in

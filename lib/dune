@@ -2,7 +2,7 @@
  (name scylla)
  (libraries krml clangml)
  (preprocess
-  (pps ppx_deriving.std)))
+  (pps refl.ppx ppx_deriving.std)))
 
 (env
  (_

@@ -1,12 +1,7 @@
 #include <inttypes.h>
 #include <string.h>
 #include "include/krml/internal/target.h"
-
-void test(uint32_t *st, uint32_t y, uint32_t z) {
-  uint32_t x = y + z;
-
-  uint32_t* st2 = st + 4U;
-}
+#include "include/krml/lowstar_endianness.h"
 
 const uint32_t
 chacha20_constants[4U] =
@@ -89,10 +84,6 @@ static inline void chacha20_core(uint32_t *k, uint32_t *ctx, uint32_t ctr)
     os[i] = x;);
   k[12U] = k[12U] + ctr_u32;
 }
-
-uint32_t load32_le(uint8_t* s) { return 0; }
-
-void store32_le(uint8_t* s, uint32_t n) { s[0] = 0; }
 
 void chacha20_init(uint32_t *ctx, uint8_t *k, uint8_t *n, uint32_t ctr)
 {
