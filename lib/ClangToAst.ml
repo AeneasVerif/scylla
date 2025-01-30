@@ -8,6 +8,10 @@ module Helpers = Krml.Helpers
 
 module FileMap = Map.Make(String)
 
+(* C definitions can be annotated with this attribute to be extracted
+   opaquely as an external function *)
+let opaque_attr = "scylla_opaque"
+
 (* A map from function names to the string list used in their fully qualified
    name. It is filled at the beginning of the translation, when exploring the
    translation unit *)
@@ -503,11 +507,42 @@ let translate_decl (decl: decl) =
       Format.printf "Declaration %a not supported@." Clang.Decl.pp decl;
       failwith "not supported"
 
+let has_opaque_attr (attr: attribute) = match attr.desc with
+  | Clang__.Attributes.Annotate s -> Krml.KString.exists s.annotation opaque_attr
+  | _ -> false
+
+(* We are traversing an external module. We filter it to only preserve
+   declarations annotated with the [opaque_attr] attribute, which
+   we translate as external.
+   TODO: We should probably try to translate all declarations as external,
+   and use bundling to remove unneeded ones *)
+let translate_external_decl (decl: decl) = match decl.desc with
+  | Function fdecl ->
+      (* let name = get_id_name fdecl.name in *)
+      if List.exists has_opaque_attr fdecl.attributes then (
+        let name = get_id_name fdecl.name in
+        let ret_type = translate_typ fdecl.function_type.result in
+        let args, vars = match fdecl.function_type.parameters with
+          | None -> [], []
+          | Some params ->
+              (* Not handling variadic parameters *)
+              assert (not (params.variadic));
+              List.map translate_param params.non_variadic |> List.split
+        in
+        let fn_type = Helpers.fold_arrow (List.map (fun x -> x.typ) args) ret_type in
+
+        let decl = Krml.Ast.(DExternal (None, [], 0, 0, (FileMap.find name !name_map, name), fn_type, vars)) in
+        Some decl
+      ) else None
+  | _ -> None
+
 let translate_file file =
   let (name, decls) = file in
   (* TODO: Multifile support *)
   if name = "test.c" then
     Some (Filename.chop_suffix name ".c", List.filter_map translate_decl decls)
+  else if name = "lowstar_endianness.h" then
+    Some (Filename.chop_suffix name ".h", List.filter_map translate_external_decl decls)
   else None
 
 (* add_to_list is only available starting from OCaml 5.1 *)
