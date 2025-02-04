@@ -200,6 +200,7 @@ inline static uint32_t load32_le(uint8_t *b) {
 }
 
 __attribute__((annotate("scylla_opaque")))
+__attribute__((annotate("scylla_mutability(mut, _)")))
 inline static void store32_le(uint8_t *b, uint32_t i) {
   store32(b, htole32(i));
 }
