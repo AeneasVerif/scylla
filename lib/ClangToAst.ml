@@ -523,7 +523,13 @@ let translate_external_decl (decl: decl) = match decl.desc with
         in
         let args_mut = Attributes.retrieve_mutability fdecl.attributes in
         let args = match args_mut with
-          | None -> args
+          | None ->
+              (* No mutability was specified, but we are in an opaque definition:
+                 All arguments must be considered as read-only *)
+              List.map (fun arg -> match arg.typ with
+                | TBuf (t, _) -> {arg with typ = TBuf (t, true)}
+                | _ -> arg
+              ) args
           | Some muts -> List.map2 (fun mut arg -> match arg.typ, mut with
               (* In Ast, the flag set to true represents a constant, immutable array.
                  The mutability flag is the converse, so we need to take the negation *)
