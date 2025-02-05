@@ -6,3 +6,11 @@ all:
 .PHONY: build
 build:
 	dune build && ln -sf _build/default/bin/main.exe scylla
+
+test: test-chacha
+
+test-%: out/%.rs
+	@true
+
+out/%.rs: test/%.c $(wildcard test/include/*)
+	./scylla $< --output out

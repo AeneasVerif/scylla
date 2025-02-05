@@ -545,10 +545,10 @@ let translate_external_decl (decl: decl) = match decl.desc with
       ) else None
   | _ -> None
 
-let translate_file file =
+let translate_file wanted_c_file file =
   let (name, decls) = file in
   (* TODO: Multifile support *)
-  if name = "test.c" then
+  if name = Filename.basename wanted_c_file then
     Some (Filename.chop_suffix name ".c", List.filter_map translate_decl decls)
   else if name = "lowstar_endianness.h" then
     Some (Filename.chop_suffix name ".h", List.filter_map translate_external_decl decls)
@@ -592,10 +592,10 @@ let split_into_files (ast: translation_unit) =
   let decl_map = List.fold_left add_decl FileMap.empty ast.desc.items in
   FileMap.bindings decl_map |> List.map (fun (k, l) -> (k, List.rev l))
 
-let translate_compil_unit (ast: translation_unit) =
+let translate_compil_unit (ast: translation_unit) (wanted_c_file: string) =
   (* Format.printf "@[%a@]@." (Refl.pp [%refl: Clang.Ast.translation_unit] []) ast; *)
   let files = split_into_files ast in
-  let files = List.filter_map translate_file files in
+  let files = List.filter_map (translate_file wanted_c_file) files in
   files
 
 let read_file (filename: string) : translation_unit =
