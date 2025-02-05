@@ -556,8 +556,8 @@ let translate_file wanted_c_file file =
 
 (* add_to_list is only available starting from OCaml 5.1 *)
 let add_to_list x data m =
-      let add = function None -> Some [data] | Some l -> Some (data :: l) in
-      FileMap.update x add m
+  let add = function None -> Some [data] | Some l -> Some (data :: l) in
+  FileMap.update x add m
 
 let add_lident_mapping (decl: decl) (filename: string) =
   let sep =
@@ -566,10 +566,11 @@ let add_lident_mapping (decl: decl) (filename: string) =
     assert (String.length Filename.dir_sep = 1);
     String.get Filename.dir_sep 0
   in
-  let path = Filename.remove_extension filename |> String.split_on_char sep in
+  let path = [ Filename.remove_extension filename |> String.split_on_char sep |> Krml.KList.last ] in
   match decl.desc with
   | Function fdecl ->
       let name = get_id_name fdecl.name in
+      (* Krml.KPrint.bprintf "%s --> %s\n" name (String.concat "::" path); *)
       name_map := FileMap.update name
         (function | None -> Some path | Some _ -> Format.printf "Declaration %s appears twice in translation unit" name; failwith "impossible")
         !name_map

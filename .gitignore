@@ -4,3 +4,4 @@ test/*/target
 out/*/a.out
 *.DS_Store
 scylla
+out/*/target
