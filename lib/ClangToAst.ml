@@ -479,7 +479,8 @@ let translate_fundecl (fdecl: function_decl) =
     | None -> Helpers.eunit
     | Some s -> translate_stmt env ret_type s.desc
   in
-  let decl = Krml.Ast.(DFunction (None, [], 0, 0, ret_type, (FileMap.find name !name_map, name), args, body)) in
+  let flags = if fdecl.inline_specified then [Krml.Common.Inline] else [] in
+  let decl = Krml.Ast.(DFunction (None, flags, 0, 0, ret_type, (FileMap.find name !name_map, name), args, body)) in
   (* Krml.KPrint.bprintf "Resulting decl %a\n" Krml.PrintAst.pdecl decl; *)
   decl
 
