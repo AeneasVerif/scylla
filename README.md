@@ -41,7 +41,7 @@ This project relies on an OCaml toolchain. In a Linux environment:
 sudo apt install opam
 opam init
 # follow instructions, reload shell etc.
-git clone git@github.com:project-everest/karamel
+git clone git@github.com:FStarLang/karamel
 (cd karamel && opam install --deps-only .)
 git clone git@github.com:aeneasverif/scylla
 cd scylla
