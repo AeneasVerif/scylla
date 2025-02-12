@@ -46,6 +46,6 @@ git clone git@github.com:FStarLang/karamel
 git clone git@github.com:aeneasverif/scylla
 cd scylla
 (cd lib && ln -s ../../karamel/lib krml)
-opam install --deps-only .
+opam install clangml
 make test
 ```
