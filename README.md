@@ -38,10 +38,13 @@ but with an actual C frontend.
 This project relies on an OCaml toolchain. In a Linux environment:
 
 ```bash
-sudo apt install opam
+sudo apt install opam cargo
 opam init
 # follow instructions, reload shell etc.
 git clone git@github.com:FStarLang/karamel
+# LINE BELOW TEMPORARY
+(cd karamel && git checkout afromher_rust)
+(cd karamel && make lib/AutoConfig.ml)
 (cd karamel && opam install --deps-only .)
 git clone git@github.com:aeneasverif/scylla
 cd scylla
