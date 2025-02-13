@@ -7,7 +7,7 @@ all:
 build:
 	dune build && ln -sf _build/default/bin/main.exe scylla
 
-test: test-chacha
+test: all test-chacha
 
 test-%: out/%.rs
 	cd out/$* && cargo build && target/debug/$*
