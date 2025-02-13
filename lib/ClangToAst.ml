@@ -189,7 +189,7 @@ let typ_of_expr (e: expr) : typ = Clang.Type.of_node e |> translate_typ
 let is_memcpy (e: expr) = match e.desc with
   | DeclRef { name; _ } ->
       let name = get_id_name name in
-      name = "__builtin___memcpy_chk"
+      name = "__builtin___memcpy_chk" || name = "memcpy"
   | _ -> false
 
 (* Simple heuristics to detect whether a loop condition is always false, in this case we can omit the loop.
@@ -277,7 +277,7 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' = match e.desc wit
       (* We are assuming here that this is __builtin___memcpy_chk.
          This function has a fourth argument, corresponding to the number of bytes
          remaining in dst. We omit it during the translation *)
-      | [dst; src; len; _] ->
+      | dst :: src :: len :: _ ->
           (* TODO: The type returned by clangml for the arguments is void*.
              However, clang-analyzer is able to find the correct type, so it should be possible to get the correct type through clangml
 
@@ -573,12 +573,16 @@ let add_lident_mapping (decl: decl) (filename: string) =
       let name = get_id_name fdecl.name in
       (* Krml.KPrint.bprintf "%s --> %s\n" name (String.concat "::" path); *)
       name_map := FileMap.update name
-        (function | None -> Some path | Some _ -> Format.printf "Declaration %s appears twice in translation unit" name; failwith "impossible")
+        (function | None -> Some path | Some _ ->
+          Format.printf "Declaration %s appears twice in translation unit\n" name;
+          Some path)
         !name_map
 
   | Var vdecl ->
       name_map := FileMap.update vdecl.var_name
-        (function | None -> Some path | Some _ -> Format.printf "Declaration %s appears twice in translation unit" vdecl.var_name; failwith "impossible")
+        (function | None -> Some path | Some _ ->
+          Format.printf "Declaration %s appears twice in translation unit\n" vdecl.var_name;
+          Some path)
         !name_map
 
   (* TODO: Do we need to support this mapping for more decls *)
@@ -601,5 +605,5 @@ let translate_compil_unit (ast: translation_unit) (wanted_c_file: string) =
   files
 
 let read_file (filename: string) : translation_unit =
-  let command_line_args = ["-DKRML_UNROLL_MAX 0"] in
+  let command_line_args = ["-DKRML_UNROLL_MAX=0"] in
   parse_file ~command_line_args filename
