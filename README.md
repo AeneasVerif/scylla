@@ -11,8 +11,8 @@ cryptographic library and [EverParse] verified parsers library.
 The [earlier version](https://github.com/FStarLang/karamel/blob/master/lib/AstToMiniRust.ml) of this
 toolchain directly consumes the intermediary Low* representation.
 
-F\*: https://fstar-lang.org
-KaRaMeL: https://github.com/FStarLang/karamel
+[F\*]: https://fstar-lang.org
+[KaRaMeL]: https://github.com/FStarLang/karamel
 
 ```
                                          KaRaMeL
@@ -25,7 +25,7 @@ This earlier version [can extract all of
 HACL\*](https://github.com/hacl-star/hacl-star/tree/afromher_rs/dist/rs/src) to Rust. This is what
 we described in our [preprint].
 
-preprint: https://arxiv.org/pdf/2412.15042
+[preprint]: https://arxiv.org/pdf/2412.15042
 
 ## This project (Scylla: a small subset of C to Rust)
 
