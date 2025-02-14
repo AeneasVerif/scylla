@@ -13,6 +13,8 @@ toolchain directly consumes the intermediary Low* representation.
 
 [F\*]: https://fstar-lang.org
 [KaRaMeL]: https://github.com/FStarLang/karamel
+[HACL\*]: https://github.com/hacl-star/hacl-star
+[EverParse]: https://github.com/project-everest/everparse/
 
 ```
                                          KaRaMeL
