@@ -45,11 +45,9 @@ Supported options:|}
   if files = [] then
     fatal_error "%s" (Arg.usage_string spec usage);
 
-  if List.length files > 1 then
-    fatal_error "ERROR: cannot currently process more than one C file -- got %d" (List.length files);
-
-  let ast = Scylla.ClangToAst.read_file (Krml.KList.one files) in
-  let files = Scylla.ClangToAst.translate_compil_unit ast (Krml.KList.one files) in
+  let files = List.concat_map (fun (f: string) ->
+    Scylla.ClangToAst.translate_compil_unit (Scylla.ClangToAst.read_file f) f
+  ) files in
   let files = Krml.Bundles.topological_sort files in
   let files = Krml.Simplify.sequence_to_let#visit_files () files in
   let files = Krml.AstToMiniRust.translate_files files in
