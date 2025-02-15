@@ -5,3 +5,5 @@ out/*/a.out
 *.DS_Store
 scylla
 out/*/target
+test/.cache
+test/build
