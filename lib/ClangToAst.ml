@@ -124,7 +124,9 @@ let translate_binop (kind: Clang.Ast.binary_operator_kind) : K.op = match kind w
 let translate_typ_name = function
   | "size_t" -> Helpers.usize
   | "uint8_t" -> Helpers.uint8
+  | "uint16_t" -> Helpers.uint16
   | "uint32_t" -> Helpers.uint32
+  | "uint64_t" -> Helpers.uint64
   | s ->
       Printf.printf "type name %s is unsupported\n" s;
       failwith "unsupported name"
@@ -134,7 +136,7 @@ let translate_builtin_typ (t: Clang.Ast.builtin_type) = match t with
   | UInt -> TInt UInt32 (* TODO: How to retrieve exact width? *)
   | UShort -> failwith "translate_builtin_typ: ushort"
   | ULong -> TInt UInt32
-  | ULongLong -> failwith "translate_builtin_typ: ulonglong"
+  | ULongLong -> TInt UInt64
   | UInt128 -> failwith "translate_builtin_typ: uint128"
 
   | Int -> TInt Int32 (* TODO: Retrieve exact width *)
