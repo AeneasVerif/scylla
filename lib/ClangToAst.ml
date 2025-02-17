@@ -41,13 +41,13 @@ let get_id_name (dname: declaration_name) = match dname with
   | LiteralOperatorName _ -> failwith "literal operator name"
   | UsingDirectiveName -> failwith "using directive"
 
-let is_assign_op (kind: Clang__Clang__ast.binary_operator_kind) = match kind with
+let is_assign_op (kind: Clang.Ast.binary_operator_kind) = match kind with
   | Assign | AddAssign | MulAssign | DivAssign | RemAssign
   | SubAssign | ShlAssign | ShrAssign | AndAssign
   | XorAssign | OrAssign -> true
   | _ -> false
 
-let assign_to_bop (kind: Clang__Clang__ast.binary_operator_kind) : Krml.Ast.expr =
+let assign_to_bop (kind: Clang.Ast.binary_operator_kind) : Krml.Ast.expr =
   let op = match kind with
   (* TODO: Might need to disambiguate for pointer arithmetic *)
   | AddAssign -> K.Add
@@ -66,7 +66,7 @@ let assign_to_bop (kind: Clang__Clang__ast.binary_operator_kind) : Krml.Ast.expr
   (* TODO: Infer width and type from types of operands *)
   Krml.Ast.with_type Helpers.uint32 (EOp (op, UInt32))
 
-let translate_unop (kind: Clang__Clang__ast.unary_operator_kind) : K.op = match kind with
+let translate_unop (kind: Clang.Ast.unary_operator_kind) : K.op = match kind with
   | PostInc -> PostIncr
   | PostDec -> PostDecr
   | PreInc -> PreIncr
@@ -83,7 +83,7 @@ let translate_unop (kind: Clang__Clang__ast.unary_operator_kind) : K.op = match 
   | Coawait -> failwith "translate_unop: coawait"
   | InvalidUnaryOperator -> failwith "translate_unop: invalid unop"
 
-let translate_binop (kind: Clang__Clang__ast.binary_operator_kind) : K.op = match kind with
+let translate_binop (kind: Clang.Ast.binary_operator_kind) : K.op = match kind with
   | PtrMemD | PtrMemI -> failwith "translate_binop: ptr mem"
 
   (* Disambiguation for pointer arithmetic must be done when calling translate_binop:
@@ -129,7 +129,7 @@ let translate_typ_name = function
       Printf.printf "type name %s is unsupported\n" s;
       failwith "unsupported name"
 
-let translate_builtin_typ (t: Clang__Clang__ast.builtin_type) = match t with
+let translate_builtin_typ (t: Clang.Ast.builtin_type) = match t with
   | Void -> TUnit
   | UInt -> TInt UInt32 (* TODO: How to retrieve exact width? *)
   | UShort -> failwith "translate_builtin_typ: ushort"
@@ -138,6 +138,9 @@ let translate_builtin_typ (t: Clang__Clang__ast.builtin_type) = match t with
   | UInt128 -> failwith "translate_builtin_typ: uint128"
 
   | Int -> TInt Int32 (* TODO: Retrieve exact width *)
+  (* JP: this depends on the *data model* -- int is always 4 bytes, long long is always 8
+     bytes, and the size of long depends on windows vs the rest of the world (we assume no PDP-11)
+     *)
 
   | Short
   | Long
@@ -145,7 +148,115 @@ let translate_builtin_typ (t: Clang__Clang__ast.builtin_type) = match t with
   | Int128 -> failwith "translate_builtin_typ: signed int"
 
   | Pointer -> failwith "translate_builtin_typ: pointer"
-  | _ -> failwith "translate_builtin_typ: unsupported builtin type"
+
+  | Invalid -> failwith "translate_builtin_typ: Invalid"
+  | Unexposed -> failwith "translate_builtin_typ: Unexposed"
+  | Bool -> failwith "translate_builtin_typ: Bool"
+  | Char_U -> failwith "translate_builtin_typ: Char_U"
+  | UChar -> failwith "translate_builtin_typ: UChar"
+  | Char16 -> failwith "translate_builtin_typ: Char16"
+  | Char32 -> failwith "translate_builtin_typ: Char32"
+  | Char_S -> failwith "translate_builtin_typ: Char_S"
+  | SChar -> failwith "translate_builtin_typ: SChar"
+  | WChar -> failwith "translate_builtin_typ: WChar"
+  | Float -> failwith "translate_builtin_typ: Float"
+  | Double -> failwith "translate_builtin_typ: Double"
+  | LongDouble -> failwith "translate_builtin_typ: LongDouble"
+  | NullPtr -> failwith "translate_builtin_typ: NullPtr"
+  | Overload -> failwith "translate_builtin_typ: Overload"
+  | Dependent -> failwith "translate_builtin_typ: Dependent"
+  | ObjCId -> failwith "translate_builtin_typ: ObjCId"
+  | ObjCClass -> failwith "translate_builtin_typ: ObjCClass"
+  | ObjCSel -> failwith "translate_builtin_typ: ObjCSel"
+  | Float128 -> failwith "translate_builtin_typ: Float128"
+  | Half -> failwith "translate_builtin_typ: Half"
+  | Float16 -> failwith "translate_builtin_typ: Float16"
+  | ShortAccum -> failwith "translate_builtin_typ: ShortAccum"
+  | Accum -> failwith "translate_builtin_typ: Accum"
+  | LongAccum -> failwith "translate_builtin_typ: LongAccum"
+  | UShortAccum -> failwith "translate_builtin_typ: UShortAccum"
+  | UAccum -> failwith "translate_builtin_typ: UAccum"
+  | ULongAccum -> failwith "translate_builtin_typ: ULongAccum"
+  | BFloat16 -> failwith "translate_builtin_typ: BFloat16"
+  | Ibm128 -> failwith "translate_builtin_typ: Ibm128"
+  | Complex -> failwith "translate_builtin_typ: Complex"
+  | BlockPointer -> failwith "translate_builtin_typ: BlockPointer"
+  | LValueReference -> failwith "translate_builtin_typ: LValueReference"
+  | RValueReference -> failwith "translate_builtin_typ: RValueReference"
+  | Record -> failwith "translate_builtin_typ: Record"
+  | Enum -> failwith "translate_builtin_typ: Enum"
+  | Typedef -> failwith "translate_builtin_typ: Typedef"
+  | ObjCInterface -> failwith "translate_builtin_typ: ObjCInterface"
+  | ObjCObjectPointer -> failwith "translate_builtin_typ: ObjCObjectPointer"
+  | FunctionNoProto -> failwith "translate_builtin_typ: FunctionNoProto"
+  | FunctionProto -> failwith "translate_builtin_typ: FunctionProto"
+  | ConstantArray -> failwith "translate_builtin_typ: ConstantArray"
+  | Vector -> failwith "translate_builtin_typ: Vector"
+  | IncompleteArray -> failwith "translate_builtin_typ: IncompleteArray"
+  | VariableArray -> failwith "translate_builtin_typ: VariableArray"
+  | DependentSizedArray -> failwith "translate_builtin_typ: DependentSizedArray"
+  | MemberPointer -> failwith "translate_builtin_typ: MemberPointer"
+  | Auto -> failwith "translate_builtin_typ: Auto"
+  | Elaborated -> failwith "translate_builtin_typ: Elaborated"
+  | Pipe -> failwith "translate_builtin_typ: Pipe"
+  | OCLImage1dRO -> failwith "translate_builtin_typ: OCLImage1dRO"
+  | OCLImage1dArrayRO -> failwith "translate_builtin_typ: OCLImage1dArrayRO"
+  | OCLImage1dBufferRO -> failwith "translate_builtin_typ: OCLImage1dBufferRO"
+  | OCLImage2dRO -> failwith "translate_builtin_typ: OCLImage2dRO"
+  | OCLImage2dArrayRO -> failwith "translate_builtin_typ: OCLImage2dArrayRO"
+  | OCLImage2dDepthRO -> failwith "translate_builtin_typ: OCLImage2dDepthRO"
+  | OCLImage2dArrayDepthRO -> failwith "translate_builtin_typ: OCLImage2dArrayDepthRO"
+  | OCLImage2dMSAARO -> failwith "translate_builtin_typ: OCLImage2dMSAARO"
+  | OCLImage2dArrayMSAARO -> failwith "translate_builtin_typ: OCLImage2dArrayMSAARO"
+  | OCLImage2dMSAADepthRO -> failwith "translate_builtin_typ: OCLImage2dMSAADepthRO"
+  | OCLImage2dArrayMSAADepthRO -> failwith "translate_builtin_typ: OCLImage2dArrayMSAADepthRO"
+  | OCLImage3dRO -> failwith "translate_builtin_typ: OCLImage3dRO"
+  | OCLImage1dWO -> failwith "translate_builtin_typ: OCLImage1dWO"
+  | OCLImage1dArrayWO -> failwith "translate_builtin_typ: OCLImage1dArrayWO"
+  | OCLImage1dBufferWO -> failwith "translate_builtin_typ: OCLImage1dBufferWO"
+  | OCLImage2dWO -> failwith "translate_builtin_typ: OCLImage2dWO"
+  | OCLImage2dArrayWO -> failwith "translate_builtin_typ: OCLImage2dArrayWO"
+  | OCLImage2dDepthWO -> failwith "translate_builtin_typ: OCLImage2dDepthWO"
+  | OCLImage2dArrayDepthWO -> failwith "translate_builtin_typ: OCLImage2dArrayDepthWO"
+  | OCLImage2dMSAAWO -> failwith "translate_builtin_typ: OCLImage2dMSAAWO"
+  | OCLImage2dArrayMSAAWO -> failwith "translate_builtin_typ: OCLImage2dArrayMSAAWO"
+  | OCLImage2dMSAADepthWO -> failwith "translate_builtin_typ: OCLImage2dMSAADepthWO"
+  | OCLImage2dArrayMSAADepthWO -> failwith "translate_builtin_typ: OCLImage2dArrayMSAADepthWO"
+  | OCLImage3dWO -> failwith "translate_builtin_typ: OCLImage3dWO"
+  | OCLImage1dRW -> failwith "translate_builtin_typ: OCLImage1dRW"
+  | OCLImage1dArrayRW -> failwith "translate_builtin_typ: OCLImage1dArrayRW"
+  | OCLImage1dBufferRW -> failwith "translate_builtin_typ: OCLImage1dBufferRW"
+  | OCLImage2dRW -> failwith "translate_builtin_typ: OCLImage2dRW"
+  | OCLImage2dArrayRW -> failwith "translate_builtin_typ: OCLImage2dArrayRW"
+  | OCLImage2dDepthRW -> failwith "translate_builtin_typ: OCLImage2dDepthRW"
+  | OCLImage2dArrayDepthRW -> failwith "translate_builtin_typ: OCLImage2dArrayDepthRW"
+  | OCLImage2dMSAARW -> failwith "translate_builtin_typ: OCLImage2dMSAARW"
+  | OCLImage2dArrayMSAARW -> failwith "translate_builtin_typ: OCLImage2dArrayMSAARW"
+  | OCLImage2dMSAADepthRW -> failwith "translate_builtin_typ: OCLImage2dMSAADepthRW"
+  | OCLImage2dArrayMSAADepthRW -> failwith "translate_builtin_typ: OCLImage2dArrayMSAADepthRW"
+  | OCLImage3dRW -> failwith "translate_builtin_typ: OCLImage3dRW"
+  | OCLSampler -> failwith "translate_builtin_typ: OCLSampler"
+  | OCLEvent -> failwith "translate_builtin_typ: OCLEvent"
+  | OCLQueue -> failwith "translate_builtin_typ: OCLQueue"
+  | OCLReserveID -> failwith "translate_builtin_typ: OCLReserveID"
+  | ObjCObject -> failwith "translate_builtin_typ: ObjCObject"
+  | ObjCTypeParam -> failwith "translate_builtin_typ: ObjCTypeParam"
+  | Attributed -> failwith "translate_builtin_typ: Attributed"
+  | OCLIntelSubgroupAVCMcePayload -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCMcePayload"
+  | OCLIntelSubgroupAVCImePayload -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCImePayload"
+  | OCLIntelSubgroupAVCRefPayload -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCRefPayload"
+  | OCLIntelSubgroupAVCSicPayload -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCSicPayload"
+  | OCLIntelSubgroupAVCMceResult -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCMceResult"
+  | OCLIntelSubgroupAVCImeResult -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCImeResult"
+  | OCLIntelSubgroupAVCRefResult -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCRefResult"
+  | OCLIntelSubgroupAVCSicResult -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCSicResult"
+  | OCLIntelSubgroupAVCImeResultSingleRefStreamout -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCImeResultSingleRefStreamout"
+  | OCLIntelSubgroupAVCImeResultDualRefStreamout -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCImeResultDualRefStreamout"
+  | OCLIntelSubgroupAVCImeSingleRefStreamin -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCImeSingleRefStreamin"
+  | OCLIntelSubgroupAVCImeDualRefStreamin -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCImeDualRefStreamin"
+  | ExtVector -> failwith "translate_builtin_typ: ExtVector"
+  | Atomic -> failwith "translate_builtin_typ: Atomic"
+  | BTFTagAttributed -> failwith "translate_builtin_typ: BTFTagAttributed"
 
 let rec translate_typ (typ: qual_type) = match typ.desc with
   | Pointer typ -> TBuf (translate_typ typ, false)
@@ -552,22 +663,30 @@ let translate_fundecl (fdecl: function_decl) =
 (* Returning an option is only a hack to make progress.
    TODO: Proper handling of  decls *)
 let translate_decl (decl: decl) =
-  match decl.desc with
-  | Function fdecl ->
-    (* TODO: How to handle libc? *)
-    (* TODO: Support multiple files *)
-    Some (translate_fundecl fdecl)
-  | Var vdecl ->
-      let _, _, e = translate_vardecl empty_env vdecl in
-      let lid = FileMap.find vdecl.var_name !name_map, vdecl.var_name in
-      let typ = translate_typ vdecl.var_type in
-      (* TODO: Flags *)
-      let flags = [] in
-      (* TODO: What is the int for? *)
-      Some (DGlobal (flags, lid, 0, typ, e))
-  | _ ->
-      Format.printf "Declaration %a not supported@." Clang.Decl.pp decl;
-      failwith "not supported"
+  let exception Unsupported in
+  try
+    match decl.desc with
+    | Function fdecl ->
+      (* TODO: How to handle libc? *)
+      (* TODO: Support multiple files *)
+      Some (translate_fundecl fdecl)
+    | Var vdecl ->
+        if vdecl.var_init = None then
+          (* Prototype, e.g. extern int x; *)
+          None
+        else
+          let _, _, e = translate_vardecl empty_env vdecl in
+          let lid = FileMap.find vdecl.var_name !name_map, vdecl.var_name in
+          let typ = translate_typ vdecl.var_type in
+          (* TODO: Flags *)
+          let flags = [] in
+          (* TODO: What is the int for? *)
+          Some (DGlobal (flags, lid, 0, typ, e))
+    | _ ->
+        raise Unsupported
+  with e ->
+    Format.printf "Declaration %a not supported@." Clang.Decl.pp decl;
+    raise e
 
 (* We are traversing an external module. We filter it to only preserve
    declarations annotated with the [opaque_attr] attribute, which
