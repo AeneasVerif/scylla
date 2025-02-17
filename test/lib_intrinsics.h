@@ -48,8 +48,11 @@
 #define Lib_IntTypes_Intrinsics_add_carry_u32(x1, x2, x3, x4) \
     (Hacl_IntTypes_Intrinsics_add_carry_u32(x1, x2, x3, x4))
 
-#define Lib_IntTypes_Intrinsics_sub_borrow_u32(x1, x2, x3, x4) \
-    (Hacl_IntTypes_Intrinsics_sub_borrow_u32(x1, x2, x3, x4))
+__attribute__((annotate("scylla_opaque")))
+__attribute__((annotate("scylla_mutability(_, _, _, mut)")))
+inline static uint32_t Lib_IntTypes_Intrinsics_sub_borrow_u32(uint32_t cin, uint32_t x, uint32_t y, uint32_t *r) {
+    return Hacl_IntTypes_Intrinsics_sub_borrow_u32(cin, x, y, r);
+}
 
 #else // !defined(HACL_CAN_COMPILE_INTRINSICS)
 
