@@ -38,8 +38,9 @@ outlined in our [preprint]. Scylla relies on the [KaRaMeL] compiler to perform t
 intermediary rewritings and to convert its C-like internal representation to Rust.
 
 ```
-   libclang            KaRaMeL
-C ----------> Scylla -----------> Rust
+   Scylla +                KaRaMeL
+   libclang               toolchain
+C ----------> Mini-C AST -----------> Rust
 ```
 
 ## Status
@@ -51,22 +52,36 @@ Scylla requires code to be *extremely* regular in order to be eligible for trans
 code can be found in the [HACL\*] and
 [EverParse] verified C libraries.
 
-So far, our only demo is the chacha20 algorithm from HACL\*.
+So far, our demo contains a handful of files from HACL\*.
 
 ## Setup
 
-This project relies on an OCaml toolchain. In a Linux environment:
+This project relies on an OCaml toolchain. We have tested this code on Mac OS 14 "Sonoma" and Ubuntu
+22.04, with LLVM versions 14 and 15. The instructions below assume you have not cloned this
+repository yet.
 
 ```bash
-sudo apt install opam cargo
+# Step 1: install OCaml environment. Follow instructions, reload your shell, and make sure 
+# `eval $(opam env)` has been suitably added to your shell profile.
+sudo apt install opam cargo # or brew on OSX
 opam init
-# follow instructions, reload shell etc.
+
+# Step 2: clone the two repositories side by side
 git clone git@github.com:FStarLang/karamel
-(cd karamel && make lib/AutoConfig.ml)
-(cd karamel && opam install --deps-only .)
 git clone git@github.com:aeneasverif/scylla
+
+# Step 3: install required OCaml packages. Note: the invocation for karamel might fail, in which
+# case you want to install all the packages in the `depends` field of karamel.opam except fstar. At
+# the time of writing, this means typing:
+# opam install ocamlfind batteries zarith stdint yojson ocamlbuild fileutils menhir pprint ulex process fix visitors wasm ppx_deriving ppx_deriving_yojson uucp
+(cd karamel && opam install --deps-only .)
+(cd scylla && opam install clangml refl sedlex visitors)
+
+# Step 4: misc. setup steps
+(cd karamel && make lib/AutoConfig.ml)
+(cd scylla/lib && ln -s ../../karamel/lib krml)
+
+# Step 5: ready!
 cd scylla
-(cd lib && ln -s ../../karamel/lib krml)
-opam install clangml refl
 make test
 ```
