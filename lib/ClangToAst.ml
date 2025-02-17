@@ -132,7 +132,8 @@ let translate_typ_name = function
       Printf.printf "type name %s is unsupported\n" s;
       failwith "unsupported name"
 
-let translate_builtin_typ (t: Clang.Ast.builtin_type) = match t with
+
+let translate_builtin_typ (t: Clang.Ast.builtin_type) = match [@warnerror "-11"] t with
   | Void -> TUnit
   | UInt -> TInt UInt32 (* TODO: How to retrieve exact width? *)
   | UShort -> failwith "translate_builtin_typ: ushort"
@@ -264,7 +265,7 @@ let translate_builtin_typ (t: Clang.Ast.builtin_type) = match t with
   | OCLIntelSubgroupAVCImeDualRefStreamin -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCImeDualRefStreamin"
   | ExtVector -> failwith "translate_builtin_typ: ExtVector"
   | Atomic -> failwith "translate_builtin_typ: Atomic"
-  | BTFTagAttributed -> failwith "translate_builtin_typ: BTFTagAttributed"
+  | _ -> failwith "translate_builtin_typ: BTFTagAttributed"
 
 let rec translate_typ (typ: qual_type) = match typ.desc with
   | Pointer typ -> TBuf (translate_typ typ, false)
