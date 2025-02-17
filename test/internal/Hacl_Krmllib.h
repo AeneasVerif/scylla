@@ -37,8 +37,10 @@ extern "C" {
 
 #include "../Hacl_Krmllib.h"
 
+__attribute__((annotate("scylla_opaque")))
 static KRML_NOINLINE uint32_t FStar_UInt32_eq_mask(uint32_t a, uint32_t b);
 
+__attribute__((annotate("scylla_opaque")))
 static KRML_NOINLINE uint32_t FStar_UInt32_gte_mask(uint32_t a, uint32_t b);
 
 static KRML_NOINLINE uint8_t FStar_UInt8_eq_mask(uint8_t a, uint8_t b);

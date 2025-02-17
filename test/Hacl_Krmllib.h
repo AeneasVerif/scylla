@@ -35,8 +35,10 @@ extern "C" {
 #include "krml/lowstar_endianness.h"
 #include "krml/internal/target.h"
 
+__attribute__((annotate("scylla_opaque")))
 static KRML_NOINLINE uint64_t FStar_UInt64_eq_mask(uint64_t a, uint64_t b);
 
+__attribute__((annotate("scylla_opaque")))
 static KRML_NOINLINE uint64_t FStar_UInt64_gte_mask(uint64_t a, uint64_t b);
 
 static inline FStar_UInt128_uint128

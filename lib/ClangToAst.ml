@@ -389,7 +389,8 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' = match e.desc wit
       (* In case of pointer arithmetic, we need to perform a rewriting into EBufSub/Diff *)
       begin match lhs_ty, kind with
       | TBuf _, Add -> EBufSub (lhs, rhs)
-      | TBuf _, Sub -> EBufDiff (lhs, rhs)
+      (* There is no support for EBufDiff in the krml Ast to MiniRust translation *)
+      | TBuf _, Sub -> failwith "substractions in pointer arithmetic are not supported"
       | _ ->
         (* TODO: Likely need a "assert_tint_or_tbool" *)
         let lhs_w = Helpers.assert_tint lhs_ty in
@@ -737,7 +738,7 @@ let translate_file wanted_c_file file =
   (* TODO: Multifile support *)
   if name = Filename.basename wanted_c_file then
     Some (Filename.chop_suffix name ".c", List.filter_map translate_decl decls)
-  else if name = "lowstar_endianness.h" then
+  else if name = "lowstar_endianness.h" || name = "Hacl_Krmllib.h" then
     Some (Filename.chop_suffix name ".h", List.filter_map translate_external_decl decls)
   else None
 
