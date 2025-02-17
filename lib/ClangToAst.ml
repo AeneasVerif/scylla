@@ -180,7 +180,9 @@ let rec translate_typ (typ: qual_type) = match typ.desc with
 
   | BuiltinType t -> translate_builtin_typ t
 
-  | _ -> failwith "translate_typ: unsupported type"
+  | _ ->
+      Format.printf "Trying to translate type %a" Clang.Type.pp typ;
+      failwith "translate_typ: unsupported type"
 
 (* Takes a Clangml expression [e], and retrieves the corresponding karamel Ast type *)
 let typ_of_expr (e: expr) : typ = Clang.Type.of_node e |> translate_typ
@@ -190,6 +192,13 @@ let is_memcpy (e: expr) = match e.desc with
   | DeclRef { name; _ } ->
       let name = get_id_name name in
       name = "__builtin___memcpy_chk" || name = "memcpy"
+  | _ -> false
+
+(* Check whether a given Clang expression is a memset callee *)
+let is_memset (e: expr) = match e.desc with
+  | DeclRef { name; _ } ->
+      let name = get_id_name name in
+      name = "__builtin___memset_chk" || name = "memset"
   | _ -> false
 
 (* Simple heuristics to detect whether a loop condition is always false, in this case we can omit the loop.
@@ -228,7 +237,14 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' = match e.desc wit
         Krml.Ast.with_type t (EApp (Helpers.mk_op K.Add w, [Krml.Ast.with_type t v; Helpers.one w]))
       )
 
+  | UnaryOperator {kind = Not; operand } ->
+      let ty = typ_of_expr operand in
+      let o = translate_expr env ty operand in
+      (* TODO: Retrieve type *)
+      EApp (Helpers.mk_op K.Not UInt32, [o])
+
   | UnaryOperator _ ->
+      Format.printf "Trying to translate unary operator %a@." Clang.Expr.pp e;
       failwith "translate_expr: unary operator"
 
   | BinaryOperator {lhs; kind = Assign; rhs} ->
@@ -356,6 +372,43 @@ let translate_vardecl (env: env) (vdecl: var_decl_desc) : env * binder * Krml.As
         )
   | Some e -> add_var env name, Helpers.fresh_binder name typ, translate_expr env typ e
 
+(* Translation of a variable declaration, followed by a memset of [args] *)
+let translate_vardecl_with_memset (env: env) (vdecl: var_decl_desc) (args: expr list)
+  : env * binder * Krml.Ast.expr =
+  (* TODO: We should not hard-fail when this does not correspond to an array decl initialized
+     by the following memset.
+     Instead, we should just translate the vardecl, and let translate_stmt translate the
+     second statement *)
+  let vname = vdecl.var_name in
+  let typ, len_var, size = match vdecl.var_type.desc with
+  | VariableArray { element; size = {desc = DeclRef {name; _}; _} as size } ->
+      TBuf (translate_typ element, false), name, size
+  | _ -> failwith "The variable being memset it not a variableArray"
+  in
+  match args with
+  | dst :: v :: len :: _ ->
+      (* Check that the destination is the variable declared just before *)
+      begin match dst.desc with
+      | DeclRef {name; _} when get_id_name name = vname -> ()
+      | _ -> failwith "not calling memset on the variable that was just declared"
+      end;
+      (* Checking that we are initializing the entire array *)
+      begin match len.desc with
+      | BinaryOperator {lhs = { desc = DeclRef { name; _}; _} ; kind = Mul;
+                        rhs = { desc = UnaryExpr {kind = SizeOf; argument}; _}}
+          when name = len_var && extract_sizeof_ty argument = Helpers.assert_tbuf typ ->
+          ()
+      | _ -> failwith "length of memset does not match declared length of array"
+      end;
+      let v = translate_expr env (typ_of_expr v) v in
+      let len = translate_expr env (typ_of_expr size) size in
+      add_var env vname,
+      Helpers.fresh_binder vname typ,
+      Krml.Ast.with_type typ (EBufCreate (Krml.Common.Stack, v, len))
+
+  | _ -> failwith "memset does not have the right number of arguments"
+
+
 let rec translate_stmt' (env: env) (t: typ) (s: stmt_desc) : expr' = match s with
   | Null -> failwith "translate_stmt: null"
 
@@ -365,13 +418,20 @@ let rec translate_stmt' (env: env) (t: typ) (s: stmt_desc) : expr' = match s wit
         let _, b, e = translate_vardecl env vdecl in
         ELet (b, e, Helpers.eunit)
     | [stmt] -> translate_stmt' env TUnit stmt.desc
-    | hd :: tl -> match hd.desc with
-      | Decl [{desc = Var vdecl; _ }] ->
+    | hd :: tl -> match hd.desc, (List.hd tl).desc with
+      (* Special case when we have a variable declaration followed by a
+         memset: this likely corresponds to an array initialization *)
+      | Decl [{desc = Var vdecl; _}],
+        Expr {desc = Call {callee; args}; _} when is_memset callee ->
+          let env', b, e = translate_vardecl_with_memset env vdecl args in
+          ELet (b, e, translate_stmt env' t (Compound (List.tl tl)))
+
+      | Decl [{desc = Var vdecl; _ }], _ ->
           let env', b, e = translate_vardecl env vdecl in
           ELet (b, e, translate_stmt env' t (Compound tl))
-      | Decl [_] -> failwith "This decl is not a var declaration"
-      | Decl _ -> failwith "multiple decls"
-      | stmt -> ELet (
+      | Decl [_], _ -> failwith "This decl is not a var declaration"
+      | Decl _, _ -> failwith "multiple decls"
+      | stmt, _ -> ELet (
         Helpers.sequence_binding (),
         translate_stmt env TUnit stmt,
         translate_stmt (add_var env "_") t (Compound tl))
@@ -622,5 +682,5 @@ let translate_compil_unit (ast: translation_unit) (wanted_c_file: string) =
   files
 
 let read_file (filename: string) : translation_unit =
-  let command_line_args = ["-DKRML_UNROLL_MAX=0"] in
+  let command_line_args = ["-DKRML_UNROLL_MAX=0"; "-I"; "/Users/fromherz/Work/repos/rust/scylla/test/include/"] in
   parse_file ~command_line_args filename
