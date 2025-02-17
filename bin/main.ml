@@ -5,18 +5,25 @@ let () =
 
 Usage: %s [OPTIONS] FILES
 
-FILES are .c files potentially decorated with Scylla-specific attributes.
+FILES are .c files, where declarations are potentially decorated with Scylla-specific attributes.
 
 Supported options:|}
       Sys.argv.(0)
   in
-  let debug s =
-    Krml.Options.debug_modules := Krml.KString.split_on_char ',' s @ !Krml.Options.debug_modules
+  let prepend_csv l s =
+    l := Krml.KString.split_on_char ',' s @ !l
   in
+  let append_csv l s =
+    l := !l @ Krml.KString.split_on_char ',' s
+  in
+  let debug = prepend_csv Krml.Options.debug_modules in
+  (* Order of compiler arguments matters, so we append here *)
+  let ccopts = append_csv Scylla.Options.ccopts in
   let spec =
     [
       "--debug", Arg.String debug, " debug options, to be passed to krml";
       "--output", Arg.Set_string Krml.Options.tmpdir, " output directory in which to write files";
+      "--ccopts", Arg.String ccopts, " options to be passed to clang, separated by commas";
     ]
   in
   let spec = Arg.align spec in

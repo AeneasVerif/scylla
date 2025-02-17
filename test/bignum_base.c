@@ -411,7 +411,7 @@ Hacl_Bignum_Multiplication_bn_sqr_u32(uint32_t aLen, uint32_t *a, uint32_t *res)
   memcpy(b_copy0, res, (aLen + aLen) * sizeof (uint32_t));
   uint32_t r = Hacl_Bignum_Addition_bn_add_eq_len_u32(aLen + aLen, a_copy0, b_copy0, res);
   uint32_t c0 = r;
-  KRML_MAYBE_UNUSED_VAR(c0);
+  // KRML_MAYBE_UNUSED_VAR(c0);
   // KRML_CHECK_SIZE(sizeof (uint32_t), aLen + aLen);
   uint32_t tmp[aLen2];
   memset(tmp, 0U, aLen2 * sizeof (uint32_t));
@@ -433,7 +433,7 @@ Hacl_Bignum_Multiplication_bn_sqr_u32(uint32_t aLen, uint32_t *a, uint32_t *res)
   memcpy(b_copy, tmp, (aLen + aLen) * sizeof (uint32_t));
   uint32_t r0 = Hacl_Bignum_Addition_bn_add_eq_len_u32(aLen + aLen, a_copy, b_copy, res);
   uint32_t c1 = r0;
-  KRML_MAYBE_UNUSED_VAR(c1);
+  // KRML_MAYBE_UNUSED_VAR(c1);
 }
 //
 // void

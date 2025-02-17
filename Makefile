@@ -1,3 +1,16 @@
+# We try to figure out the best include paths, compiler options, etc. from the build system.
+
+SCYLLA_OPTS = --ccopts -DKRML_UNROLL_MAX=0,-I,test/include
+
+# On OSX, querying xcrun appears to provide the sysroot.
+ifeq ($(shell uname -s),Darwin)
+  ISYSROOT=$(shell xcrun --show-sdk-path)
+  ifneq ($(ISYSROOT),)
+    SCYLLA_OPTS += --ccopts -I,$(ISYSROOT)/usr/include
+  endif
+endif
+
+
 .PHONY: all
 all:
 	@ocamlfind list | grep -q krml || test -L lib/krml || echo "⚠️⚠️⚠️ krml not found; we suggest cd lib && ln -s path/to/karamel/lib krml"
@@ -7,14 +20,10 @@ all:
 build:
 	dune build && ln -sf _build/default/bin/main.exe scylla
 
-test: all test-chacha
+# We extract all of the tests into the same hacl directory
+test: test-chacha test-bignum_base
+	for f in rs/*.rs; do cp $$f out/hacl/src/; done
+	cd out/hacl && cargo build && target/debug/hacl
 
-test-%: out/%.rs
-	cd out/$* && cargo build && target/debug/$*
-
-# FIXME: we can't write out/%/src/%.rs in GNU Make (which is what is now being generated)
-.PRECIOUS: out/%.rs
-
-out/%.rs: test/%.c $(wildcard test/include/*)
-	./scylla $< --output out/$*/src/
-	for f in rs/*.rs; do cp $$f out/$*/src/; done
+test-%: test/%.c $(wildcard test/include/*) | all
+	./scylla $(SCYLLA_OPTS) $< --output out/hacl/src/

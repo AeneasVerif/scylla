@@ -538,7 +538,7 @@ let translate_vardecl_with_memset (env: env) (vdecl: var_decl_desc) (args: expr 
           ()
       | _ -> failwith "length of memset does not match declared length of array"
       end;
-      let v = translate_expr env (typ_of_expr v) v in
+      let v = translate_expr env (Helpers.assert_tbuf typ) v in
       let len = translate_expr env (typ_of_expr size) size in
       add_var env vname,
       Helpers.fresh_binder vname typ,
@@ -832,5 +832,7 @@ let translate_compil_unit (ast: translation_unit) (wanted_c_file: string) =
   files
 
 let read_file (filename: string) : translation_unit =
-  let command_line_args = ["-DKRML_UNROLL_MAX=0"; "-I"; "/Users/fromherz/Work/repos/rust/scylla/test/include/"] in
+  Format.printf "Clang version is %s\n" (Clang.get_clang_version());
+  let command_line_args = !Scylla__Options.ccopts in
+  Format.printf "Arguments passed to clang are: %s\n" (String.concat " " command_line_args);
   parse_file ~command_line_args filename
