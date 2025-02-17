@@ -12,9 +12,15 @@ endif
 
 
 .PHONY: all
-all:
+all: lib/DataModel.ml
 	@ocamlfind list | grep -q krml || test -L lib/krml || echo "⚠️⚠️⚠️ krml not found; we suggest cd lib && ln -s path/to/karamel/lib krml"
 	$(MAKE) build
+
+lib/DataModel.ml: misc/data_model.exe
+	$< > $@
+
+misc/data_model.exe: misc/data_model.o
+	$(CC) $< -o $@
 
 .PHONY: build
 build:

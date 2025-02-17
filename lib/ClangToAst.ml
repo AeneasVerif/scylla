@@ -136,7 +136,12 @@ let translate_builtin_typ (t: Clang.Ast.builtin_type) = match t with
   | Void -> TUnit
   | UInt -> TInt UInt32 (* TODO: How to retrieve exact width? *)
   | UShort -> failwith "translate_builtin_typ: ushort"
-  | ULong -> TInt UInt32
+  | ULong ->
+      begin match DataModel.size_long with
+      | 4 -> TInt UInt32
+      | 8 -> TInt UInt64
+      | _ -> failwith "impossible"
+      end
   | ULongLong -> TInt UInt64
   | UInt128 -> failwith "translate_builtin_typ: uint128"
 

@@ -7,3 +7,4 @@ scylla
 out/*/target
 test/.cache
 test/build
+lib/DataModel.ml
