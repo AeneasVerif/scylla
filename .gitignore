@@ -8,3 +8,5 @@ out/*/target
 test/.cache
 test/build
 lib/DataModel.ml
+*.o
+*.exe
