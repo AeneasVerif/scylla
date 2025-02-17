@@ -41,13 +41,13 @@ let get_id_name (dname: declaration_name) = match dname with
   | LiteralOperatorName _ -> failwith "literal operator name"
   | UsingDirectiveName -> failwith "using directive"
 
-let is_assign_op (kind: Clang__Clang__ast.binary_operator_kind) = match kind with
+let is_assign_op (kind: Clang.Ast.binary_operator_kind) = match kind with
   | Assign | AddAssign | MulAssign | DivAssign | RemAssign
   | SubAssign | ShlAssign | ShrAssign | AndAssign
   | XorAssign | OrAssign -> true
   | _ -> false
 
-let assign_to_bop (kind: Clang__Clang__ast.binary_operator_kind) : Krml.Ast.expr =
+let assign_to_bop (kind: Clang.Ast.binary_operator_kind) : Krml.Ast.expr =
   let op = match kind with
   (* TODO: Might need to disambiguate for pointer arithmetic *)
   | AddAssign -> K.Add
@@ -66,7 +66,7 @@ let assign_to_bop (kind: Clang__Clang__ast.binary_operator_kind) : Krml.Ast.expr
   (* TODO: Infer width and type from types of operands *)
   Krml.Ast.with_type Helpers.uint32 (EOp (op, UInt32))
 
-let translate_unop (kind: Clang__Clang__ast.unary_operator_kind) : K.op = match kind with
+let translate_unop (kind: Clang.Ast.unary_operator_kind) : K.op = match kind with
   | PostInc -> PostIncr
   | PostDec -> PostDecr
   | PreInc -> PreIncr
@@ -83,7 +83,7 @@ let translate_unop (kind: Clang__Clang__ast.unary_operator_kind) : K.op = match 
   | Coawait -> failwith "translate_unop: coawait"
   | InvalidUnaryOperator -> failwith "translate_unop: invalid unop"
 
-let translate_binop (kind: Clang__Clang__ast.binary_operator_kind) : K.op = match kind with
+let translate_binop (kind: Clang.Ast.binary_operator_kind) : K.op = match kind with
   | PtrMemD | PtrMemI -> failwith "translate_binop: ptr mem"
 
   (* Disambiguation for pointer arithmetic must be done when calling translate_binop:
@@ -111,7 +111,8 @@ let translate_binop (kind: Clang__Clang__ast.binary_operator_kind) : K.op = matc
   | Xor -> BXor
   | Or -> BOr
 
-  | LAnd | LOr -> failwith "translate_binop: logical ops"
+  | LAnd -> And
+  | LOr -> Or
 
   | Assign | AddAssign | MulAssign | DivAssign | RemAssign
   | SubAssign | ShlAssign | ShrAssign | AndAssign
@@ -124,20 +125,31 @@ let translate_binop (kind: Clang__Clang__ast.binary_operator_kind) : K.op = matc
 let translate_typ_name = function
   | "size_t" -> Helpers.usize
   | "uint8_t" -> Helpers.uint8
+  | "uint16_t" -> Helpers.uint16
   | "uint32_t" -> Helpers.uint32
+  | "uint64_t" -> Helpers.uint64
   | s ->
       Printf.printf "type name %s is unsupported\n" s;
       failwith "unsupported name"
 
-let translate_builtin_typ (t: Clang__Clang__ast.builtin_type) = match t with
+
+let translate_builtin_typ (t: Clang.Ast.builtin_type) = match [@warnerror "-11"] t with
   | Void -> TUnit
   | UInt -> TInt UInt32 (* TODO: How to retrieve exact width? *)
   | UShort -> failwith "translate_builtin_typ: ushort"
-  | ULong -> TInt UInt32
-  | ULongLong -> failwith "translate_builtin_typ: ulonglong"
+  | ULong ->
+      begin match DataModel.size_long with
+      | 4 -> TInt UInt32
+      | 8 -> TInt UInt64
+      | _ -> failwith "impossible"
+      end
+  | ULongLong -> TInt UInt64
   | UInt128 -> failwith "translate_builtin_typ: uint128"
 
   | Int -> TInt Int32 (* TODO: Retrieve exact width *)
+  (* JP: this depends on the *data model* -- int is always 4 bytes, long long is always 8
+     bytes, and the size of long depends on windows vs the rest of the world (we assume no PDP-11)
+     *)
 
   | Short
   | Long
@@ -145,7 +157,115 @@ let translate_builtin_typ (t: Clang__Clang__ast.builtin_type) = match t with
   | Int128 -> failwith "translate_builtin_typ: signed int"
 
   | Pointer -> failwith "translate_builtin_typ: pointer"
-  | _ -> failwith "translate_builtin_typ: unsupported builtin type"
+
+  | Invalid -> failwith "translate_builtin_typ: Invalid"
+  | Unexposed -> failwith "translate_builtin_typ: Unexposed"
+  | Bool -> failwith "translate_builtin_typ: Bool"
+  | Char_U -> failwith "translate_builtin_typ: Char_U"
+  | UChar -> failwith "translate_builtin_typ: UChar"
+  | Char16 -> failwith "translate_builtin_typ: Char16"
+  | Char32 -> failwith "translate_builtin_typ: Char32"
+  | Char_S -> failwith "translate_builtin_typ: Char_S"
+  | SChar -> failwith "translate_builtin_typ: SChar"
+  | WChar -> failwith "translate_builtin_typ: WChar"
+  | Float -> failwith "translate_builtin_typ: Float"
+  | Double -> failwith "translate_builtin_typ: Double"
+  | LongDouble -> failwith "translate_builtin_typ: LongDouble"
+  | NullPtr -> failwith "translate_builtin_typ: NullPtr"
+  | Overload -> failwith "translate_builtin_typ: Overload"
+  | Dependent -> failwith "translate_builtin_typ: Dependent"
+  | ObjCId -> failwith "translate_builtin_typ: ObjCId"
+  | ObjCClass -> failwith "translate_builtin_typ: ObjCClass"
+  | ObjCSel -> failwith "translate_builtin_typ: ObjCSel"
+  | Float128 -> failwith "translate_builtin_typ: Float128"
+  | Half -> failwith "translate_builtin_typ: Half"
+  | Float16 -> failwith "translate_builtin_typ: Float16"
+  | ShortAccum -> failwith "translate_builtin_typ: ShortAccum"
+  | Accum -> failwith "translate_builtin_typ: Accum"
+  | LongAccum -> failwith "translate_builtin_typ: LongAccum"
+  | UShortAccum -> failwith "translate_builtin_typ: UShortAccum"
+  | UAccum -> failwith "translate_builtin_typ: UAccum"
+  | ULongAccum -> failwith "translate_builtin_typ: ULongAccum"
+  | BFloat16 -> failwith "translate_builtin_typ: BFloat16"
+  | Ibm128 -> failwith "translate_builtin_typ: Ibm128"
+  | Complex -> failwith "translate_builtin_typ: Complex"
+  | BlockPointer -> failwith "translate_builtin_typ: BlockPointer"
+  | LValueReference -> failwith "translate_builtin_typ: LValueReference"
+  | RValueReference -> failwith "translate_builtin_typ: RValueReference"
+  | Record -> failwith "translate_builtin_typ: Record"
+  | Enum -> failwith "translate_builtin_typ: Enum"
+  | Typedef -> failwith "translate_builtin_typ: Typedef"
+  | ObjCInterface -> failwith "translate_builtin_typ: ObjCInterface"
+  | ObjCObjectPointer -> failwith "translate_builtin_typ: ObjCObjectPointer"
+  | FunctionNoProto -> failwith "translate_builtin_typ: FunctionNoProto"
+  | FunctionProto -> failwith "translate_builtin_typ: FunctionProto"
+  | ConstantArray -> failwith "translate_builtin_typ: ConstantArray"
+  | Vector -> failwith "translate_builtin_typ: Vector"
+  | IncompleteArray -> failwith "translate_builtin_typ: IncompleteArray"
+  | VariableArray -> failwith "translate_builtin_typ: VariableArray"
+  | DependentSizedArray -> failwith "translate_builtin_typ: DependentSizedArray"
+  | MemberPointer -> failwith "translate_builtin_typ: MemberPointer"
+  | Auto -> failwith "translate_builtin_typ: Auto"
+  | Elaborated -> failwith "translate_builtin_typ: Elaborated"
+  | Pipe -> failwith "translate_builtin_typ: Pipe"
+  | OCLImage1dRO -> failwith "translate_builtin_typ: OCLImage1dRO"
+  | OCLImage1dArrayRO -> failwith "translate_builtin_typ: OCLImage1dArrayRO"
+  | OCLImage1dBufferRO -> failwith "translate_builtin_typ: OCLImage1dBufferRO"
+  | OCLImage2dRO -> failwith "translate_builtin_typ: OCLImage2dRO"
+  | OCLImage2dArrayRO -> failwith "translate_builtin_typ: OCLImage2dArrayRO"
+  | OCLImage2dDepthRO -> failwith "translate_builtin_typ: OCLImage2dDepthRO"
+  | OCLImage2dArrayDepthRO -> failwith "translate_builtin_typ: OCLImage2dArrayDepthRO"
+  | OCLImage2dMSAARO -> failwith "translate_builtin_typ: OCLImage2dMSAARO"
+  | OCLImage2dArrayMSAARO -> failwith "translate_builtin_typ: OCLImage2dArrayMSAARO"
+  | OCLImage2dMSAADepthRO -> failwith "translate_builtin_typ: OCLImage2dMSAADepthRO"
+  | OCLImage2dArrayMSAADepthRO -> failwith "translate_builtin_typ: OCLImage2dArrayMSAADepthRO"
+  | OCLImage3dRO -> failwith "translate_builtin_typ: OCLImage3dRO"
+  | OCLImage1dWO -> failwith "translate_builtin_typ: OCLImage1dWO"
+  | OCLImage1dArrayWO -> failwith "translate_builtin_typ: OCLImage1dArrayWO"
+  | OCLImage1dBufferWO -> failwith "translate_builtin_typ: OCLImage1dBufferWO"
+  | OCLImage2dWO -> failwith "translate_builtin_typ: OCLImage2dWO"
+  | OCLImage2dArrayWO -> failwith "translate_builtin_typ: OCLImage2dArrayWO"
+  | OCLImage2dDepthWO -> failwith "translate_builtin_typ: OCLImage2dDepthWO"
+  | OCLImage2dArrayDepthWO -> failwith "translate_builtin_typ: OCLImage2dArrayDepthWO"
+  | OCLImage2dMSAAWO -> failwith "translate_builtin_typ: OCLImage2dMSAAWO"
+  | OCLImage2dArrayMSAAWO -> failwith "translate_builtin_typ: OCLImage2dArrayMSAAWO"
+  | OCLImage2dMSAADepthWO -> failwith "translate_builtin_typ: OCLImage2dMSAADepthWO"
+  | OCLImage2dArrayMSAADepthWO -> failwith "translate_builtin_typ: OCLImage2dArrayMSAADepthWO"
+  | OCLImage3dWO -> failwith "translate_builtin_typ: OCLImage3dWO"
+  | OCLImage1dRW -> failwith "translate_builtin_typ: OCLImage1dRW"
+  | OCLImage1dArrayRW -> failwith "translate_builtin_typ: OCLImage1dArrayRW"
+  | OCLImage1dBufferRW -> failwith "translate_builtin_typ: OCLImage1dBufferRW"
+  | OCLImage2dRW -> failwith "translate_builtin_typ: OCLImage2dRW"
+  | OCLImage2dArrayRW -> failwith "translate_builtin_typ: OCLImage2dArrayRW"
+  | OCLImage2dDepthRW -> failwith "translate_builtin_typ: OCLImage2dDepthRW"
+  | OCLImage2dArrayDepthRW -> failwith "translate_builtin_typ: OCLImage2dArrayDepthRW"
+  | OCLImage2dMSAARW -> failwith "translate_builtin_typ: OCLImage2dMSAARW"
+  | OCLImage2dArrayMSAARW -> failwith "translate_builtin_typ: OCLImage2dArrayMSAARW"
+  | OCLImage2dMSAADepthRW -> failwith "translate_builtin_typ: OCLImage2dMSAADepthRW"
+  | OCLImage2dArrayMSAADepthRW -> failwith "translate_builtin_typ: OCLImage2dArrayMSAADepthRW"
+  | OCLImage3dRW -> failwith "translate_builtin_typ: OCLImage3dRW"
+  | OCLSampler -> failwith "translate_builtin_typ: OCLSampler"
+  | OCLEvent -> failwith "translate_builtin_typ: OCLEvent"
+  | OCLQueue -> failwith "translate_builtin_typ: OCLQueue"
+  | OCLReserveID -> failwith "translate_builtin_typ: OCLReserveID"
+  | ObjCObject -> failwith "translate_builtin_typ: ObjCObject"
+  | ObjCTypeParam -> failwith "translate_builtin_typ: ObjCTypeParam"
+  | Attributed -> failwith "translate_builtin_typ: Attributed"
+  | OCLIntelSubgroupAVCMcePayload -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCMcePayload"
+  | OCLIntelSubgroupAVCImePayload -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCImePayload"
+  | OCLIntelSubgroupAVCRefPayload -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCRefPayload"
+  | OCLIntelSubgroupAVCSicPayload -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCSicPayload"
+  | OCLIntelSubgroupAVCMceResult -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCMceResult"
+  | OCLIntelSubgroupAVCImeResult -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCImeResult"
+  | OCLIntelSubgroupAVCRefResult -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCRefResult"
+  | OCLIntelSubgroupAVCSicResult -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCSicResult"
+  | OCLIntelSubgroupAVCImeResultSingleRefStreamout -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCImeResultSingleRefStreamout"
+  | OCLIntelSubgroupAVCImeResultDualRefStreamout -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCImeResultDualRefStreamout"
+  | OCLIntelSubgroupAVCImeSingleRefStreamin -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCImeSingleRefStreamin"
+  | OCLIntelSubgroupAVCImeDualRefStreamin -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCImeDualRefStreamin"
+  | ExtVector -> failwith "translate_builtin_typ: ExtVector"
+  | Atomic -> failwith "translate_builtin_typ: Atomic"
+  | _ -> failwith "translate_builtin_typ: BTFTagAttributed"
 
 let rec translate_typ (typ: qual_type) = match typ.desc with
   | Pointer typ -> TBuf (translate_typ typ, false)
@@ -180,7 +300,9 @@ let rec translate_typ (typ: qual_type) = match typ.desc with
 
   | BuiltinType t -> translate_builtin_typ t
 
-  | _ -> failwith "translate_typ: unsupported type"
+  | _ ->
+      Format.printf "Trying to translate type %a" Clang.Type.pp typ;
+      failwith "translate_typ: unsupported type"
 
 (* Takes a Clangml expression [e], and retrieves the corresponding karamel Ast type *)
 let typ_of_expr (e: expr) : typ = Clang.Type.of_node e |> translate_typ
@@ -190,6 +312,13 @@ let is_memcpy (e: expr) = match e.desc with
   | DeclRef { name; _ } ->
       let name = get_id_name name in
       name = "__builtin___memcpy_chk" || name = "memcpy"
+  | _ -> false
+
+(* Check whether a given Clang expression is a memset callee *)
+let is_memset (e: expr) = match e.desc with
+  | DeclRef { name; _ } ->
+      let name = get_id_name name in
+      name = "__builtin___memset_chk" || name = "memset"
   | _ -> false
 
 (* Simple heuristics to detect whether a loop condition is always false, in this case we can omit the loop.
@@ -228,7 +357,14 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' = match e.desc wit
         Krml.Ast.with_type t (EApp (Helpers.mk_op K.Add w, [Krml.Ast.with_type t v; Helpers.one w]))
       )
 
+  | UnaryOperator {kind = Not; operand } ->
+      let ty = typ_of_expr operand in
+      let o = translate_expr env ty operand in
+      (* TODO: Retrieve type *)
+      EApp (Helpers.mk_op K.Not UInt32, [o])
+
   | UnaryOperator _ ->
+      Format.printf "Trying to translate unary operator %a@." Clang.Expr.pp e;
       failwith "translate_expr: unary operator"
 
   | BinaryOperator {lhs; kind = Assign; rhs} ->
@@ -260,7 +396,8 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' = match e.desc wit
       (* In case of pointer arithmetic, we need to perform a rewriting into EBufSub/Diff *)
       begin match lhs_ty, kind with
       | TBuf _, Add -> EBufSub (lhs, rhs)
-      | TBuf _, Sub -> EBufDiff (lhs, rhs)
+      (* There is no support for EBufDiff in the krml Ast to MiniRust translation *)
+      | TBuf _, Sub -> failwith "substractions in pointer arithmetic are not supported"
       | _ ->
         (* TODO: Likely need a "assert_tint_or_tbool" *)
         let lhs_w = Helpers.assert_tint lhs_ty in
@@ -298,6 +435,24 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' = match e.desc wit
       | _ -> failwith "memcpy does not have the right number of arguments"
       end
 
+  | Call {callee; args} when is_memset callee ->
+      (* Format.printf "Trying to translate memset %a@." Clang.Expr.pp e; *)
+      begin match args with
+      | dst :: v :: len :: _ ->
+          let len, ty = match len.desc with
+          (* We recognize the case `len = lhs * sizeof (_)` *)
+            | BinaryOperator {lhs; kind = Mul; rhs = { desc = UnaryExpr {kind = SizeOf; argument}; _}} ->
+                let len = translate_expr env Helpers.usize lhs in
+                let ty = extract_sizeof_ty argument in
+                len, ty
+            | _ -> failwith "ill-formed memcpy"
+          in
+          let dst = translate_expr env (TBuf (ty, false)) dst in
+          let elt = translate_expr env ty v in
+          EBufFill (dst, elt, len)
+      | _ -> failwith "memset does not have the right number of arguments"
+      end
+
   | Call {callee; args} ->
       (* In C, a function type is a pointer. We need to strip it to retrieve
          the standard arrow abstraction *)
@@ -333,14 +488,19 @@ let extract_constarray_size (ty: qual_type) = match ty.desc with
   | ConstantArray {size; _} -> size, Helpers.mk_uint32 size
   | _ -> failwith "Type is not a ConstantArray"
 
+(* Create a default value associated to a given type [typ] *)
+let create_default_value typ = match typ with
+  | TInt w -> Helpers.zero w
+  | _ -> failwith "Creating a default value is only supported for integer types"
+
 let translate_vardecl (env: env) (vdecl: var_decl_desc) : env * binder * Krml.Ast.expr =
   let name = vdecl.var_name in
   let typ = translate_typ vdecl.var_type in
   match vdecl.var_init with
-  (* Note: This can happen if, for instance, a C definition could not be found *)
   | None ->
-        Format.printf "Variable %s has no body@." name;
-        failwith "Variable declarations without definitions are not supported"
+        (* If there is no associated definition, we attempt to craft
+           a default initialization value *)
+        add_var env name, Helpers.fresh_binder name typ, create_default_value typ
   | Some {desc = InitList l; _} ->
         let size, size_e = extract_constarray_size vdecl.var_type in
         if List.length l = 1 then
@@ -356,6 +516,43 @@ let translate_vardecl (env: env) (vdecl: var_decl_desc) : env * binder * Krml.As
         )
   | Some e -> add_var env name, Helpers.fresh_binder name typ, translate_expr env typ e
 
+(* Translation of a variable declaration, followed by a memset of [args] *)
+let translate_vardecl_with_memset (env: env) (vdecl: var_decl_desc) (args: expr list)
+  : env * binder * Krml.Ast.expr =
+  (* TODO: We should not hard-fail when this does not correspond to an array decl initialized
+     by the following memset.
+     Instead, we should just translate the vardecl, and let translate_stmt translate the
+     second statement *)
+  let vname = vdecl.var_name in
+  let typ, len_var, size = match vdecl.var_type.desc with
+  | VariableArray { element; size = {desc = DeclRef {name; _}; _} as size } ->
+      TBuf (translate_typ element, false), name, size
+  | _ -> failwith "The variable being memset it not a variableArray"
+  in
+  match args with
+  | dst :: v :: len :: _ ->
+      (* Check that the destination is the variable declared just before *)
+      begin match dst.desc with
+      | DeclRef {name; _} when get_id_name name = vname -> ()
+      | _ -> failwith "not calling memset on the variable that was just declared"
+      end;
+      (* Checking that we are initializing the entire array *)
+      begin match len.desc with
+      | BinaryOperator {lhs = { desc = DeclRef { name; _}; _} ; kind = Mul;
+                        rhs = { desc = UnaryExpr {kind = SizeOf; argument}; _}}
+          when name = len_var && extract_sizeof_ty argument = Helpers.assert_tbuf typ ->
+          ()
+      | _ -> failwith "length of memset does not match declared length of array"
+      end;
+      let v = translate_expr env (Helpers.assert_tbuf typ) v in
+      let len = translate_expr env (typ_of_expr size) size in
+      add_var env vname,
+      Helpers.fresh_binder vname typ,
+      Krml.Ast.with_type typ (EBufCreate (Krml.Common.Stack, v, len))
+
+  | _ -> failwith "memset does not have the right number of arguments"
+
+
 let rec translate_stmt' (env: env) (t: typ) (s: stmt_desc) : expr' = match s with
   | Null -> failwith "translate_stmt: null"
 
@@ -365,13 +562,20 @@ let rec translate_stmt' (env: env) (t: typ) (s: stmt_desc) : expr' = match s wit
         let _, b, e = translate_vardecl env vdecl in
         ELet (b, e, Helpers.eunit)
     | [stmt] -> translate_stmt' env TUnit stmt.desc
-    | hd :: tl -> match hd.desc with
-      | Decl [{desc = Var vdecl; _ }] ->
+    | hd :: tl -> match hd.desc, (List.hd tl).desc with
+      (* Special case when we have a variable declaration followed by a
+         memset: this likely corresponds to an array initialization *)
+      | Decl [{desc = Var vdecl; _}],
+        Expr {desc = Call {callee; args}; _} when is_memset callee ->
+          let env', b, e = translate_vardecl_with_memset env vdecl args in
+          ELet (b, e, translate_stmt env' t (Compound (List.tl tl)))
+
+      | Decl [{desc = Var vdecl; _ }], _ ->
           let env', b, e = translate_vardecl env vdecl in
           ELet (b, e, translate_stmt env' t (Compound tl))
-      | Decl [_] -> failwith "This decl is not a var declaration"
-      | Decl _ -> failwith "multiple decls"
-      | stmt -> ELet (
+      | Decl [_], _ -> failwith "This decl is not a var declaration"
+      | Decl _, _ -> failwith "multiple decls"
+      | stmt, _ -> ELet (
         Helpers.sequence_binding (),
         translate_stmt env TUnit stmt,
         translate_stmt (add_var env "_") t (Compound tl))
@@ -487,22 +691,30 @@ let translate_fundecl (fdecl: function_decl) =
 (* Returning an option is only a hack to make progress.
    TODO: Proper handling of  decls *)
 let translate_decl (decl: decl) =
-  match decl.desc with
-  | Function fdecl ->
-    (* TODO: How to handle libc? *)
-    (* TODO: Support multiple files *)
-    Some (translate_fundecl fdecl)
-  | Var vdecl ->
-      let _, _, e = translate_vardecl empty_env vdecl in
-      let lid = FileMap.find vdecl.var_name !name_map, vdecl.var_name in
-      let typ = translate_typ vdecl.var_type in
-      (* TODO: Flags *)
-      let flags = [] in
-      (* TODO: What is the int for? *)
-      Some (DGlobal (flags, lid, 0, typ, e))
-  | _ ->
-      Format.printf "Declaration %a not supported@." Clang.Decl.pp decl;
-      failwith "not supported"
+  let exception Unsupported in
+  try
+    match decl.desc with
+    | Function fdecl ->
+      (* TODO: How to handle libc? *)
+      (* TODO: Support multiple files *)
+      Some (translate_fundecl fdecl)
+    | Var vdecl ->
+        if vdecl.var_init = None then
+          (* Prototype, e.g. extern int x; *)
+          None
+        else
+          let _, _, e = translate_vardecl empty_env vdecl in
+          let lid = FileMap.find vdecl.var_name !name_map, vdecl.var_name in
+          let typ = translate_typ vdecl.var_type in
+          (* TODO: Flags *)
+          let flags = [] in
+          (* TODO: What is the int for? *)
+          Some (DGlobal (flags, lid, 0, typ, e))
+    | _ ->
+        raise Unsupported
+  with e ->
+    Format.printf "Declaration %a not supported@." Clang.Decl.pp decl;
+    raise e
 
 (* We are traversing an external module. We filter it to only preserve
    declarations annotated with the [opaque_attr] attribute, which
@@ -551,9 +763,13 @@ let translate_file wanted_c_file file =
   (* TODO: Multifile support *)
   if name = Filename.basename wanted_c_file then
     Some (Filename.chop_suffix name ".c", List.filter_map translate_decl decls)
-  else if name = "lowstar_endianness.h" then
+  else
+  (* translate_external_decl will only translate declarations annotated with the
+     `scylla_opaque` attribute.
+     Furthermore, a file that does not contain any definitions will be filtered
+     out in krml during the Rust translation.
+     Hence, we can apply translate_external_decl on any file in the tree *)
     Some (Filename.chop_suffix name ".h", List.filter_map translate_external_decl decls)
-  else None
 
 (* add_to_list is only available starting from OCaml 5.1 *)
 let add_to_list x data m =
@@ -574,36 +790,55 @@ let add_lident_mapping (decl: decl) (filename: string) =
       (* Krml.KPrint.bprintf "%s --> %s\n" name (String.concat "::" path); *)
       name_map := FileMap.update name
         (function | None -> Some path | Some _ ->
-          Format.printf "Declaration %s appears twice in translation unit\n" name;
+          Format.printf "Declaration %s appears twice in translation unit, found again in %s\n" name filename;
           Some path)
         !name_map
 
   | Var vdecl ->
       name_map := FileMap.update vdecl.var_name
         (function | None -> Some path | Some _ ->
-          Format.printf "Declaration %s appears twice in translation unit\n" vdecl.var_name;
+          Format.printf "Variable declaration %s appears twice in translation unit\n" vdecl.var_name;
           Some path)
         !name_map
 
   (* TODO: Do we need to support this mapping for more decls *)
   | _ -> ()
 
-let split_into_files (ast: translation_unit) =
+let split_into_files (lib_dirs: string list) (ast: translation_unit) =
   let add_decl acc decl =
     let loc = Clang.Ast.location_of_node decl |> Clang.Ast.concrete_of_source_location File in
-    add_lident_mapping decl loc.filename;
-    let filename = loc.filename |> Filename.basename in
-    add_to_list filename decl acc
+    (* If this belongs to the C library, do not extract it *)
+    (* TODO: This could be done more efficiently by filtering after splitting into files,
+       to avoid repeated traversals of lib_dirs *)
+    if List.exists (fun x -> String.starts_with ~prefix:x loc.filename) lib_dirs then acc
+    else (
+      add_lident_mapping decl loc.filename;
+      let filename = loc.filename |> Filename.basename in
+      add_to_list filename decl acc
+    )
   in
   let decl_map = List.fold_left add_decl FileMap.empty ast.desc.items in
   FileMap.bindings decl_map |> List.map (fun (k, l) -> (k, List.rev l))
 
+(* On MacOS, C compilation often relies on a SDK, where parts of the stdlib
+    is located *)
+let get_sdkroot () =
+  (* TODO: Is there something similar on Linux, or is the stdlib included in
+     the Clang default include directories? *)
+  try
+    Unix.getenv "SDKROOT" |> String.split_on_char ':'
+  with
+    | Not_found -> []
+
 let translate_compil_unit (ast: translation_unit) (wanted_c_file: string) =
+  let lib_dirs = get_sdkroot () @ Clang.default_include_directories () in
   (* Format.printf "@[%a@]@." (Refl.pp [%refl: Clang.Ast.translation_unit] []) ast; *)
-  let files = split_into_files ast in
+  let files = split_into_files lib_dirs ast in
   let files = List.filter_map (translate_file wanted_c_file) files in
   files
 
 let read_file (filename: string) : translation_unit =
-  let command_line_args = ["-DKRML_UNROLL_MAX=0"] in
+  Format.printf "Clang version is %s\n" (Clang.get_clang_version());
+  let command_line_args = !Scylla__Options.ccopts in
+  Format.printf "Arguments passed to clang are: %s\n" (String.concat " " command_line_args);
   parse_file ~command_line_args filename

@@ -210,10 +210,32 @@ inline static void store32_le(uint8_t *b, uint32_t i) {
 #define load32_be(b) (be32toh(load32(b)))
 #define store32_be(b, i) (store32(b, htobe32(i)))
 
-#define load64_le(b) (le64toh(load64(b)))
-#define store64_le(b, i) (store64(b, htole64(i)))
-#define load64_be(b) (be64toh(load64(b)))
-#define store64_be(b, i) (store64(b, htobe64(i)))
+__attribute__((annotate("scylla_opaque")))
+inline static uint64_t load64_le(uint8_t *b) {
+  return le64toh(load64(b));
+}
+
+__attribute__((annotate("scylla_opaque")))
+__attribute__((annotate("scylla_mutability(mut, _)")))
+inline static void store64_le(uint8_t *b, uint64_t i) {
+  store64(b, htole64(i));
+}
+
+__attribute__((annotate("scylla_opaque")))
+inline static uint64_t load64_be(uint8_t *b) {
+  return be64toh(load64(b));
+}
+
+__attribute__((annotate("scylla_opaque")))
+__attribute__((annotate("scylla_mutability(mut, _)")))
+inline static void store64_be(uint8_t *b, uint64_t i) {
+  store64(b, htobe64(i));
+}
+
+// #define load64_le(b) (le64toh(load64(b)))
+// #define store64_le(b, i) (store64(b, htole64(i)))
+// #define load64_be(b) (be64toh(load64(b)))
+// #define store64_be(b, i) (store64(b, htobe64(i)))
 
 /* Co-existence of LowStar.Endianness and FStar.Endianness generates name
  * conflicts, because of course both insist on having no prefixes. Until a
