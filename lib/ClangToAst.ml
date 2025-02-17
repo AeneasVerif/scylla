@@ -739,11 +739,13 @@ let translate_file wanted_c_file file =
   (* TODO: Multifile support *)
   if name = Filename.basename wanted_c_file then
     Some (Filename.chop_suffix name ".c", List.filter_map translate_decl decls)
-  else if name = "lowstar_endianness.h" ||
-          name = "Hacl_Krmllib.h" ||
-          name = "lib_intrinsics.h" then
+  else
+  (* translate_external_decl will only translate declarations annotated with the
+     `scylla_opaque` attribute.
+     Furthermore, a file that does not contain any definitions will be filtered
+     out in krml during the Rust translation.
+     Hence, we can apply translate_external_decl on any file in the tree *)
     Some (Filename.chop_suffix name ".h", List.filter_map translate_external_decl decls)
-  else None
 
 (* add_to_list is only available starting from OCaml 5.1 *)
 let add_to_list x data m =
