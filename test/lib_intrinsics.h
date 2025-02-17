@@ -40,7 +40,7 @@
 __attribute__((annotate("scylla_opaque")))
 __attribute__((annotate("scylla_mutability(_, _, _, mut)")))
 inline static uint64_t Lib_IntTypes_Intrinsics_add_carry_u64(uint64_t cin, uint64_t x, uint64_t y, uint64_t *r) {
-    return Hacl_IntTypes_Intrinsics_add_carry_u64(x1, x2, x3, x4);
+    return Hacl_IntTypes_Intrinsics_add_carry_u64(cin, x, y, r);
 }
 
 __attribute__((annotate("scylla_opaque")))
@@ -54,7 +54,7 @@ inline static uint64_t Lib_IntTypes_Intrinsics_sub_borrow_u64(uint64_t cin, uint
 __attribute__((annotate("scylla_opaque")))
 __attribute__((annotate("scylla_mutability(_, _, _, mut)")))
 inline static uint32_t Lib_IntTypes_Intrinsics_add_carry_u32(uint32_t cin, uint32_t x, uint32_t y, uint32_t *r) {
-    return Hacl_IntTypes_Intrinsics_add_carry_u32(x1, x2, x3, x4);
+    return Hacl_IntTypes_Intrinsics_add_carry_u32(cin, x, y, r);
 }
 
 __attribute__((annotate("scylla_opaque")))
