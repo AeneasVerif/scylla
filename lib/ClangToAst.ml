@@ -429,6 +429,24 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' = match e.desc wit
       | _ -> failwith "memcpy does not have the right number of arguments"
       end
 
+  | Call {callee; args} when is_memset callee ->
+      (* Format.printf "Trying to translate memset %a@." Clang.Expr.pp e; *)
+      begin match args with
+      | dst :: v :: len :: _ ->
+          let len, ty = match len.desc with
+          (* We recognize the case `len = lhs * sizeof (_)` *)
+            | BinaryOperator {lhs; kind = Mul; rhs = { desc = UnaryExpr {kind = SizeOf; argument}; _}} ->
+                let len = translate_expr env Helpers.usize lhs in
+                let ty = extract_sizeof_ty argument in
+                len, ty
+            | _ -> failwith "ill-formed memcpy"
+          in
+          let dst = translate_expr env (TBuf (ty, false)) dst in
+          let elt = translate_expr env ty v in
+          EBufFill (dst, elt, len)
+      | _ -> failwith "memset does not have the right number of arguments"
+      end
+
   | Call {callee; args} ->
       (* In C, a function type is a pointer. We need to strip it to retrieve
          the standard arrow abstraction *)
