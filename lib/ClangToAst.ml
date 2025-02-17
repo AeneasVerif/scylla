@@ -349,14 +349,19 @@ let extract_constarray_size (ty: qual_type) = match ty.desc with
   | ConstantArray {size; _} -> size, Helpers.mk_uint32 size
   | _ -> failwith "Type is not a ConstantArray"
 
+(* Create a default value associated to a given type [typ] *)
+let create_default_value typ = match typ with
+  | TInt w -> Helpers.zero w
+  | _ -> failwith "Creating a default value is only supported for integer types"
+
 let translate_vardecl (env: env) (vdecl: var_decl_desc) : env * binder * Krml.Ast.expr =
   let name = vdecl.var_name in
   let typ = translate_typ vdecl.var_type in
   match vdecl.var_init with
-  (* Note: This can happen if, for instance, a C definition could not be found *)
   | None ->
-        Format.printf "Variable %s has no body@." name;
-        failwith "Variable declarations without definitions are not supported"
+        (* If there is no associated definition, we attempt to craft
+           a default initialization value *)
+        add_var env name, Helpers.fresh_binder name typ, create_default_value typ
   | Some {desc = InitList l; _} ->
         let size, size_e = extract_constarray_size vdecl.var_type in
         if List.length l = 1 then
