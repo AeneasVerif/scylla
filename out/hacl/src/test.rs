@@ -37,9 +37,25 @@ fn chacha20() {
     let mut out = [0u8; PLAINTEXT1.len()];
     crate::chacha::chacha20_encrypt(out.len().try_into().unwrap(), &mut out, &PLAINTEXT1, &KEY1, &NONCE1, COUNTER1);
     assert_eq!(out, CIPHER1);
-    println!("success");
+    println!("chacha20: success");
 }
 
 #[test]
 fn bignum_base() {
+    // echo 'obase=16;123456789123456789' | bc
+    let a = [ u32::from_be_bytes([ 0xAC, 0xD0, 0x5F, 0x15 ]), u32::from_be_bytes([0x01, 0xB6, 0x9B, 0x4B]), ];
+    let b = [ u32::from_be_bytes([ 0xAC, 0xD0, 0x5F, 0x15 ]), u32::from_be_bytes([0x01, 0xB6, 0x9B, 0x4B]), ];
+    let mut actual = [0u32; 4];
+    crate::bignum_base::Hacl_Bignum_Multiplication_bn_mul_u32(2, &a, 2, &b, &mut actual);
+    // echo 'obase=16;123456789123456789 * 123456789123456789' | bc
+    let expected = [
+        u32::from_be_bytes([ 0xDD, 0x70, 0x97, 0xB9 ]),  // 4
+        u32::from_be_bytes([ 0x65, 0xBF, 0xCD, 0xAC ]), // 3
+        u32::from_be_bytes([ 0xC5, 0x28, 0x12, 0xA8 ]), // 2
+        u32::from_be_bytes([ 0x00, 0x02, 0xEF, 0x77 ]), // 1
+    ];
+    let actual_hex = actual.map(|x| hex::encode(x.to_be_bytes()));
+    let expected_hex = expected.map(|x| hex::encode(x.to_be_bytes()));
+    assert_eq!(actual_hex, expected_hex);
+    println!("bignum_base: success");
 }

@@ -23,7 +23,7 @@ build:
 # We extract all of the tests into the same hacl directory
 test: test-chacha test-bignum_base
 	for f in rs/*.rs; do cp $$f out/hacl/src/; done
-	cd out/hacl && cargo build && target/debug/hacl
+	cd out/hacl && cargo test
 
 test-%: test/%.c $(wildcard test/include/*) | all
 	./scylla $(SCYLLA_OPTS) $< --output out/hacl/src/
