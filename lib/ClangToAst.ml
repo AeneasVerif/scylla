@@ -111,7 +111,8 @@ let translate_binop (kind: Clang.Ast.binary_operator_kind) : K.op = match kind w
   | Xor -> BXor
   | Or -> BOr
 
-  | LAnd | LOr -> failwith "translate_binop: logical ops"
+  | LAnd -> And
+  | LOr -> Or
 
   | Assign | AddAssign | MulAssign | DivAssign | RemAssign
   | SubAssign | ShlAssign | ShrAssign | AndAssign
@@ -738,7 +739,9 @@ let translate_file wanted_c_file file =
   (* TODO: Multifile support *)
   if name = Filename.basename wanted_c_file then
     Some (Filename.chop_suffix name ".c", List.filter_map translate_decl decls)
-  else if name = "lowstar_endianness.h" || name = "Hacl_Krmllib.h" then
+  else if name = "lowstar_endianness.h" ||
+          name = "Hacl_Krmllib.h" ||
+          name = "lib_intrinsics.h" then
     Some (Filename.chop_suffix name ".h", List.filter_map translate_external_decl decls)
   else None
 
