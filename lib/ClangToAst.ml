@@ -574,33 +574,50 @@ let add_lident_mapping (decl: decl) (filename: string) =
       (* Krml.KPrint.bprintf "%s --> %s\n" name (String.concat "::" path); *)
       name_map := FileMap.update name
         (function | None -> Some path | Some _ ->
-          Format.printf "Declaration %s appears twice in translation unit\n" name;
+          Format.printf "Declaration %s appears twice in translation unit, found again in %s\n" name filename;
           Some path)
         !name_map
 
   | Var vdecl ->
       name_map := FileMap.update vdecl.var_name
         (function | None -> Some path | Some _ ->
-          Format.printf "Declaration %s appears twice in translation unit\n" vdecl.var_name;
+          Format.printf "Variable declaration %s appears twice in translation unit\n" vdecl.var_name;
           Some path)
         !name_map
 
   (* TODO: Do we need to support this mapping for more decls *)
   | _ -> ()
 
-let split_into_files (ast: translation_unit) =
+let split_into_files (lib_dirs: string list) (ast: translation_unit) =
   let add_decl acc decl =
     let loc = Clang.Ast.location_of_node decl |> Clang.Ast.concrete_of_source_location File in
-    add_lident_mapping decl loc.filename;
-    let filename = loc.filename |> Filename.basename in
-    add_to_list filename decl acc
+    (* If this belongs to the C library, do not extract it *)
+    (* TODO: This could be done more efficiently by filtering after splitting into files,
+       to avoid repeated traversals of lib_dirs *)
+    if List.exists (fun x -> String.starts_with ~prefix:x loc.filename) lib_dirs then acc
+    else (
+      add_lident_mapping decl loc.filename;
+      let filename = loc.filename |> Filename.basename in
+      add_to_list filename decl acc
+    )
   in
   let decl_map = List.fold_left add_decl FileMap.empty ast.desc.items in
   FileMap.bindings decl_map |> List.map (fun (k, l) -> (k, List.rev l))
 
+(* On MacOS, C compilation often relies on a SDK, where parts of the stdlib
+    is located *)
+let get_sdkroot () =
+  (* TODO: Is there something similar on Linux, or is the stdlib included in
+     the Clang default include directories? *)
+  try
+    Unix.getenv "SDKROOT" |> String.split_on_char ':'
+  with
+    | Not_found -> []
+
 let translate_compil_unit (ast: translation_unit) (wanted_c_file: string) =
+  let lib_dirs = get_sdkroot () @ Clang.default_include_directories () in
   (* Format.printf "@[%a@]@." (Refl.pp [%refl: Clang.Ast.translation_unit] []) ast; *)
-  let files = split_into_files ast in
+  let files = split_into_files lib_dirs ast in
   let files = List.filter_map (translate_file wanted_c_file) files in
   files
 
