@@ -760,9 +760,15 @@ let translate_external_decl (decl: decl) = match decl.desc with
 
 let translate_file wanted_c_file file =
   let (name, decls) = file in
+  let basename = Filename.basename wanted_c_file in
   (* TODO: Multifile support *)
   if name = Filename.basename wanted_c_file then
     Some (Filename.chop_suffix name ".c", List.filter_map translate_decl decls)
+  else if Filename.remove_extension name = Filename.remove_extension basename then
+    (* Special case for a header file corresponding to the C file we want to extract
+       TODO: We should probably translate this file for type definitions, and to determine
+       which functions should be public *)
+    None
   else
   (* translate_external_decl will only translate declarations annotated with the
      `scylla_opaque` attribute.
