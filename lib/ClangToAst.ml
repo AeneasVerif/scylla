@@ -513,7 +513,7 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' = match e.desc wit
   | Paren _ -> failwith "translate_expr: paren"
 
   | _ ->
-    Format.printf "Trying to translate expression %a@." Clang.Expr.pp e;
+    Format.eprintf "Trying to translate expression %a@." Clang.Expr.pp e;
     failwith "translate_expr: unsupported expression"
 
 and translate_expr (env: env) (t: typ) (e: expr) : Krml.Ast.expr =
@@ -559,10 +559,10 @@ let translate_vardecl_with_memset (env: env) (vdecl: var_decl_desc) (args: expr 
      Instead, we should just translate the vardecl, and let translate_stmt translate the
      second statement *)
   let vname = vdecl.var_name in
-  let typ, len_var, size = match vdecl.var_type.desc with
-  | VariableArray { element; size = {desc = DeclRef {name; _}; _} as size } ->
-      TBuf (translate_typ element, false), name, size
-  | _ -> failwith "The variable being memset it not a variableArray"
+  let typ, size = match vdecl.var_type.desc with
+  | VariableArray { element; size } ->
+      TBuf (translate_typ element, false), size
+  | _ -> failwith "The variable being memset is not a variableArray"
   in
   match args with
   | dst :: v :: len :: _ ->
@@ -572,24 +572,30 @@ let translate_vardecl_with_memset (env: env) (vdecl: var_decl_desc) (args: expr 
       | _ -> failwith "not calling memset on the variable that was just declared"
       end;
       (* Checking that we are initializing the entire array *)
-      begin match len.desc with
-      | BinaryOperator {lhs = { desc = DeclRef { name; _}; _} ; kind = Mul;
+      let len = match len.desc with
+      | BinaryOperator {lhs; kind = Mul;
                         rhs = { desc = UnaryExpr {kind = SizeOf; argument}; _}}
-          when name = len_var && extract_sizeof_ty argument = Helpers.assert_tbuf typ ->
-          ()
-      | _ -> failwith "length of memset does not match declared length of array"
-      end;
+          when extract_sizeof_ty argument = Helpers.assert_tbuf typ ->
+          lhs
+      | _ -> failwith "memset length is not of the shape `N * sizeof(ty)`"
+      in
       let v = translate_expr env (Helpers.assert_tbuf typ) v in
-      let len = translate_expr env (typ_of_expr size) size in
-      add_var env vname,
-      Helpers.fresh_binder vname typ,
-      Krml.Ast.with_type typ (EBufCreate (Krml.Common.Stack, v, len))
+      let size = translate_expr env (typ_of_expr size) size in
+      let len = translate_expr env (typ_of_expr len) len in
+      (* Types might have been inferred differently, we only compare the expressions *)
+      if len.node = size.node then
+        add_var env vname,
+        Helpers.fresh_binder vname typ,
+        Krml.Ast.with_type typ (EBufCreate (Krml.Common.Stack, v, len))
+      else
+        failwith "length of memset does not match declared length of array"
 
   | _ -> failwith "memset does not have the right number of arguments"
 
 
 let rec translate_stmt' (env: env) (t: typ) (s: stmt_desc) : expr' = match s with
-  | Null -> failwith "translate_stmt: null"
+  (* This is a null statement, not a null pointer. It corresponds to a no-op *)
+  | Null -> EUnit
 
   | Compound l -> begin match l with
     | [] -> EUnit
