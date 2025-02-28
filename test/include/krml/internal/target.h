@@ -72,7 +72,7 @@
 #endif
 
 #ifndef KRML_MAYBE_UNUSED_VAR
-#  define KRML_MAYBE_UNUSED_VAR(x) KRML_HOST_IGNORE(x)
+#  define KRML_MAYBE_UNUSED_VAR(x) // KRML_HOST_IGNORE(x)
 #endif
 
 #ifndef KRML_MAYBE_UNUSED
@@ -209,17 +209,17 @@ inline static int32_t krml_time(void) {
 #  define _KRML_CHECK_SIZE_PRAGMA
 #endif
 
-#define KRML_CHECK_SIZE(size_elt, sz)                                          \
-  do {                                                                         \
-    _KRML_CHECK_SIZE_PRAGMA                                                    \
-    if (((size_t)(sz)) > ((size_t)(SIZE_MAX / (size_elt)))) {                  \
-      KRML_HOST_PRINTF(                                                        \
-          "Maximum allocatable size exceeded, aborting before overflow at "    \
-          "%s:%d\n",                                                           \
-          __FILE__, __LINE__);                                                 \
-      KRML_HOST_EXIT(253);                                                     \
-    }                                                                          \
-  } while (0)
+#define KRML_CHECK_SIZE(size_elt, sz)
+  // do {                                                                         \
+  //   _KRML_CHECK_SIZE_PRAGMA                                                    \
+  //   if (((size_t)(sz)) > ((size_t)(SIZE_MAX / (size_elt)))) {                  \
+  //     KRML_HOST_PRINTF(                                                        \
+  //         "Maximum allocatable size exceeded, aborting before overflow at "    \
+  //         "%s:%d\n",                                                           \
+  //         __FILE__, __LINE__);                                                 \
+  //     KRML_HOST_EXIT(253);                                                     \
+  //   }                                                                          \
+  // } while (0)
 
 #if defined(_MSC_VER) && _MSC_VER < 1900
 #  define KRML_HOST_SNPRINTF(buf, sz, fmt, arg)                                \
