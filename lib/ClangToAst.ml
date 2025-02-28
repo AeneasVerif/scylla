@@ -28,8 +28,13 @@ let find_var env var =
   (* This variable is not a local var *)
   (* TODO: More robust check, likely need env for top-level decls *)
   | Not_found ->
-      let path = FileMap.find var !name_map in
-      EQualified (path, var)
+      try
+        let path = FileMap.find var !name_map in
+        EQualified (path, var)
+      with
+      | Not_found ->
+          Printf.eprintf "Could not find variable %s\n" var;
+          raise Not_found
 
 let get_id_name (dname: declaration_name) = match dname with
   | IdentifierName s -> s
