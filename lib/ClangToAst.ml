@@ -804,8 +804,8 @@ let translate_file wanted_c_file file =
   let (name, decls) = file in
   let basename = Filename.basename wanted_c_file in
   (* TODO: Multifile support *)
-  if name = Filename.basename wanted_c_file then
-    Some (Filename.chop_suffix name ".c", List.filter_map translate_decl decls)
+  if name = basename then
+    Some (Filename.chop_extension name, List.filter_map translate_decl decls)
   else if Filename.remove_extension name = Filename.remove_extension basename then
     (* Special case for a header file corresponding to the C file we want to extract
        TODO: We should probably translate this file for type definitions, and to determine

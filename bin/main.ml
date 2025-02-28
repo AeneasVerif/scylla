@@ -34,7 +34,7 @@ Supported options:|}
         exit 255) fmt
   in
   let anon_fun f =
-    if Filename.check_suffix f ".c" then
+    if Filename.check_suffix f ".c" || Filename.check_suffix f ".h" then
       files := f :: !files
     else
       fatal_error "Unknown file extension for %s" f
