@@ -134,7 +134,7 @@ let translate_typ_name = function
   | "uint32_t" -> Helpers.uint32
   | "uint64_t" -> Helpers.uint64
   | s ->
-      Printf.printf "type name %s is unsupported\n" s;
+      Printf.eprintf "type name %s is unsupported\n" s;
       failwith "unsupported name"
 
 
@@ -396,13 +396,43 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' = match e.desc wit
   | BinaryOperator {lhs; kind; rhs} ->
       let lhs_ty = typ_of_expr lhs in
       let lhs = translate_expr env lhs_ty lhs in
-      let rhs = translate_expr env (typ_of_expr rhs) rhs in
+      let rhs_ty = typ_of_expr rhs in
+      let rhs = translate_expr env rhs_ty rhs in
       let kind = translate_binop kind in
+
+      let combine_arith kind lhs rhs =
+        let w = Helpers.assert_tint rhs_ty in
+        let op_type = Helpers.type_of_op kind w in
+        let op = with_type op_type (EOp (kind, w)) in
+        with_type rhs_ty (EApp (op, [lhs; rhs]))
+      in
+
       (* In case of pointer arithmetic, we need to perform a rewriting into EBufSub/Diff *)
       begin match lhs_ty, kind with
-      | TBuf _, Add -> EBufSub (lhs, rhs)
-      (* There is no support for EBufDiff in the krml Ast to MiniRust translation *)
-      | TBuf _, Sub -> failwith "substractions in pointer arithmetic are not supported"
+      | TBuf _, Add ->
+          begin match lhs.node with
+          (* Successive pointer arithmetic operations are likely due to operator precedence, e.g.,
+             ptr + n - m parsed as (ptr + n) - m, when ptr + (n - m) might be intended.
+             We recognize these cases, and normalize them to perform pointer arithmetic only once
+          *)
+          | EBufSub (lhs', rhs') ->
+              (* (lhs' + rhs') + rhs --> lhs' + (rhs' + rhs) *)
+              EBufSub (lhs', combine_arith Add rhs' rhs)
+          | EBufDiff (lhs', rhs') ->
+              (* (lhs' - rhs') + rhs --> lhs' + (rhs - rhs') *)
+              EBufSub (lhs', combine_arith Sub rhs rhs')
+          | _ -> EBufSub (lhs, rhs)
+          end
+      | TBuf _, Sub ->
+          begin match lhs.node with
+          | EBufSub (lhs', rhs') ->
+              (* (lhs' + rhs') - rhs --> lhs' + (rhs' - rhs) *)
+              EBufSub (lhs', combine_arith Sub rhs' rhs)
+          | EBufDiff (lhs', rhs') ->
+              (* (lhs' - rhs') - rhs --> lhs' - (rhs' + rhs) *)
+              EBufDiff (lhs', combine_arith Add rhs' rhs)
+          | _ -> EBufDiff (lhs, rhs)
+          end
       | _ ->
         (* TODO: Likely need a "assert_tint_or_tbool" *)
         let lhs_w = Helpers.assert_tint lhs_ty in
@@ -670,6 +700,7 @@ let translate_param (p: parameter) : binder * string =
   (* Not handling default expressions for function parameters *)
   assert (p.default = None);
   Helpers.fresh_binder p.name typ, p.name
+
 
 let translate_fundecl (fdecl: function_decl) =
   let name = get_id_name fdecl.name in
