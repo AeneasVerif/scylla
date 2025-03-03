@@ -578,9 +578,17 @@ let translate_vardecl_with_memset (env: env) (vdecl: var_decl_desc) (args: expr 
      second statement *)
   let vname = vdecl.var_name in
   let typ, size = match vdecl.var_type.desc with
+
   | VariableArray { element; size } ->
+      TBuf (translate_typ element, false), translate_expr env (typ_of_expr size) size
+  | ConstantArray {element; size_as_expr; _} ->
+      let size = match size_as_expr with
+      | None -> failwith "Length of constant array is not an expr"
+      | Some size -> translate_expr env Helpers.usize size
+      in
       TBuf (translate_typ element, false), size
-  | _ -> failwith "The variable being memset is not a variableArray"
+  | _ ->
+      failwith "The variable being memset is not a constantArray or variableArray"
   in
   match args with
   | dst :: v :: len :: _ ->
@@ -598,8 +606,7 @@ let translate_vardecl_with_memset (env: env) (vdecl: var_decl_desc) (args: expr 
       | _ -> failwith "memset length is not of the shape `N * sizeof(ty)`"
       in
       let v = translate_expr env (Helpers.assert_tbuf typ) v in
-      let size = translate_expr env (typ_of_expr size) size in
-      let len = translate_expr env (typ_of_expr len) len in
+      let len = translate_expr env Helpers.usize len in
       (* Types might have been inferred differently, we only compare the expressions *)
       if len.node = size.node then
         add_var env vname,
