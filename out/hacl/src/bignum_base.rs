@@ -16,7 +16,7 @@ pub fn Hacl_Bignum_Base_mul_wide_add2_u32(a: u32, b: u32, c_in: u32, out: &mut [
 pub fn Hacl_Bignum_Base_mul_wide_add2_u64(a: u64, b: u64, c_in: u64, out: &mut [u64]) -> u64
 {
   let out0: u64 = out[0usize];
-  let res: crate::fstar_uint128::uint128 =
+  let res: crate::types::FStar_UInt128_uint128 =
       crate::hacl_krmllib::FStar_UInt128_add(
         crate::hacl_krmllib::FStar_UInt128_add(
           crate::hacl_krmllib::FStar_UInt128_mul_wide(a, b),
@@ -289,6 +289,48 @@ pub fn Hacl_Bignum_Multiplication_bn_mul_u32(
   }
 }
 
+pub fn Hacl_Bignum_Multiplication_bn_mul_u64(
+  aLen: u32,
+  a: &[u64],
+  bLen: u32,
+  b: &[u64],
+  res: &mut [u64]
+)
+{
+  (res[0usize..aLen.wrapping_add(bLen) as usize]).copy_from_slice(
+    &vec![0u64; aLen.wrapping_add(bLen) as usize].into_boxed_slice()
+  );
+  for i0 in 0u32..bLen
+  {
+    let bj: u64 = b[i0 as usize];
+    let res_j: (&mut [u64], &mut [u64]) = res.split_at_mut(i0 as usize);
+    let mut c: u64 = 0u64;
+    for i in 0u32..aLen.wrapping_div(4u32)
+    {
+      let a_i: u64 = a[4u32.wrapping_mul(i) as usize];
+      let res_i0: (&mut [u64], &mut [u64]) = res_j.1.split_at_mut(4u32.wrapping_mul(i) as usize);
+      c = Hacl_Bignum_Base_mul_wide_add2_u64(a_i, bj, c, res_i0.1);
+      let a_i0: u64 = a[4u32.wrapping_mul(i).wrapping_add(1u32) as usize];
+      let res_i1: (&mut [u64], &mut [u64]) = res_i0.1.split_at_mut(1usize);
+      c = Hacl_Bignum_Base_mul_wide_add2_u64(a_i0, bj, c, res_i1.1);
+      let a_i1: u64 = a[4u32.wrapping_mul(i).wrapping_add(2u32) as usize];
+      let res_i2: (&mut [u64], &mut [u64]) = res_i1.1.split_at_mut(1usize);
+      c = Hacl_Bignum_Base_mul_wide_add2_u64(a_i1, bj, c, res_i2.1);
+      let a_i2: u64 = a[4u32.wrapping_mul(i).wrapping_add(3u32) as usize];
+      let res_i: (&mut [u64], &mut [u64]) = res_i2.1.split_at_mut(1usize);
+      c = Hacl_Bignum_Base_mul_wide_add2_u64(a_i2, bj, c, res_i.1)
+    };
+    for i in aLen.wrapping_div(4u32).wrapping_mul(4u32)..aLen
+    {
+      let a_i: u64 = a[i as usize];
+      let res_i: (&mut [u64], &mut [u64]) = res_j.1.split_at_mut(i as usize);
+      c = Hacl_Bignum_Base_mul_wide_add2_u64(a_i, bj, c, res_i.1)
+    };
+    let r: u64 = c;
+    res[aLen.wrapping_add(i0) as usize] = r
+  }
+}
+
 pub fn Hacl_Bignum_Multiplication_bn_sqr_u32(aLen: u32, a: &[u32], res: &mut [u32])
 {
   (res[0usize..aLen.wrapping_add(aLen) as usize]).copy_from_slice(
@@ -355,5 +397,78 @@ pub fn Hacl_Bignum_Multiplication_bn_sqr_u32(aLen: u32, a: &[u32], res: &mut [u3
   let r0: u32 =
       Hacl_Bignum_Addition_bn_add_eq_len_u32(aLen.wrapping_add(aLen), &a_copy, &b_copy, res);
   let c1: u32 = r0;
+  ()
+}
+
+pub fn Hacl_Bignum_Multiplication_bn_sqr_u64(aLen: u32, a: &[u64], res: &mut [u64])
+{
+  (res[0usize..aLen.wrapping_add(aLen) as usize]).copy_from_slice(
+    &vec![0u64; aLen.wrapping_add(aLen) as usize].into_boxed_slice()
+  );
+  for i0 in 0u32..aLen
+  {
+    let a_j: u64 = a[i0 as usize];
+    let ab: &[u64] = a;
+    let res_j: (&mut [u64], &mut [u64]) = res.split_at_mut(i0 as usize);
+    let mut c: u64 = 0u64;
+    for i in 0u32..i0.wrapping_div(4u32)
+    {
+      let a_i: u64 = ab[4u32.wrapping_mul(i) as usize];
+      let res_i0: (&mut [u64], &mut [u64]) = res_j.1.split_at_mut(4u32.wrapping_mul(i) as usize);
+      c = Hacl_Bignum_Base_mul_wide_add2_u64(a_i, a_j, c, res_i0.1);
+      let a_i0: u64 = ab[4u32.wrapping_mul(i).wrapping_add(1u32) as usize];
+      let res_i1: (&mut [u64], &mut [u64]) = res_i0.1.split_at_mut(1usize);
+      c = Hacl_Bignum_Base_mul_wide_add2_u64(a_i0, a_j, c, res_i1.1);
+      let a_i1: u64 = ab[4u32.wrapping_mul(i).wrapping_add(2u32) as usize];
+      let res_i2: (&mut [u64], &mut [u64]) = res_i1.1.split_at_mut(1usize);
+      c = Hacl_Bignum_Base_mul_wide_add2_u64(a_i1, a_j, c, res_i2.1);
+      let a_i2: u64 = ab[4u32.wrapping_mul(i).wrapping_add(3u32) as usize];
+      let res_i: (&mut [u64], &mut [u64]) = res_i2.1.split_at_mut(1usize);
+      c = Hacl_Bignum_Base_mul_wide_add2_u64(a_i2, a_j, c, res_i.1)
+    };
+    for i in i0.wrapping_div(4u32).wrapping_mul(4u32)..i0
+    {
+      let a_i: u64 = ab[i as usize];
+      let res_i: (&mut [u64], &mut [u64]) = res_j.1.split_at_mut(i as usize);
+      c = Hacl_Bignum_Base_mul_wide_add2_u64(a_i, a_j, c, res_i.1)
+    };
+    let r: u64 = c;
+    res[i0.wrapping_add(i0) as usize] = r
+  };
+  let mut a_copy0: Box<[u64]> = vec![0u64; aLen.wrapping_add(aLen) as usize].into_boxed_slice();
+  let mut b_copy0: Box<[u64]> = vec![0u64; aLen.wrapping_add(aLen) as usize].into_boxed_slice();
+  ((&mut a_copy0)[0usize..aLen.wrapping_add(aLen) as usize]).copy_from_slice(
+    &res[0usize..aLen.wrapping_add(aLen) as usize]
+  );
+  ((&mut b_copy0)[0usize..aLen.wrapping_add(aLen) as usize]).copy_from_slice(
+    &res[0usize..aLen.wrapping_add(aLen) as usize]
+  );
+  let r: u64 =
+      Hacl_Bignum_Addition_bn_add_eq_len_u64(aLen.wrapping_add(aLen), &a_copy0, &b_copy0, res);
+  let c0: u64 = r;
+  let mut tmp: Box<[u64]> = vec![0u64; aLen.wrapping_add(aLen) as usize].into_boxed_slice();
+  for i in 0u32..aLen
+  {
+    let res1: crate::types::FStar_UInt128_uint128 =
+        crate::hacl_krmllib::FStar_UInt128_mul_wide(a[i as usize], a[i as usize]);
+    let hi: u64 =
+        crate::hacl_krmllib::FStar_UInt128_uint128_to_uint64(
+          crate::hacl_krmllib::FStar_UInt128_shift_right(res1, 64u32)
+        );
+    let lo: u64 = crate::hacl_krmllib::FStar_UInt128_uint128_to_uint64(res1);
+    (&mut tmp)[2u32.wrapping_mul(i) as usize] = lo;
+    (&mut tmp)[2u32.wrapping_mul(i).wrapping_add(1u32) as usize] = hi
+  };
+  let mut a_copy: Box<[u64]> = vec![0u64; aLen.wrapping_add(aLen) as usize].into_boxed_slice();
+  let mut b_copy: Box<[u64]> = vec![0u64; aLen.wrapping_add(aLen) as usize].into_boxed_slice();
+  ((&mut a_copy)[0usize..aLen.wrapping_add(aLen) as usize]).copy_from_slice(
+    &res[0usize..aLen.wrapping_add(aLen) as usize]
+  );
+  ((&mut b_copy)[0usize..aLen.wrapping_add(aLen) as usize]).copy_from_slice(
+    &(&tmp)[0usize..aLen.wrapping_add(aLen) as usize]
+  );
+  let r0: u64 =
+      Hacl_Bignum_Addition_bn_add_eq_len_u64(aLen.wrapping_add(aLen), &a_copy, &b_copy, res);
+  let c1: u64 = r0;
   ()
 }
