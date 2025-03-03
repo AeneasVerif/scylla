@@ -339,7 +339,10 @@ let extract_sizeof_ty = function
 
 (* Translate expression [e], with expected type [t] *)
 let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' = match e.desc with
-  | IntegerLiteral (Int n) -> EConstant (Helpers.assert_tint t, string_of_int n)
+  | IntegerLiteral n ->
+      let ty = Helpers.assert_tint t in
+      let signed = K.is_signed ty in
+      EConstant (ty, Clang.Ast.string_of_integer_literal ~signed n)
 
   | FloatingLiteral _ -> failwith "translate_expr: floating literal"
   | StringLiteral _ -> failwith "translate_expr: string literal"
