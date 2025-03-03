@@ -802,7 +802,6 @@ let translate_param (p: parameter) : binder * string =
   assert (p.default = None);
   Helpers.fresh_binder p.name typ, p.name
 
-
 let translate_fundecl (fdecl: function_decl) =
   let name = get_id_name fdecl.name in
   let ret_type = translate_typ fdecl.function_type.result in
@@ -816,14 +815,16 @@ let translate_fundecl (fdecl: function_decl) =
   (* To adopt a DeBruijn representation, the list must be reversed to
    have the last binder as the first element of the environment *)
   let env = {vars = List.rev vars} in
-  let body = match fdecl.body with
-    | None -> Helpers.eunit
-    | Some s -> translate_stmt env ret_type s.desc
-  in
-  let flags = if fdecl.inline_specified then [Krml.Common.Inline] else [] in
-  let decl = Krml.Ast.(DFunction (None, flags, 0, 0, ret_type, (FileMap.find name !name_map, name), args, body)) in
-  (* Krml.KPrint.bprintf "Resulting decl %a\n" Krml.PrintAst.pdecl decl; *)
-  decl
+  match fdecl.body with
+  (* If the function body is empty, this is likely a prototype. We
+     do not extract it *)
+  | None -> None
+  | Some s ->
+    let body = translate_stmt env ret_type s.desc in
+    let flags = if fdecl.inline_specified then [Krml.Common.Inline] else [] in
+    let decl = Krml.Ast.(DFunction (None, flags, 0, 0, ret_type, (FileMap.find name !name_map, name), args, body)) in
+    (* Krml.KPrint.bprintf "Resulting decl %a\n" Krml.PrintAst.pdecl decl; *)
+    Some decl
 
 (* Translate a field declaration inside a struct type declaration *)
 let translate_field (decl: decl) =
@@ -846,7 +847,7 @@ let translate_decl (decl: decl) =
     | Function fdecl ->
       (* TODO: How to handle libc? *)
       (* TODO: Support multiple files *)
-      Some (translate_fundecl fdecl)
+      translate_fundecl fdecl
     | Var vdecl ->
         if vdecl.var_init = None then
           (* Prototype, e.g. extern int x; *)
@@ -922,22 +923,19 @@ let translate_external_decl (decl: decl) = match decl.desc with
 
 let translate_file wanted_c_file file =
   let (name, decls) = file in
-  let basename = Filename.basename wanted_c_file in
+  (* We extract both the .c and the .h together. However, we will not
+     extract function prototypes without a body, avoiding duplicated definitions *)
+  let basename = Filename.remove_extension (Filename.basename wanted_c_file) in
   (* TODO: Multifile support *)
   if name = basename then
-    Some (Filename.chop_extension name, List.filter_map translate_decl decls)
-  else if Filename.remove_extension name = Filename.remove_extension basename then
-    (* Special case for a header file corresponding to the C file we want to extract
-       TODO: We should probably translate this file for type definitions, and to determine
-       which functions should be public *)
-    None
+    Some (name, List.filter_map translate_decl decls)
   else
   (* translate_external_decl will only translate declarations annotated with the
      `scylla_opaque` attribute.
      Furthermore, a file that does not contain any definitions will be filtered
      out in krml during the Rust translation.
      Hence, we can apply translate_external_decl on any file in the tree *)
-    Some (Filename.chop_suffix name ".h", List.filter_map translate_external_decl decls)
+    Some (name, List.filter_map translate_external_decl decls)
 
 (* add_to_list is only available starting from OCaml 5.1 *)
 let add_to_list x data m =
@@ -995,7 +993,10 @@ let split_into_files (lib_dirs: string list) (ast: translation_unit) =
     if List.exists (fun x -> String.starts_with ~prefix:x loc.filename) lib_dirs then acc
     else (
       add_lident_mapping decl loc.filename;
-      let filename = loc.filename |> Filename.basename in
+      (* We merge .h and .c files here. Duplicated declarations (e.g., prototypes in the
+         .h file, and definitions in the .c file) will be filtered during the translation
+         of declaration *)
+      let filename = loc.filename |> Filename.basename |> Filename.remove_extension in
       add_to_list filename decl acc
     )
   in
