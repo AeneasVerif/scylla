@@ -335,6 +335,14 @@ let is_memset (e: expr) = match e.desc with
       name = "__builtin___memset_chk" || name = "memset"
   | _ -> false
 
+(* Check whether a given Clang expression is a calloc callee *)
+let is_calloc (e: expr) = match e.desc with
+  | DeclRef { name; _ } ->
+      let name = get_id_name name in
+      name = "calloc"
+  | _ -> false
+
+
 (* Simple heuristics to detect whether a loop condition is always false, in this case we can omit the loop.
    TODO: Should probably check for absence of side-effects in condition evaluation *)
 let is_trivial_false (e: Krml.Ast.expr) = match e.node with
@@ -539,7 +547,13 @@ and translate_expr (env: env) (t: typ) (e: expr) : Krml.Ast.expr =
 
 let extract_constarray_size (ty: qual_type) = match ty.desc with
   | ConstantArray {size; _} -> size, Helpers.mk_uint32 size
-  | _ -> failwith "Type is not a ConstantArray"
+  | _ ->
+      Format.eprintf "Expected ConstantArray, got type %a\n" Clang.Type.pp ty;
+      failwith "Type is not a ConstantArray"
+
+let is_constantarray (ty: qual_type) = match ty.desc with
+  | ConstantArray _ -> true
+  | _ -> false
 
 (* Create a default value associated to a given type [typ] *)
 let create_default_value typ = match typ with
@@ -554,7 +568,7 @@ let translate_vardecl (env: env) (vdecl: var_decl_desc) : env * binder * Krml.As
         (* If there is no associated definition, we attempt to craft
            a default initialization value *)
         add_var env name, Helpers.fresh_binder name typ, create_default_value typ
-  | Some {desc = InitList l; _} ->
+  | Some {desc = InitList l; _} when is_constantarray vdecl.var_type ->
         let size, size_e = extract_constarray_size vdecl.var_type in
         if List.length l = 1 then
           (* One element initializer, possibly repeated *)
@@ -567,6 +581,23 @@ let translate_vardecl (env: env) (vdecl: var_decl_desc) : env * binder * Krml.As
           let es = List.map (translate_expr env ty) l in
           add_var env name, Helpers.fresh_binder name typ, Krml.Ast.with_type typ (EBufCreateL (Krml.Common.Stack, es))
         )
+
+  | Some {desc = Call {callee; args}; _}
+  (* There commonly is a cast around calloc to the type of the variable. We omit it when translating it to Rust,
+     as the allocation will be typed *)
+  | Some {desc = Cast {operand = {desc = Call {callee; args}; _}; _}; _} when is_calloc callee ->
+      begin match args with
+      | [len; {desc = UnaryExpr {kind = SizeOf; argument}; _}] ->
+          let len = translate_expr env Helpers.usize len in
+          (* Sanity check: calloc is of the right type *)
+          let ty = Helpers.assert_tbuf typ in
+          assert (extract_sizeof_ty argument = ty);
+          let w = Helpers.assert_tint ty in
+          add_var env name, Helpers.fresh_binder name typ,
+            Krml.Ast.with_type typ (EBufCreate (Krml.Common.Heap, Helpers.zero w, len))
+      | _ -> failwith "calloc is expected to have two arguments"
+      end
+
   | Some e -> add_var env name, Helpers.fresh_binder name typ, translate_expr env typ e
 
 (* Translation of a variable declaration, followed by a memset of [args] *)
