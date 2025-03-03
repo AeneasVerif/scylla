@@ -7,11 +7,20 @@ module K = Krml.Constant
 module Helpers = Krml.Helpers
 
 module FileMap = Map.Make(String)
+module StructMap = Map.Make(String)
 
 (* A map from function names to the string list used in their fully qualified
    name. It is filled at the beginning of the translation, when exploring the
    translation unit *)
 let name_map = ref FileMap.empty
+
+(* A map from structure names to their corresponding KaRaMeL `type_def` declaration.
+   Struct declarations are typically done through a typedef indirection in C, e.g.,
+   `typedef struct name_s { ... } name;`
+   This map is used to deconstruct the indirection in Rust, and directly define
+   a struct type `name`
+*)
+let struct_map = ref StructMap.empty
 
 type env = {
   (* Variables in the context *)
@@ -307,17 +316,25 @@ let rec translate_typ (typ: qual_type) = match typ.desc with
           Helpers.fold_arrow ts ret_typ
       end
 
-  | Record  {name; _} -> get_id_name name |> translate_typ_name
+  | Record  _ -> failwith "translate_typ: record"
 
   | Typedef {name; _} -> get_id_name name |> translate_typ_name
 
   | BuiltinType t -> translate_builtin_typ t
 
-  | Elaborated {named_type; _} -> translate_typ named_type
-
   | _ ->
       Format.eprintf "Trying to translate type %a\n" Clang.Type.pp typ;
       failwith "translate_typ: unsupported type"
+
+(* Elaborate a type during a typedef declaration *)
+let elaborate_typ (typ: qual_type) = match typ.desc with
+  | Elaborated { keyword = Struct; named_type = { desc = Record {name; _}; _}; _ } ->
+      let name = get_id_name name in
+      StructMap.find name !struct_map
+  (* TODO: Similar workflow as structs *)
+  | Elaborated { keyword = Enum; _} -> failwith "elaborated enums not supported"
+  | Elaborated _ -> failwith "elaborated types that are not enums or structs are not supported"
+  | _ -> failwith "The underlying type of a typedef is not an elaborated type"
 
 (* Takes a Clangml expression [e], and retrieves the corresponding karamel Ast type *)
 let typ_of_expr (e: expr) : typ = Clang.Type.of_node e |> translate_typ
@@ -828,10 +845,15 @@ let translate_decl (decl: decl) =
 
     | RecordDecl {name; fields; _} ->
         let fields = List.map translate_field fields in
-        Some (DType ((FileMap.find name !name_map, name), [], 0, 0, Flat fields))
+        struct_map := StructMap.update name (function
+          | None -> Some (Flat fields)
+          | Some _ -> Printf.eprintf "A type declaration already exists for struct %s\n" name; failwith "redefining a structure type")
+        !struct_map;
+        None
 
     | TypedefDecl {name; underlying_type} ->
-        Some (DType ((FileMap.find name !name_map, name), [], 0, 0, Abbrev (translate_typ underlying_type)))
+        let ty = elaborate_typ underlying_type in
+        Some (DType ((FileMap.find name !name_map, name), [], 0, 0, ty))
 
     | _ ->
         raise Unsupported
