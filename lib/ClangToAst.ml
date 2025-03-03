@@ -307,15 +307,16 @@ let rec translate_typ (typ: qual_type) = match typ.desc with
           Helpers.fold_arrow ts ret_typ
       end
 
-  | Record  _ -> failwith "translate_typ: record"
-
+  | Record  {name; _} -> get_id_name name |> translate_typ_name
 
   | Typedef {name; _} -> get_id_name name |> translate_typ_name
 
   | BuiltinType t -> translate_builtin_typ t
 
+  | Elaborated {named_type; _} -> translate_typ named_type
+
   | _ ->
-      Format.printf "Trying to translate type %a" Clang.Type.pp typ;
+      Format.eprintf "Trying to translate type %a\n" Clang.Type.pp typ;
       failwith "translate_typ: unsupported type"
 
 (* Takes a Clangml expression [e], and retrieves the corresponding karamel Ast type *)
@@ -568,6 +569,10 @@ let translate_vardecl (env: env) (vdecl: var_decl_desc) : env * binder * Krml.As
         (* If there is no associated definition, we attempt to craft
            a default initialization value *)
         add_var env name, Helpers.fresh_binder name typ, create_default_value typ
+
+  (* Intializing a constant array with a list of elements.
+     For instance, uint32[2] = { 0 };
+  *)
   | Some {desc = InitList l; _} when is_constantarray vdecl.var_type ->
         let size, size_e = extract_constarray_size vdecl.var_type in
         if List.length l = 1 then
@@ -786,6 +791,18 @@ let translate_fundecl (fdecl: function_decl) =
   (* Krml.KPrint.bprintf "Resulting decl %a\n" Krml.PrintAst.pdecl decl; *)
   decl
 
+(* Translate a field declaration inside a struct type declaration *)
+let translate_field (decl: decl) =
+  match decl.desc with
+  | Field {name; qual_type; bitwidth; init; attributes} ->
+      (* Sanity-checks for unsupported features *)
+      assert (bitwidth = None);
+      assert (init = None);
+      assert (attributes = []);
+      (* TODO: What is the boolean used for in krml fields_t_opt type? *)
+      (Some name, (translate_typ qual_type, false))
+  | _ -> failwith "Struct declarations should only contain fields"
+
 (* Returning an option is only a hack to make progress.
    TODO: Proper handling of  decls *)
 let translate_decl (decl: decl) =
@@ -808,6 +825,14 @@ let translate_decl (decl: decl) =
           let flags = [] in
           (* TODO: What is the int for? *)
           Some (DGlobal (flags, lid, 0, typ, e))
+
+    | RecordDecl {name; fields; _} ->
+        let fields = List.map translate_field fields in
+        Some (DType ((FileMap.find name !name_map, name), [], 0, 0, Flat fields))
+
+    | TypedefDecl {name; underlying_type} ->
+        Some (DType ((FileMap.find name !name_map, name), [], 0, 0, Abbrev (translate_typ underlying_type)))
+
     | _ ->
         raise Unsupported
   with e ->
@@ -902,6 +927,20 @@ let add_lident_mapping (decl: decl) (filename: string) =
       name_map := FileMap.update vdecl.var_name
         (function | None -> Some path | Some _ ->
           Format.printf "Variable declaration %s appears twice in translation unit\n" vdecl.var_name;
+          Some path)
+        !name_map
+
+  | RecordDecl rdecl ->
+      name_map := FileMap.update rdecl.name
+        (function | None -> Some path | Some _ ->
+          Format.printf "Record Type declaration %s appears twice in translation unit\n" rdecl.name;
+          Some path)
+        !name_map
+
+  | TypedefDecl tdecl ->
+      name_map := FileMap.update tdecl.name
+        (function | None -> Some path | Some _ ->
+          Format.printf "Typedef declaration %s appears twice in translation unit\n" tdecl.name;
           Some path)
         !name_map
 
