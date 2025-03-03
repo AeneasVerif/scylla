@@ -110,16 +110,16 @@ pub fn Hacl_Bignum_Addition_bn_sub_eq_len_u32(aLen: u32, a: &[u32], b: &[u32], r
     c = crate::lib_intrinsics::Lib_IntTypes_Intrinsics_sub_borrow_u32(c, t1, t20, res_i0.1);
     let t10: u32 = a[4u32.wrapping_mul(i).wrapping_add(1u32) as usize];
     let t21: u32 = b[4u32.wrapping_mul(i).wrapping_add(1u32) as usize];
-    let res_i1: &mut [u32] = &mut (&mut res[4u32.wrapping_mul(i) as usize..])[1usize..];
-    c = crate::lib_intrinsics::Lib_IntTypes_Intrinsics_sub_borrow_u32(c, t10, t21, res_i1);
+    let res_i1: (&mut [u32], &mut [u32]) = res_i0.1.split_at_mut(1usize);
+    c = crate::lib_intrinsics::Lib_IntTypes_Intrinsics_sub_borrow_u32(c, t10, t21, res_i1.1);
     let t11: u32 = a[4u32.wrapping_mul(i).wrapping_add(2u32) as usize];
     let t22: u32 = b[4u32.wrapping_mul(i).wrapping_add(2u32) as usize];
-    let res_i2: &mut [u32] = &mut (&mut res[4u32.wrapping_mul(i) as usize..])[2usize..];
-    c = crate::lib_intrinsics::Lib_IntTypes_Intrinsics_sub_borrow_u32(c, t11, t22, res_i2);
+    let res_i2: (&mut [u32], &mut [u32]) = res_i1.1.split_at_mut(1usize);
+    c = crate::lib_intrinsics::Lib_IntTypes_Intrinsics_sub_borrow_u32(c, t11, t22, res_i2.1);
     let t12: u32 = a[4u32.wrapping_mul(i).wrapping_add(3u32) as usize];
     let t2: u32 = b[4u32.wrapping_mul(i).wrapping_add(3u32) as usize];
-    let res_i: &mut [u32] = &mut (&mut res[4u32.wrapping_mul(i) as usize..])[3usize..];
-    c = crate::lib_intrinsics::Lib_IntTypes_Intrinsics_sub_borrow_u32(c, t12, t2, res_i)
+    let res_i: (&mut [u32], &mut [u32]) = res_i2.1.split_at_mut(1usize);
+    c = crate::lib_intrinsics::Lib_IntTypes_Intrinsics_sub_borrow_u32(c, t12, t2, res_i.1)
   };
   for i in aLen.wrapping_div(4u32).wrapping_mul(4u32)..aLen
   {
@@ -143,16 +143,16 @@ pub fn Hacl_Bignum_Addition_bn_sub_eq_len_u64(aLen: u32, a: &[u64], b: &[u64], r
     c = crate::lib_intrinsics::Lib_IntTypes_Intrinsics_sub_borrow_u64(c, t1, t20, res_i0.1);
     let t10: u64 = a[4u32.wrapping_mul(i).wrapping_add(1u32) as usize];
     let t21: u64 = b[4u32.wrapping_mul(i).wrapping_add(1u32) as usize];
-    let res_i1: &mut [u64] = &mut (&mut res[4u32.wrapping_mul(i) as usize..])[1usize..];
-    c = crate::lib_intrinsics::Lib_IntTypes_Intrinsics_sub_borrow_u64(c, t10, t21, res_i1);
+    let res_i1: (&mut [u64], &mut [u64]) = res_i0.1.split_at_mut(1usize);
+    c = crate::lib_intrinsics::Lib_IntTypes_Intrinsics_sub_borrow_u64(c, t10, t21, res_i1.1);
     let t11: u64 = a[4u32.wrapping_mul(i).wrapping_add(2u32) as usize];
     let t22: u64 = b[4u32.wrapping_mul(i).wrapping_add(2u32) as usize];
-    let res_i2: &mut [u64] = &mut (&mut res[4u32.wrapping_mul(i) as usize..])[2usize..];
-    c = crate::lib_intrinsics::Lib_IntTypes_Intrinsics_sub_borrow_u64(c, t11, t22, res_i2);
+    let res_i2: (&mut [u64], &mut [u64]) = res_i1.1.split_at_mut(1usize);
+    c = crate::lib_intrinsics::Lib_IntTypes_Intrinsics_sub_borrow_u64(c, t11, t22, res_i2.1);
     let t12: u64 = a[4u32.wrapping_mul(i).wrapping_add(3u32) as usize];
     let t2: u64 = b[4u32.wrapping_mul(i).wrapping_add(3u32) as usize];
-    let res_i: &mut [u64] = &mut (&mut res[4u32.wrapping_mul(i) as usize..])[3usize..];
-    c = crate::lib_intrinsics::Lib_IntTypes_Intrinsics_sub_borrow_u64(c, t12, t2, res_i)
+    let res_i: (&mut [u64], &mut [u64]) = res_i2.1.split_at_mut(1usize);
+    c = crate::lib_intrinsics::Lib_IntTypes_Intrinsics_sub_borrow_u64(c, t12, t2, res_i.1)
   };
   for i in aLen.wrapping_div(4u32).wrapping_mul(4u32)..aLen
   {
@@ -176,16 +176,16 @@ pub fn Hacl_Bignum_Addition_bn_add_eq_len_u32(aLen: u32, a: &[u32], b: &[u32], r
     c = crate::lib_intrinsics::Lib_IntTypes_Intrinsics_add_carry_u32(c, t1, t20, res_i0.1);
     let t10: u32 = a[4u32.wrapping_mul(i).wrapping_add(1u32) as usize];
     let t21: u32 = b[4u32.wrapping_mul(i).wrapping_add(1u32) as usize];
-    let res_i1: &mut [u32] = &mut (&mut res[4u32.wrapping_mul(i) as usize..])[1usize..];
-    c = crate::lib_intrinsics::Lib_IntTypes_Intrinsics_add_carry_u32(c, t10, t21, res_i1);
+    let res_i1: (&mut [u32], &mut [u32]) = res_i0.1.split_at_mut(1usize);
+    c = crate::lib_intrinsics::Lib_IntTypes_Intrinsics_add_carry_u32(c, t10, t21, res_i1.1);
     let t11: u32 = a[4u32.wrapping_mul(i).wrapping_add(2u32) as usize];
     let t22: u32 = b[4u32.wrapping_mul(i).wrapping_add(2u32) as usize];
-    let res_i2: &mut [u32] = &mut (&mut res[4u32.wrapping_mul(i) as usize..])[2usize..];
-    c = crate::lib_intrinsics::Lib_IntTypes_Intrinsics_add_carry_u32(c, t11, t22, res_i2);
+    let res_i2: (&mut [u32], &mut [u32]) = res_i1.1.split_at_mut(1usize);
+    c = crate::lib_intrinsics::Lib_IntTypes_Intrinsics_add_carry_u32(c, t11, t22, res_i2.1);
     let t12: u32 = a[4u32.wrapping_mul(i).wrapping_add(3u32) as usize];
     let t2: u32 = b[4u32.wrapping_mul(i).wrapping_add(3u32) as usize];
-    let res_i: &mut [u32] = &mut (&mut res[4u32.wrapping_mul(i) as usize..])[3usize..];
-    c = crate::lib_intrinsics::Lib_IntTypes_Intrinsics_add_carry_u32(c, t12, t2, res_i)
+    let res_i: (&mut [u32], &mut [u32]) = res_i2.1.split_at_mut(1usize);
+    c = crate::lib_intrinsics::Lib_IntTypes_Intrinsics_add_carry_u32(c, t12, t2, res_i.1)
   };
   for i in aLen.wrapping_div(4u32).wrapping_mul(4u32)..aLen
   {
@@ -209,16 +209,16 @@ pub fn Hacl_Bignum_Addition_bn_add_eq_len_u64(aLen: u32, a: &[u64], b: &[u64], r
     c = crate::lib_intrinsics::Lib_IntTypes_Intrinsics_add_carry_u64(c, t1, t20, res_i0.1);
     let t10: u64 = a[4u32.wrapping_mul(i).wrapping_add(1u32) as usize];
     let t21: u64 = b[4u32.wrapping_mul(i).wrapping_add(1u32) as usize];
-    let res_i1: &mut [u64] = &mut (&mut res[4u32.wrapping_mul(i) as usize..])[1usize..];
-    c = crate::lib_intrinsics::Lib_IntTypes_Intrinsics_add_carry_u64(c, t10, t21, res_i1);
+    let res_i1: (&mut [u64], &mut [u64]) = res_i0.1.split_at_mut(1usize);
+    c = crate::lib_intrinsics::Lib_IntTypes_Intrinsics_add_carry_u64(c, t10, t21, res_i1.1);
     let t11: u64 = a[4u32.wrapping_mul(i).wrapping_add(2u32) as usize];
     let t22: u64 = b[4u32.wrapping_mul(i).wrapping_add(2u32) as usize];
-    let res_i2: &mut [u64] = &mut (&mut res[4u32.wrapping_mul(i) as usize..])[2usize..];
-    c = crate::lib_intrinsics::Lib_IntTypes_Intrinsics_add_carry_u64(c, t11, t22, res_i2);
+    let res_i2: (&mut [u64], &mut [u64]) = res_i1.1.split_at_mut(1usize);
+    c = crate::lib_intrinsics::Lib_IntTypes_Intrinsics_add_carry_u64(c, t11, t22, res_i2.1);
     let t12: u64 = a[4u32.wrapping_mul(i).wrapping_add(3u32) as usize];
     let t2: u64 = b[4u32.wrapping_mul(i).wrapping_add(3u32) as usize];
-    let res_i: &mut [u64] = &mut (&mut res[4u32.wrapping_mul(i) as usize..])[3usize..];
-    c = crate::lib_intrinsics::Lib_IntTypes_Intrinsics_add_carry_u64(c, t12, t2, res_i)
+    let res_i: (&mut [u64], &mut [u64]) = res_i2.1.split_at_mut(1usize);
+    c = crate::lib_intrinsics::Lib_IntTypes_Intrinsics_add_carry_u64(c, t12, t2, res_i.1)
   };
   for i in aLen.wrapping_div(4u32).wrapping_mul(4u32)..aLen
   {
@@ -252,14 +252,14 @@ pub fn Hacl_Bignum_Multiplication_bn_mul_u32(
       let res_i0: (&mut [u32], &mut [u32]) = res_j.1.split_at_mut(4u32.wrapping_mul(i) as usize);
       c = Hacl_Bignum_Base_mul_wide_add2_u32(a_i, bj, c, res_i0.1);
       let a_i0: u32 = a[4u32.wrapping_mul(i).wrapping_add(1u32) as usize];
-      let res_i1: &mut [u32] = &mut (&mut res_j.1[4u32.wrapping_mul(i) as usize..])[1usize..];
-      c = Hacl_Bignum_Base_mul_wide_add2_u32(a_i0, bj, c, res_i1);
+      let res_i1: (&mut [u32], &mut [u32]) = res_i0.1.split_at_mut(1usize);
+      c = Hacl_Bignum_Base_mul_wide_add2_u32(a_i0, bj, c, res_i1.1);
       let a_i1: u32 = a[4u32.wrapping_mul(i).wrapping_add(2u32) as usize];
-      let res_i2: &mut [u32] = &mut (&mut res_j.1[4u32.wrapping_mul(i) as usize..])[2usize..];
-      c = Hacl_Bignum_Base_mul_wide_add2_u32(a_i1, bj, c, res_i2);
+      let res_i2: (&mut [u32], &mut [u32]) = res_i1.1.split_at_mut(1usize);
+      c = Hacl_Bignum_Base_mul_wide_add2_u32(a_i1, bj, c, res_i2.1);
       let a_i2: u32 = a[4u32.wrapping_mul(i).wrapping_add(3u32) as usize];
-      let res_i: &mut [u32] = &mut (&mut res_j.1[4u32.wrapping_mul(i) as usize..])[3usize..];
-      c = Hacl_Bignum_Base_mul_wide_add2_u32(a_i2, bj, c, res_i)
+      let res_i: (&mut [u32], &mut [u32]) = res_i2.1.split_at_mut(1usize);
+      c = Hacl_Bignum_Base_mul_wide_add2_u32(a_i2, bj, c, res_i.1)
     };
     for i in aLen.wrapping_div(4u32).wrapping_mul(4u32)..aLen
     {
@@ -289,14 +289,14 @@ pub fn Hacl_Bignum_Multiplication_bn_sqr_u32(aLen: u32, a: &[u32], res: &mut [u3
       let res_i0: (&mut [u32], &mut [u32]) = res_j.1.split_at_mut(4u32.wrapping_mul(i) as usize);
       c = Hacl_Bignum_Base_mul_wide_add2_u32(a_i, a_j, c, res_i0.1);
       let a_i0: u32 = ab[4u32.wrapping_mul(i).wrapping_add(1u32) as usize];
-      let res_i1: &mut [u32] = &mut (&mut res_j.1[4u32.wrapping_mul(i) as usize..])[1usize..];
-      c = Hacl_Bignum_Base_mul_wide_add2_u32(a_i0, a_j, c, res_i1);
+      let res_i1: (&mut [u32], &mut [u32]) = res_i0.1.split_at_mut(1usize);
+      c = Hacl_Bignum_Base_mul_wide_add2_u32(a_i0, a_j, c, res_i1.1);
       let a_i1: u32 = ab[4u32.wrapping_mul(i).wrapping_add(2u32) as usize];
-      let res_i2: &mut [u32] = &mut (&mut res_j.1[4u32.wrapping_mul(i) as usize..])[2usize..];
-      c = Hacl_Bignum_Base_mul_wide_add2_u32(a_i1, a_j, c, res_i2);
+      let res_i2: (&mut [u32], &mut [u32]) = res_i1.1.split_at_mut(1usize);
+      c = Hacl_Bignum_Base_mul_wide_add2_u32(a_i1, a_j, c, res_i2.1);
       let a_i2: u32 = ab[4u32.wrapping_mul(i).wrapping_add(3u32) as usize];
-      let res_i: &mut [u32] = &mut (&mut res_j.1[4u32.wrapping_mul(i) as usize..])[3usize..];
-      c = Hacl_Bignum_Base_mul_wide_add2_u32(a_i2, a_j, c, res_i)
+      let res_i: (&mut [u32], &mut [u32]) = res_i2.1.split_at_mut(1usize);
+      c = Hacl_Bignum_Base_mul_wide_add2_u32(a_i2, a_j, c, res_i.1)
     };
     for i in i0.wrapping_div(4u32).wrapping_mul(4u32)..i0
     {
@@ -307,9 +307,8 @@ pub fn Hacl_Bignum_Multiplication_bn_sqr_u32(aLen: u32, a: &[u32], res: &mut [u3
     let r: u32 = c;
     res[i0.wrapping_add(i0) as usize] = r
   };
-  let aLen2: u32 = aLen.wrapping_add(aLen);
-  let mut a_copy0: Box<[u32]> = vec![0u32; aLen2 as usize].into_boxed_slice();
-  let mut b_copy0: Box<[u32]> = vec![0u32; aLen2 as usize].into_boxed_slice();
+  let mut a_copy0: Box<[u32]> = vec![0u32; aLen.wrapping_add(aLen) as usize].into_boxed_slice();
+  let mut b_copy0: Box<[u32]> = vec![0u32; aLen.wrapping_add(aLen) as usize].into_boxed_slice();
   ((&mut a_copy0)[0usize..aLen.wrapping_add(aLen) as usize]).copy_from_slice(
     &res[0usize..aLen.wrapping_add(aLen) as usize]
   );
@@ -319,7 +318,7 @@ pub fn Hacl_Bignum_Multiplication_bn_sqr_u32(aLen: u32, a: &[u32], res: &mut [u3
   let r: u32 =
       Hacl_Bignum_Addition_bn_add_eq_len_u32(aLen.wrapping_add(aLen), &a_copy0, &b_copy0, res);
   let c0: u32 = r;
-  let mut tmp: Box<[u32]> = vec![0u32; aLen2 as usize].into_boxed_slice();
+  let mut tmp: Box<[u32]> = vec![0u32; aLen.wrapping_add(aLen) as usize].into_boxed_slice();
   for i in 0u32..aLen
   {
     let res1: u64 = (a[i as usize] as u64).wrapping_mul(a[i as usize] as u64);
@@ -328,8 +327,8 @@ pub fn Hacl_Bignum_Multiplication_bn_sqr_u32(aLen: u32, a: &[u32], res: &mut [u3
     (&mut tmp)[2u32.wrapping_mul(i) as usize] = lo;
     (&mut tmp)[2u32.wrapping_mul(i).wrapping_add(1u32) as usize] = hi
   };
-  let mut a_copy: Box<[u32]> = vec![0u32; aLen2 as usize].into_boxed_slice();
-  let mut b_copy: Box<[u32]> = vec![0u32; aLen2 as usize].into_boxed_slice();
+  let mut a_copy: Box<[u32]> = vec![0u32; aLen.wrapping_add(aLen) as usize].into_boxed_slice();
+  let mut b_copy: Box<[u32]> = vec![0u32; aLen.wrapping_add(aLen) as usize].into_boxed_slice();
   ((&mut a_copy)[0usize..aLen.wrapping_add(aLen) as usize]).copy_from_slice(
     &res[0usize..aLen.wrapping_add(aLen) as usize]
   );

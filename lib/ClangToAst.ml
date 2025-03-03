@@ -371,6 +371,12 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' = match e.desc wit
       (* TODO: Retrieve type *)
       EApp (Helpers.mk_op K.Not UInt32, [o])
 
+  | UnaryOperator {kind = LNot; operand } ->
+      (* Logical not: The operand should be a boolean *)
+      let o = translate_expr env TBool operand in
+      (Helpers.mk_not o).node
+
+
   | UnaryOperator _ ->
       Format.printf "Trying to translate unary operator %a@." Clang.Expr.pp e;
       failwith "translate_expr: unary operator"
