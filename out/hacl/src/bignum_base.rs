@@ -13,6 +13,23 @@ pub fn Hacl_Bignum_Base_mul_wide_add2_u32(a: u32, b: u32, c_in: u32, out: &mut [
   res.wrapping_shr(32u32) as u32
 }
 
+pub fn Hacl_Bignum_Base_mul_wide_add2_u64(a: u64, b: u64, c_in: u64, out: &mut [u64]) -> u64
+{
+  let out0: u64 = out[0usize];
+  let res: crate::fstar_uint128::uint128 =
+      crate::hacl_krmllib::FStar_UInt128_add(
+        crate::hacl_krmllib::FStar_UInt128_add(
+          crate::hacl_krmllib::FStar_UInt128_mul_wide(a, b),
+          crate::hacl_krmllib::FStar_UInt128_uint64_to_uint128(c_in)
+        ),
+        crate::hacl_krmllib::FStar_UInt128_uint64_to_uint128(out0)
+      );
+  out[0usize] = crate::hacl_krmllib::FStar_UInt128_uint128_to_uint64(res);
+  crate::hacl_krmllib::FStar_UInt128_uint128_to_uint64(
+    crate::hacl_krmllib::FStar_UInt128_shift_right(res, 64u32)
+  )
+}
+
 pub fn Hacl_Bignum_Convert_bn_from_bytes_be_uint64(len: u32, b: &[u8], res: &mut [u64])
 {
   let bnLen: u32 = len.wrapping_sub(1u32).wrapping_div(8u32).wrapping_add(1u32);

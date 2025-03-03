@@ -48,18 +48,18 @@ Hacl_Bignum_Base_mul_wide_add2_u32(uint32_t a, uint32_t b, uint32_t c_in, uint32
   return (uint32_t)(res >> 32U);
 }
 
-// uint64_t
-// Hacl_Bignum_Base_mul_wide_add2_u64(uint64_t a, uint64_t b, uint64_t c_in, uint64_t *out)
-// {
-//   uint64_t out0 = out[0U];
-//   FStar_UInt128_uint128
-//   res =
-//     FStar_UInt128_add(FStar_UInt128_add(FStar_UInt128_mul_wide(a, b),
-//         FStar_UInt128_uint64_to_uint128(c_in)),
-//       FStar_UInt128_uint64_to_uint128(out0));
-//   out[0U] = FStar_UInt128_uint128_to_uint64(res);
-//   return FStar_UInt128_uint128_to_uint64(FStar_UInt128_shift_right(res, 64U));
-// }
+uint64_t
+Hacl_Bignum_Base_mul_wide_add2_u64(uint64_t a, uint64_t b, uint64_t c_in, uint64_t *out)
+{
+  uint64_t out0 = out[0U];
+  FStar_UInt128_uint128
+  res =
+    FStar_UInt128_add(FStar_UInt128_add(FStar_UInt128_mul_wide(a, b),
+        FStar_UInt128_uint64_to_uint128(c_in)),
+      FStar_UInt128_uint64_to_uint128(out0));
+  out[0U] = FStar_UInt128_uint128_to_uint64(res);
+  return FStar_UInt128_uint128_to_uint64(FStar_UInt128_shift_right(res, 64U));
+}
 
 void
 Hacl_Bignum_Convert_bn_from_bytes_be_uint64(uint32_t len, uint8_t *b, uint64_t *res)
