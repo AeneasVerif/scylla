@@ -604,6 +604,23 @@ let translate_vardecl (env: env) (vdecl: var_decl_desc) : env * binder * Krml.As
           add_var env name, Helpers.fresh_binder name typ, Krml.Ast.with_type typ (EBufCreateL (Krml.Common.Stack, es))
         )
 
+  (* Initializing a struct value.
+     TODO: We should check that the declaration type indeed corresponds to a struct type *)
+  | Some {desc = InitList l; _} ->
+      let translate_field_expr (e : expr) = match e.desc with
+        | DesignatedInit { designators; init }  ->
+            begin match designators with
+            | [FieldDesignator name] ->
+                let e = translate_expr env (typ_of_expr init) init in
+                (Some name, e)
+            | [_] -> failwith "expected a field designator"
+            | _ -> failwith "assigning to several fields during struct initialization is not supported"
+            end
+      | _ -> failwith "a designated initializer was expected when initializing a struct"
+      in
+      add_var env name, Helpers.fresh_binder name typ, Krml.Ast.with_type typ (EFlat (List.map translate_field_expr l))
+
+
   | Some {desc = Call {callee; args}; _}
   (* There commonly is a cast around calloc to the type of the variable. We omit it when translating it to Rust,
      as the allocation will be typed *)
