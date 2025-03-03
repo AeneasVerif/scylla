@@ -88,3 +88,27 @@ pub fn FStar_UInt8_gte_mask(a: u8, b: u8) -> u8
   x_xor_q_.wrapping_sub(1u8)
 }
 
+#[inline(always)]
+pub fn FStar_UInt128_add(a: crate::fstar_uint128::uint128, b: crate::fstar_uint128::uint128) -> crate::fstar_uint128::uint128 {
+    crate::fstar_uint128::add(a, b)
+}
+
+#[inline(always)]
+pub fn FStar_UInt128_shift_right(a: crate::fstar_uint128::uint128, b: u32) -> crate::fstar_uint128::uint128 {
+    crate::fstar_uint128::shift_right(a, b)
+}
+
+#[inline(always)]
+pub fn FStar_UInt128_mul_wide(a: u64, b: u64) -> crate::fstar_uint128::uint128 {
+    crate::fstar_uint128::mul_wide(a, b)
+}
+
+#[inline(always)]
+pub fn FStar_UInt128_uint64_to_uint128(a: u64) -> crate::fstar_uint128::uint128 {
+    crate::fstar_uint128::uint64_to_uint128(a)
+}
+
+#[inline(always)]
+pub fn FStar_UInt128_uint128_to_uint64(a: crate::fstar_uint128::uint128) -> u64 {
+    crate::fstar_uint128::uint128_to_uint64(a)
+}

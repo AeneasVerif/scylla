@@ -133,9 +133,18 @@ let translate_typ_name = function
   | "uint16_t" -> Helpers.uint16
   | "uint32_t" -> Helpers.uint32
   | "uint64_t" -> Helpers.uint64
+  (* TODO: We need an environment for local type definitions.
+     In the meantime, we rely on a fallback:
+     we assume that A_B_ty corresponds to a_b::ty in Rust *)
   | s ->
-      Printf.eprintf "type name %s is unsupported\n" s;
-      failwith "unsupported name"
+      let path = String.split_on_char '_' s in
+      let name, path = match List.rev path with
+      | [] -> failwith "Empty name"
+      | hd :: tl -> hd, String.concat "_" (List.rev tl)
+      in TQualified ([path], name)
+  (* | s -> *)
+  (*     Printf.eprintf "type name %s is unsupported\n" s; *)
+  (*     failwith "unsupported name" *)
 
 
 let translate_builtin_typ (t: Clang.Ast.builtin_type) = match [@warnerror "-11"] t with
