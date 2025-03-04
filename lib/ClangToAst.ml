@@ -80,23 +80,6 @@ let assign_to_bop (kind: Clang.Ast.binary_operator_kind) : Krml.Ast.expr =
   (* TODO: Infer width and type from types of operands *)
   Krml.Ast.with_type Helpers.uint32 (EOp (op, UInt32))
 
-let translate_unop (kind: Clang.Ast.unary_operator_kind) : K.op = match kind with
-  | PostInc -> PostIncr
-  | PostDec -> PostDecr
-  | PreInc -> PreIncr
-  | PreDec -> PreDecr
-  | AddrOf -> failwith "translate_unop: addrof"
-  | Deref -> failwith "translate_unop: deref"
-  | Plus -> failwith "translate_unop: plus"
-  | Minus -> failwith "translate_unop: minus"
-  | Not -> failwith "translate_unop: not"
-  | LNot -> failwith "translate_unop: lnot"
-  | Real -> failwith "translate_unop: real"
-  | Imag -> failwith "translate_unop: imag"
-  | Extension -> failwith "translate_unop: extension"
-  | Coawait -> failwith "translate_unop: coawait"
-  | InvalidUnaryOperator -> failwith "translate_unop: invalid unop"
-
 let translate_binop (kind: Clang.Ast.binary_operator_kind) : K.op = match kind with
   | PtrMemD | PtrMemI -> failwith "translate_binop: ptr mem"
 
@@ -447,6 +430,10 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' = match e.desc wit
       let o = translate_expr env TBool operand in
       (Helpers.mk_not o).node
 
+  | UnaryOperator {kind = Deref; operand } ->
+      let ty = Helpers.assert_tbuf (typ_of_expr operand) in
+      let o = translate_expr env ty operand in
+      EBufRead (o, Helpers.zero_usize)
 
   | UnaryOperator _ ->
       Format.printf "Trying to translate unary operator %a@." Clang.Expr.pp e;
