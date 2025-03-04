@@ -72,7 +72,7 @@
 #endif
 
 #ifndef KRML_MAYBE_UNUSED_VAR
-#  define KRML_MAYBE_UNUSED_VAR(x) // KRML_HOST_IGNORE(x)
+#  define KRML_MAYBE_UNUSED_VAR(x) scylla_reset(x)
 #endif
 
 #ifndef KRML_MAYBE_UNUSED

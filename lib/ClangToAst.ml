@@ -219,6 +219,13 @@ let elaborate_typ (typ: qual_type) = match typ.desc with
 (* Takes a Clangml expression [e], and retrieves the corresponding karamel Ast type *)
 let typ_of_expr (e: expr) : typ = Clang.Type.of_node e |> translate_typ
 
+(* Check whether a given Clang expression is a scylla_reset callee *)
+let is_scylla_reset (e: expr) = match e.desc with
+  | DeclRef { name; _ } ->
+      let name = get_id_name name in
+      name = "scylla_reset"
+  | _ -> false
+
 (* Check whether a given Clang expression is a memcpy callee *)
 let is_memcpy (e: expr) = match e.desc with
   | DeclRef { name; _ } ->
@@ -418,6 +425,12 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' = match e.desc wit
       end
 
   | DeclRef {name; _} -> get_id_name name |> find_var env
+
+  | Call {callee; args} when is_scylla_reset callee ->
+      begin match args with
+      | [e] -> let e = translate_expr env (typ_of_expr e) e in (Helpers.push_ignore e).node
+      | _ -> failwith "wrong number of arguments for scylla_reset"
+      end
 
   | Call {callee; args} when is_memcpy callee ->
       (* Format.printf "Trying to translate memcpy %a@." Clang.Expr.pp e; *)
