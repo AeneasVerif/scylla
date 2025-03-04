@@ -350,6 +350,13 @@ let is_malloc (e: expr) = match e.desc with
       name = "malloc"
   | _ -> false
 
+(* Check whether a given Clang expression is a free callee *)
+let is_free (e: expr) = match e.desc with
+  | DeclRef { name; _ } ->
+      let name = get_id_name name in
+      name = "free"
+  | _ -> false
+
 (* Check whether a variable declaration has a malloc initializer. If so,
    we will rewrite it based on the initializer that follows *)
 let is_malloc_vdecl (vdecl: var_decl_desc) = match vdecl.var_init with
@@ -432,7 +439,7 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' = match e.desc wit
 
   | UnaryOperator {kind = Deref; operand } ->
       let ty = Helpers.assert_tbuf (typ_of_expr operand) in
-      let o = translate_expr env ty operand in
+      let o = translate_expr env (TBuf (ty, false)) operand in
       EBufRead (o, Helpers.zero_usize)
 
   | UnaryOperator _ ->
@@ -555,6 +562,12 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' = match e.desc wit
       | _ -> failwith "memset does not have the right number of arguments"
       end
 
+  | Call {callee; args} when is_free callee ->
+      begin match args with
+      | [ptr] -> EBufFree (translate_expr env (typ_of_expr ptr) ptr)
+      | _ -> failwith "ill-formed free: too many arguments"
+      end
+
   | Call {callee; args} ->
       (* In C, a function type is a pointer. We need to strip it to retrieve
          the standard arrow abstraction *)
@@ -578,6 +591,22 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' = match e.desc wit
 
   | ConditionalOperator _ -> failwith "translate_expr: conditional operator"
   | Paren _ -> failwith "translate_expr: paren"
+
+  | Member {base; arrow; field} ->
+      (* TODO: Support for arrow access *)
+      assert (not arrow);
+      let base = match base with
+      | None -> failwith "field accesses without a base expression are not supported"
+      | Some b -> b
+      in
+      let base = translate_expr env (typ_of_expr base) base in
+
+      let f = match field with
+      | FieldName {desc; _} -> get_id_name desc.name
+      | _ -> failwith "member node: only field accesses supported"
+      in
+
+      EField (base, f)
 
   | _ ->
     Format.eprintf "Trying to translate expression %a@." Clang.Expr.pp e;
