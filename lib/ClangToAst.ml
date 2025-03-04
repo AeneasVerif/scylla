@@ -533,13 +533,13 @@ let create_default_value typ = match typ with
   | _ -> failwith "Creating a default value is only supported for integer types"
 
 let translate_vardecl (env: env) (vdecl: var_decl_desc) : env * binder * Krml.Ast.expr =
-  let name = vdecl.var_name in
+  let vname = vdecl.var_name in
   let typ = translate_typ vdecl.var_type in
   match vdecl.var_init with
   | None ->
         (* If there is no associated definition, we attempt to craft
            a default initialization value *)
-        add_var env name, Helpers.fresh_binder name typ, create_default_value typ
+        add_var env vname, Helpers.fresh_binder vname typ, create_default_value typ
 
   (* Intializing a constant array with a list of elements.
      For instance, uint32[2] = { 0 };
@@ -550,12 +550,12 @@ let translate_vardecl (env: env) (vdecl: var_decl_desc) : env * binder * Krml.As
           (* One element initializer, possibly repeated *)
           let e = translate_expr env (Helpers.assert_tbuf typ) (List.hd l) in
           (* TODO: Arrays are not on stack if at top-level *)
-          add_var env name, Helpers.fresh_binder name typ, Krml.Ast.with_type typ (EBufCreate (Krml.Common.Stack, e, size_e))
+          add_var env vname, Helpers.fresh_binder vname typ, Krml.Ast.with_type typ (EBufCreate (Krml.Common.Stack, e, size_e))
         else (
           assert (List.length l = size);
           let ty = Helpers.assert_tbuf typ in
           let es = List.map (translate_expr env ty) l in
-          add_var env name, Helpers.fresh_binder name typ, Krml.Ast.with_type typ (EBufCreateL (Krml.Common.Stack, es))
+          add_var env vname, Helpers.fresh_binder vname typ, Krml.Ast.with_type typ (EBufCreateL (Krml.Common.Stack, es))
         )
 
   (* Initializing a struct value.
@@ -572,7 +572,7 @@ let translate_vardecl (env: env) (vdecl: var_decl_desc) : env * binder * Krml.As
             end
       | _ -> failwith "a designated initializer was expected when initializing a struct"
       in
-      add_var env name, Helpers.fresh_binder name typ, Krml.Ast.with_type typ (EFlat (List.map translate_field_expr l))
+      add_var env vname, Helpers.fresh_binder vname typ, Krml.Ast.with_type typ (EFlat (List.map translate_field_expr l))
 
 
   | Some {desc = Call {callee; args}; _}
@@ -586,12 +586,23 @@ let translate_vardecl (env: env) (vdecl: var_decl_desc) : env * binder * Krml.As
           let ty = Helpers.assert_tbuf typ in
           assert (extract_sizeof_ty argument = ty);
           let w = Helpers.assert_tint ty in
-          add_var env name, Helpers.fresh_binder name typ,
+          add_var env vname, Helpers.fresh_binder vname typ,
             Krml.Ast.with_type typ (EBufCreate (Krml.Common.Heap, Helpers.zero w, len))
       | _ -> failwith "calloc is expected to have two arguments"
       end
 
-  | Some e -> add_var env name, Helpers.fresh_binder name typ, translate_expr env typ e
+  | Some {desc = DeclRef { name; _ }; _} ->
+      let var = get_id_name name |> find_var env in
+      let e = match typ with
+      (* If we have a statement of the shape `let x = y` where y is a pointer,
+         this likely corresponds to taking a slice of y, starting at index 0.
+         We need to explicitly insert the EBufSub node to create a split tree *)
+      | TBuf _ | TArray _ -> EBufSub (Krml.Ast.with_type typ var, Helpers.zero_usize)
+      | _ -> var
+      in
+      add_var env vname, Helpers.fresh_binder vname typ, Krml.Ast.with_type typ e
+
+  | Some e -> add_var env vname, Helpers.fresh_binder vname typ, translate_expr env typ e
 
 (* Translation of a variable declaration, followed by a memset of [args] *)
 let translate_vardecl_with_memset (env: env) (vdecl: var_decl_desc) (args: expr list)
