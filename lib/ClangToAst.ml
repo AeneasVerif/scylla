@@ -360,6 +360,42 @@ let is_calloc (e: expr) = match e.desc with
       name = "calloc"
   | _ -> false
 
+(* Check whether a given Clang expression is a malloc callee *)
+let is_malloc (e: expr) = match e.desc with
+  | DeclRef { name; _ } ->
+      let name = get_id_name name in
+      name = "malloc"
+  | _ -> false
+
+(* Check whether a variable declaration has a malloc initializer. If so,
+   we will rewrite it based on the initializer that follows *)
+let is_malloc_vdecl (vdecl: var_decl_desc) = match vdecl.var_init with
+  | Some {desc = Call {callee; _}; _}
+  (* There commonly is a cast around malloc to the type of the variable. We omit it when translating it to Rust,
+     as the allocation will be typed *)
+  | Some {desc = Cast {operand = {desc = Call {callee; _}; _}; _}; _} when is_malloc callee ->
+      true
+
+  | _ -> false
+
+(* Recognize several common patterns for the null pointer *)
+let rec is_null (e: expr) = match e.desc with
+  | IntegerLiteral (Int 0) -> true
+  | Cast { qual_type = {desc = Pointer { desc = BuiltinType Void; _}; _} ; operand; _ } -> is_null operand
+  | _ -> false
+
+let is_null_check var_name (e: expr) = match e.desc with
+  | BinaryOperator {lhs = {desc = DeclRef { name; _}; _}; kind = NE; rhs } ->
+      if get_id_name name = var_name && is_null rhs then true else false
+  | _ -> false
+
+(* Check whether statement [s] corresponds to a malloc initializer for
+   , which
+    will therefore be rewritten in combination with malloc to generate
+    a standard array or Vec declaration in Rust *)
+let is_malloc_initializer (vdecl: var_decl_desc) (s: stmt_desc) = match s with
+  | If { cond; _ } when is_null_check vdecl.var_name cond -> true (* {cond; then_branch; else_branch; _} -> true *)
+  | _ -> false
 
 (* Simple heuristics to detect whether a loop condition is always false, in this case we can omit the loop.
    TODO: Should probably check for absence of side-effects in condition evaluation *)
@@ -687,6 +723,51 @@ let translate_vardecl_with_memset (env: env) (vdecl: var_decl_desc) (args: expr 
 
   | _ -> failwith "memset does not have the right number of arguments"
 
+  (* Translation of a variable declaration through malloc, followed by an initialization through [s] *)
+let translate_vardecl_malloc (env: env) (vdecl: var_decl_desc) (s: stmt_desc)
+  : env * binder * Krml.Ast.expr =
+  let vname = vdecl.var_name in
+  let typ = match vdecl.var_type.desc with
+  | Pointer ty -> TBuf (translate_typ ty, false)
+  | _ -> failwith "The variable being malloc'ed is not a pointer"
+  in
+
+  let args = match vdecl.var_init with
+  | Some {desc = Call {args; _}; _}
+  (* There commonly is a cast around malloc to the type of the variable. We omit it when translating it to Rust,
+     as the allocation will be typed *)
+  | Some {desc = Cast {operand = {desc = Call {args; _}; _}; _}; _} -> args
+  | _ -> failwith "impossible: calling translate_vardecl_malloc on a non-malloc initializer"
+  in
+
+  begin match args with
+  | [{desc = UnaryExpr {kind = SizeOf; argument}; _}] ->
+      (* Sanity-check: The sizeof argument correponds to the type of the pointer being malloc'ed *)
+      assert (extract_sizeof_ty argument = Helpers.assert_tbuf typ)
+  | [_] -> failwith "argument of malloc if not of the shape `sizeof(type)`"
+  | _ -> failwith "Too many arguments for malloc"
+  end;
+
+  (* Check if expression [e] corresponds to accessing the 0-th element of array [var_name] *)
+  let is_zero_access (e: expr) var_name = match e.desc with
+  | ArraySubscript {base = {desc = DeclRef {name; _}; _}; index = {desc = IntegerLiteral (Int 0); _}} ->
+      get_id_name name = var_name
+  | _ -> false
+  in
+
+  let init_val = match s with
+  (* We previously checked that this had shape 'if ptr != NULL { ... }`. *)
+  | If {then_branch; _} -> begin match then_branch.desc with
+      | Compound [{desc = Expr {desc = BinaryOperator {lhs; kind = Assign; rhs}; _}; _}] when is_zero_access lhs vname ->
+          translate_expr env (Helpers.assert_tbuf typ) rhs
+      | _ -> failwith "ill-formed malloc initializer"
+      end
+  | _ -> failwith "ill-formed malloc initializer"
+  in
+
+  add_var env vname, Helpers.fresh_binder vname typ, Krml.Ast.with_type typ (EBufCreate (Krml.Common.Heap, init_val, Helpers.oneu32))
+
+
 
 let rec translate_stmt' (env: env) (t: typ) (s: stmt_desc) : expr' = match s with
   (* This is a null statement, not a null pointer. It corresponds to a no-op *)
@@ -704,6 +785,13 @@ let rec translate_stmt' (env: env) (t: typ) (s: stmt_desc) : expr' = match s wit
       | Decl [{desc = Var vdecl; _}],
         Expr {desc = Call {callee; args}; _} when is_memset callee ->
           let env', b, e = translate_vardecl_with_memset env vdecl args in
+          ELet (b, e, translate_stmt env' t (Compound (List.tl tl)))
+
+      (* Special case when we have a malloc followed by an initializer
+         for the corresponding pointer: we rewrite this into a heap array
+         initialization *)
+      | Decl [{desc = Var vdecl; _}], stmt when is_malloc_vdecl vdecl && is_malloc_initializer vdecl stmt ->
+          let env', b, e = translate_vardecl_malloc env vdecl stmt in
           ELet (b, e, translate_stmt env' t (Compound (List.tl tl)))
 
       | Decl [{desc = Var vdecl; _ }], _ ->
