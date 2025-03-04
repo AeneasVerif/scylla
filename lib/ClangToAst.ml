@@ -796,10 +796,9 @@ let rec translate_stmt' (env: env) (t: typ) (s: stmt_desc) : expr' = match s wit
   | Break -> failwith "translate_stmt: break"
   | Asm _ -> failwith "translate_stmt: asm"
 
-  (* TODO: Should this be an EReturn ? If so, need to support Return constructs in MiniRust *)
   | Return eo -> begin match eo with
-        | None -> EUnit
-        | Some e -> translate_expr' env (typ_of_expr e) e
+        | None -> EReturn Helpers.eunit
+        | Some e -> EReturn (translate_expr env (typ_of_expr e) e)
     end
 
   | Decl _ -> failwith "translate_stmt: decl"
