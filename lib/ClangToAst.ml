@@ -1039,6 +1039,7 @@ let translate_compil_unit (ast: translation_unit) (wanted_c_file: string) =
 
 let read_file (filename: string) : translation_unit =
   Format.printf "Clang version is %s\n" (Clang.get_clang_version());
-  let command_line_args = !Scylla__Options.ccopts in
+  let command_line_args = !Scylla__Options.ccopts @
+    List.map Clang.Command_line.include_directory (Clang.default_include_directories ()) in
   Format.printf "Arguments passed to clang are: %s\n" (String.concat " " command_line_args);
   parse_file ~command_line_args filename
