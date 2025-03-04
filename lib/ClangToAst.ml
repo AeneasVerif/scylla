@@ -368,6 +368,11 @@ let is_malloc_vdecl (vdecl: var_decl_desc) = match vdecl.var_init with
 
   | _ -> false
 
+(* Check whether expression [e] is a pointer *)
+let has_pointer_type (e: expr) = match typ_of_expr e with
+  | TBuf _ | TArray _ -> true
+  | _ -> false
+
 (* Recognize several common patterns for the null pointer *)
 let rec is_null (e: expr) = match e.desc with
   | IntegerLiteral (Int 0) -> true
@@ -838,6 +843,17 @@ let rec translate_stmt' (env: env) (t: typ) (s: stmt_desc) : expr' = match s wit
       end
 
   | ForRange _ -> failwith "translate_stmt: for range"
+
+  (* There is no null pointer in Rust. We remove branching based on null-pointer
+     comparisons *)
+  | If {cond = {desc = BinaryOperator {lhs; kind = EQ; rhs}; _}; else_branch; _} when has_pointer_type lhs && is_null rhs ->
+      begin match else_branch with
+      | None -> EUnit
+      | Some s -> translate_stmt' env TUnit s.desc
+      end
+  | If {cond = {desc = BinaryOperator {lhs; kind = NE; rhs}; _}; then_branch; _} when has_pointer_type lhs && is_null rhs ->
+      translate_stmt' env TUnit then_branch.desc
+
   | If {init; condition_variable; cond; then_branch; else_branch} ->
       (* These two fields should be specific to C++ *)
       assert (init = None);
