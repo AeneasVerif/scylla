@@ -161,9 +161,9 @@ let translate_builtin_typ (t: Clang.Ast.builtin_type) = match [@warnerror "-11"]
   | Long
   | LongLong
   | Int128 -> failwith "translate_builtin_typ: signed int"
+  | Bool -> TBool
 
   | Pointer -> failwith "translate_builtin_typ: pointer"
-  | Bool -> failwith "translate_builtin_typ: Bool"
   | Float -> failwith "translate_builtin_typ: Float"
   | Double -> failwith "translate_builtin_typ: Double"
   | LongDouble -> failwith "translate_builtin_typ: LongDouble"
