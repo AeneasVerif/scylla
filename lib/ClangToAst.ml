@@ -279,8 +279,7 @@ let has_pointer_type (e: expr) = match typ_of_expr e with
 
 (* Recognize several common patterns for the null pointer *)
 let rec is_null (e: expr) = match e.desc with
-  | IntegerLiteral (Int 0) -> true
-  | Cast { qual_type = {desc = Pointer { desc = BuiltinType Void; _}; _} ; operand; _ } -> is_null operand
+  | Cast { qual_type = {desc = Pointer { desc = BuiltinType Void; _}; _} ; operand = {desc = IntegerLiteral (Int 0); _}; _ } -> true
   | _ -> false
 
 let is_null_check var_name (e: expr) = match e.desc with
@@ -308,7 +307,10 @@ let extract_sizeof_ty = function
   | ArgumentType ty -> translate_typ ty
 
 (* Translate expression [e], with expected type [t] *)
-let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' = match e.desc with
+let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' =
+  if is_null e then EBufNull
+  else
+  match e.desc with
   | IntegerLiteral n ->
       let ty = Helpers.assert_tint t in
       let signed = K.is_signed ty in
