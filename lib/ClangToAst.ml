@@ -14,7 +14,8 @@ module StructMap = Map.Make(String)
    translation unit *)
 let name_map = ref FileMap.empty
 
-(* A map from structure names to their corresponding KaRaMeL `type_def` declaration.
+(* A map from structure names to their corresponding KaRaMeL `type_def` declaration,
+   as well as whether the struct type is annotated with the `scylla_box` attribute.
    Struct declarations are typically done through a typedef indirection in C, e.g.,
    `typedef struct name_s { ... } name;`
    This map is used to deconstruct the indirection in Rust, and directly define
@@ -210,7 +211,7 @@ let rec translate_typ (typ: qual_type) = match typ.desc with
       Format.eprintf "Trying to translate type %a\n" Clang.Type.pp typ;
       failwith "translate_typ: unsupported type"
 
-(* Elaborate a type during a typedef declaration *)
+(* Elaborate a type during a typedef declaration. Also return whether the type should be boxed *)
 let elaborate_typ (typ: qual_type) = match typ.desc with
   | Elaborated { keyword = Struct; named_type = { desc = Record {name; _}; _}; _ } ->
       let name = get_id_name name in
@@ -907,17 +908,19 @@ let translate_decl (decl: decl) =
           (* TODO: What is the int for? *)
           Some (DGlobal (flags, lid, 0, typ, e))
 
-    | RecordDecl {name; fields; _} ->
+    | RecordDecl {name; fields; attributes; _} ->
+        let is_box = Attributes.has_box_attr attributes in
         let fields = List.map translate_field fields in
         struct_map := StructMap.update name (function
-          | None -> Some (Flat fields)
+          | None -> Some (Flat fields, is_box)
           | Some _ -> Printf.eprintf "A type declaration already exists for struct %s\n" name; failwith "redefining a structure type")
         !struct_map;
         None
 
     | TypedefDecl {name; underlying_type} ->
-        let ty = elaborate_typ underlying_type in
+        let ty, is_box = elaborate_typ underlying_type in
         let lid = FileMap.find name !name_map, name in
+        if is_box then boxed_types := Krml.AstToMiniRust.LidSet.add lid !boxed_types;
         Some (DType (lid, [], 0, 0, ty))
 
     | _ ->

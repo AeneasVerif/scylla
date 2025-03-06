@@ -12,6 +12,10 @@ let opaque_attr = "scylla_opaque"
    which will be checked during the translation from Clang to Ast *)
 let mut_attr = "scylla_mutability"
 
+(* An attribute to specify that a given type (and its internal pointers) should
+   be translated to `Box`es instead of borrows *)
+let box_attr = "scylla_box"
+
 (* We check for the presence of the [opaque_attr] attribute. We require it to
    be exactly the annotation *)
 let has_opaque_attr' (attr: attribute) = match attr.desc with
@@ -19,6 +23,14 @@ let has_opaque_attr' (attr: attribute) = match attr.desc with
   | _ -> false
 
 let has_opaque_attr (attrs: attribute list) = List.exists has_opaque_attr' attrs
+
+(* We check for the presence of the [box_attr] attribute. We require it to
+   be exactly the annotation *)
+let has_box_attr' (attr: attribute) = match attr.desc with
+  | Clang__.Attributes.Annotate s -> String.equal s.annotation box_attr
+  | _ -> false
+
+let has_box_attr (attrs: attribute list) = List.exists has_box_attr' attrs
 
 let retrieve_mutability' (attr: attribute) = match attr.desc with
   | Clang__.Attributes.Annotate s ->
