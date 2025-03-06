@@ -4,13 +4,13 @@
 #![allow(unused_assignments)]
 #![allow(unreachable_patterns)]
 
-#[derive(PartialEq, Clone, Copy)]
-pub struct Hacl_Bignum_MontArithmetic_bn_mont_ctx_u32 <'a>
-{ pub len: u32, pub n: &'a [u32], pub mu: u32, pub r2: &'a [u32] }
+#[derive(PartialEq, Clone)]
+pub struct Hacl_Bignum_MontArithmetic_bn_mont_ctx_u32
+{ pub len: u32, pub n: Box<[u32]>, pub mu: u32, pub r2: Box<[u32]> }
 
-#[derive(PartialEq, Clone, Copy)]
-pub struct Hacl_Bignum_MontArithmetic_bn_mont_ctx_u64 <'a>
-{ pub len: u32, pub n: &'a [u64], pub mu: u64, pub r2: &'a [u64] }
+#[derive(PartialEq, Clone)]
+pub struct Hacl_Bignum_MontArithmetic_bn_mont_ctx_u64
+{ pub len: u32, pub n: Box<[u64]>, pub mu: u64, pub r2: Box<[u64]> }
 
 pub fn Hacl_Bignum_Karatsuba_bn_karatsuba_mul_uint32(
   aLen: u32,

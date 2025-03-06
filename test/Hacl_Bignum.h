@@ -37,7 +37,9 @@ extern "C" {
 
 #include "lib_intrinsics.h"
 
-typedef struct Hacl_Bignum_MontArithmetic_bn_mont_ctx_u32_s
+typedef struct
+__attribute__((annotate("scylla_box")))
+Hacl_Bignum_MontArithmetic_bn_mont_ctx_u32_s
 {
   uint32_t len;
   uint32_t *n;
@@ -46,7 +48,9 @@ typedef struct Hacl_Bignum_MontArithmetic_bn_mont_ctx_u32_s
 }
 Hacl_Bignum_MontArithmetic_bn_mont_ctx_u32;
 
-typedef struct Hacl_Bignum_MontArithmetic_bn_mont_ctx_u64_s
+typedef struct
+__attribute__((annotate("scylla_box")))
+Hacl_Bignum_MontArithmetic_bn_mont_ctx_u64_s
 {
   uint32_t len;
   uint64_t *n;

@@ -868,7 +868,7 @@ pub fn Hacl_Bignum4096_mod_inv_prime_vartime(n: &[u64], a: &[u64], res: &mut [u6
 }
 
 pub fn Hacl_Bignum4096_mont_ctx_init(n: &[u64]) ->
-    &[crate::hacl::bignum::Hacl_Bignum_MontArithmetic_bn_mont_ctx_u64]
+    Box<[crate::hacl::bignum::Hacl_Bignum_MontArithmetic_bn_mont_ctx_u64]>
 {
   let mut r2: Box<[u64]> = vec![0u64; 64usize].into_boxed_slice();
   let mut n1: Box<[u64]> = vec![0u64; 64usize].into_boxed_slice();
@@ -883,19 +883,19 @@ pub fn Hacl_Bignum4096_mont_ctx_init(n: &[u64]) ->
   let mu: u64 = crate::hacl::bignum::Hacl_Bignum_ModInvLimb_mod_inv_uint64(n[0usize]);
   let res: crate::hacl::bignum::Hacl_Bignum_MontArithmetic_bn_mont_ctx_u64 =
       crate::hacl::bignum::Hacl_Bignum_MontArithmetic_bn_mont_ctx_u64
-      { len: 64u32, n: n11.1, mu, r2: r21.1 };
+      { len: 64u32, n: (*n11.1).into(), mu, r2: (*r21.1).into() };
   let buf: Box<[crate::hacl::bignum::Hacl_Bignum_MontArithmetic_bn_mont_ctx_u64]> =
       vec![res].into_boxed_slice();
-  return &buf
+  return buf
 }
 
 pub fn Hacl_Bignum4096_mont_ctx_free(
   k: &[crate::hacl::bignum::Hacl_Bignum_MontArithmetic_bn_mont_ctx_u64]
 )
 {
-  let uu____0: crate::hacl::bignum::Hacl_Bignum_MontArithmetic_bn_mont_ctx_u64 = k[0usize];
-  let n: &[u64] = uu____0.n;
-  let r2: &[u64] = uu____0.r2;
+  let uu____0: &crate::hacl::bignum::Hacl_Bignum_MontArithmetic_bn_mont_ctx_u64 = &k[0usize];
+  let n: &[u64] = &uu____0.n;
+  let r2: &[u64] = &uu____0.r2;
   ()
 }
 
@@ -905,9 +905,9 @@ pub fn Hacl_Bignum4096_mod_precomp(
   res: &mut [u64]
 )
 {
-  let n: &[u64] = (k[0usize]).n;
+  let n: &[u64] = &(k[0usize]).n;
   let mu: u64 = (k[0usize]).mu;
-  let r2: &[u64] = (k[0usize]).r2;
+  let r2: &[u64] = &(k[0usize]).r2;
   bn_slow_precomp(n, mu, r2, a, res)
 }
 
@@ -919,9 +919,9 @@ pub fn Hacl_Bignum4096_mod_exp_vartime_precomp(
   res: &mut [u64]
 )
 {
-  let n: &[u64] = (k[0usize]).n;
+  let n: &[u64] = &(k[0usize]).n;
   let mu: u64 = (k[0usize]).mu;
-  let r2: &[u64] = (k[0usize]).r2;
+  let r2: &[u64] = &(k[0usize]).r2;
   exp_vartime_precomp(n, mu, r2, a, bBits, b, res)
 }
 
@@ -933,9 +933,9 @@ pub fn Hacl_Bignum4096_mod_exp_consttime_precomp(
   res: &mut [u64]
 )
 {
-  let n: &[u64] = (k[0usize]).n;
+  let n: &[u64] = &(k[0usize]).n;
   let mu: u64 = (k[0usize]).mu;
-  let r2: &[u64] = (k[0usize]).r2;
+  let r2: &[u64] = &(k[0usize]).r2;
   exp_consttime_precomp(n, mu, r2, a, bBits, b, res)
 }
 
@@ -945,9 +945,9 @@ pub fn Hacl_Bignum4096_mod_inv_prime_vartime_precomp(
   res: &mut [u64]
 )
 {
-  let n: &[u64] = (k[0usize]).n;
+  let n: &[u64] = &(k[0usize]).n;
   let mu: u64 = (k[0usize]).mu;
-  let r2: &[u64] = (k[0usize]).r2;
+  let r2: &[u64] = &(k[0usize]).r2;
   let mut n2: [u64; 64] = [0u64; 64usize];
   let c0: u64 =
       crate::lib_intrinsics::Lib_IntTypes_Intrinsics_sub_borrow_u64(0u64, n[0usize], 2u64, &mut n2);
