@@ -22,6 +22,10 @@ let name_map = ref FileMap.empty
 *)
 let struct_map = ref StructMap.empty
 
+(* A map storing types that are annotated with `scylla_box`, indicating
+   that internal pointers should be translated to Boxes instead of borrows *)
+let boxed_types = ref Krml.AstToMiniRust.LidSet.empty
+
 type env = {
   (* Variables in the context *)
   vars: string list
@@ -913,7 +917,8 @@ let translate_decl (decl: decl) =
 
     | TypedefDecl {name; underlying_type} ->
         let ty = elaborate_typ underlying_type in
-        Some (DType ((FileMap.find name !name_map, name), [], 0, 0, ty))
+        let lid = FileMap.find name !name_map, name in
+        Some (DType (lid, [], 0, 0, ty))
 
     | _ ->
         raise Unsupported
@@ -1060,7 +1065,7 @@ let translate_compil_unit (ast: translation_unit) (wanted_c_file: string) =
   (* Format.printf "@[%a@]@." (Refl.pp [%refl: Clang.Ast.translation_unit] []) ast; *)
   let files = split_into_files lib_dirs ast in
   let files = List.filter_map (translate_file wanted_c_file) files in
-  files
+  !boxed_types, files
 
 let read_file (filename: string) : translation_unit =
   Format.printf "Clang version is %s\n" (Clang.get_clang_version());
