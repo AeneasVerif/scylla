@@ -14,13 +14,18 @@ module StructMap = Map.Make(String)
    translation unit *)
 let name_map = ref FileMap.empty
 
-(* A map from structure names to their corresponding KaRaMeL `type_def` declaration.
+(* A map from structure names to their corresponding KaRaMeL `type_def` declaration,
+   as well as whether the struct type is annotated with the `scylla_box` attribute.
    Struct declarations are typically done through a typedef indirection in C, e.g.,
    `typedef struct name_s { ... } name;`
    This map is used to deconstruct the indirection in Rust, and directly define
    a struct type `name`
 *)
 let struct_map = ref StructMap.empty
+
+(* A map storing types that are annotated with `scylla_box`, indicating
+   that internal pointers should be translated to Boxes instead of borrows *)
+let boxed_types = ref Krml.AstToMiniRust.LidSet.empty
 
 type env = {
   (* Variables in the context *)
@@ -161,9 +166,9 @@ let translate_builtin_typ (t: Clang.Ast.builtin_type) = match [@warnerror "-11"]
   | Long
   | LongLong
   | Int128 -> failwith "translate_builtin_typ: signed int"
+  | Bool -> TBool
 
   | Pointer -> failwith "translate_builtin_typ: pointer"
-  | Bool -> failwith "translate_builtin_typ: Bool"
   | Float -> failwith "translate_builtin_typ: Float"
   | Double -> failwith "translate_builtin_typ: Double"
   | LongDouble -> failwith "translate_builtin_typ: LongDouble"
@@ -206,7 +211,7 @@ let rec translate_typ (typ: qual_type) = match typ.desc with
       Format.eprintf "Trying to translate type %a\n" Clang.Type.pp typ;
       failwith "translate_typ: unsupported type"
 
-(* Elaborate a type during a typedef declaration *)
+(* Elaborate a type during a typedef declaration. Also return whether the type should be boxed *)
 let elaborate_typ (typ: qual_type) = match typ.desc with
   | Elaborated { keyword = Struct; named_type = { desc = Record {name; _}; _}; _ } ->
       let name = get_id_name name in
@@ -218,6 +223,13 @@ let elaborate_typ (typ: qual_type) = match typ.desc with
 
 (* Takes a Clangml expression [e], and retrieves the corresponding karamel Ast type *)
 let typ_of_expr (e: expr) : typ = Clang.Type.of_node e |> translate_typ
+
+(* Check whether a given Clang expression is a scylla_reset callee *)
+let is_scylla_reset (e: expr) = match e.desc with
+  | DeclRef { name; _ } ->
+      let name = get_id_name name in
+      name = "scylla_reset"
+  | _ -> false
 
 (* Check whether a given Clang expression is a memcpy callee *)
 let is_memcpy (e: expr) = match e.desc with
@@ -272,8 +284,7 @@ let has_pointer_type (e: expr) = match typ_of_expr e with
 
 (* Recognize several common patterns for the null pointer *)
 let rec is_null (e: expr) = match e.desc with
-  | IntegerLiteral (Int 0) -> true
-  | Cast { qual_type = {desc = Pointer { desc = BuiltinType Void; _}; _} ; operand; _ } -> is_null operand
+  | Cast { qual_type = {desc = Pointer { desc = BuiltinType Void; _}; _} ; operand = {desc = IntegerLiteral (Int 0); _}; _ } -> true
   | _ -> false
 
 let is_null_check var_name (e: expr) = match e.desc with
@@ -301,7 +312,10 @@ let extract_sizeof_ty = function
   | ArgumentType ty -> translate_typ ty
 
 (* Translate expression [e], with expected type [t] *)
-let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' = match e.desc with
+let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' =
+  if is_null e then EBufNull
+  else
+  match e.desc with
   | IntegerLiteral n ->
       let ty = Helpers.assert_tint t in
       let signed = K.is_signed ty in
@@ -419,6 +433,12 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' = match e.desc wit
 
   | DeclRef {name; _} -> get_id_name name |> find_var env
 
+  | Call {callee; args} when is_scylla_reset callee ->
+      begin match args with
+      | [e] -> let e = translate_expr env (typ_of_expr e) e in (Helpers.push_ignore e).node
+      | _ -> failwith "wrong number of arguments for scylla_reset"
+      end
+
   | Call {callee; args} when is_memcpy callee ->
       (* Format.printf "Trying to translate memcpy %a@." Clang.Expr.pp e; *)
       begin match args with
@@ -533,13 +553,13 @@ let create_default_value typ = match typ with
   | _ -> failwith "Creating a default value is only supported for integer types"
 
 let translate_vardecl (env: env) (vdecl: var_decl_desc) : env * binder * Krml.Ast.expr =
-  let name = vdecl.var_name in
+  let vname = vdecl.var_name in
   let typ = translate_typ vdecl.var_type in
   match vdecl.var_init with
   | None ->
         (* If there is no associated definition, we attempt to craft
            a default initialization value *)
-        add_var env name, Helpers.fresh_binder name typ, create_default_value typ
+        add_var env vname, Helpers.fresh_binder vname typ, create_default_value typ
 
   (* Intializing a constant array with a list of elements.
      For instance, uint32[2] = { 0 };
@@ -550,12 +570,12 @@ let translate_vardecl (env: env) (vdecl: var_decl_desc) : env * binder * Krml.As
           (* One element initializer, possibly repeated *)
           let e = translate_expr env (Helpers.assert_tbuf typ) (List.hd l) in
           (* TODO: Arrays are not on stack if at top-level *)
-          add_var env name, Helpers.fresh_binder name typ, Krml.Ast.with_type typ (EBufCreate (Krml.Common.Stack, e, size_e))
+          add_var env vname, Helpers.fresh_binder vname typ, Krml.Ast.with_type typ (EBufCreate (Krml.Common.Stack, e, size_e))
         else (
           assert (List.length l = size);
           let ty = Helpers.assert_tbuf typ in
           let es = List.map (translate_expr env ty) l in
-          add_var env name, Helpers.fresh_binder name typ, Krml.Ast.with_type typ (EBufCreateL (Krml.Common.Stack, es))
+          add_var env vname, Helpers.fresh_binder vname typ, Krml.Ast.with_type typ (EBufCreateL (Krml.Common.Stack, es))
         )
 
   (* Initializing a struct value.
@@ -572,7 +592,7 @@ let translate_vardecl (env: env) (vdecl: var_decl_desc) : env * binder * Krml.As
             end
       | _ -> failwith "a designated initializer was expected when initializing a struct"
       in
-      add_var env name, Helpers.fresh_binder name typ, Krml.Ast.with_type typ (EFlat (List.map translate_field_expr l))
+      add_var env vname, Helpers.fresh_binder vname typ, Krml.Ast.with_type typ (EFlat (List.map translate_field_expr l))
 
 
   | Some {desc = Call {callee; args}; _}
@@ -586,12 +606,23 @@ let translate_vardecl (env: env) (vdecl: var_decl_desc) : env * binder * Krml.As
           let ty = Helpers.assert_tbuf typ in
           assert (extract_sizeof_ty argument = ty);
           let w = Helpers.assert_tint ty in
-          add_var env name, Helpers.fresh_binder name typ,
+          add_var env vname, Helpers.fresh_binder vname typ,
             Krml.Ast.with_type typ (EBufCreate (Krml.Common.Heap, Helpers.zero w, len))
       | _ -> failwith "calloc is expected to have two arguments"
       end
 
-  | Some e -> add_var env name, Helpers.fresh_binder name typ, translate_expr env typ e
+  | Some {desc = DeclRef { name; _ }; _} ->
+      let var = get_id_name name |> find_var env in
+      let e = match typ with
+      (* If we have a statement of the shape `let x = y` where y is a pointer,
+         this likely corresponds to taking a slice of y, starting at index 0.
+         We need to explicitly insert the EBufSub node to create a split tree *)
+      | TBuf _ | TArray _ -> EBufSub (Krml.Ast.with_type typ var, Helpers.zero_usize)
+      | _ -> var
+      in
+      add_var env vname, Helpers.fresh_binder vname typ, Krml.Ast.with_type typ e
+
+  | Some e -> add_var env vname, Helpers.fresh_binder vname typ, translate_expr env typ e
 
 (* Translation of a variable declaration, followed by a memset of [args] *)
 let translate_vardecl_with_memset (env: env) (vdecl: var_decl_desc) (args: expr list)
@@ -796,10 +827,9 @@ let rec translate_stmt' (env: env) (t: typ) (s: stmt_desc) : expr' = match s wit
   | Break -> failwith "translate_stmt: break"
   | Asm _ -> failwith "translate_stmt: asm"
 
-  (* TODO: Should this be an EReturn ? If so, need to support Return constructs in MiniRust *)
   | Return eo -> begin match eo with
-        | None -> EUnit
-        | Some e -> translate_expr' env (typ_of_expr e) e
+        | None -> EReturn Helpers.eunit
+        | Some e -> EReturn (translate_expr env (typ_of_expr e) e)
     end
 
   | Decl _ -> failwith "translate_stmt: decl"
@@ -878,17 +908,20 @@ let translate_decl (decl: decl) =
           (* TODO: What is the int for? *)
           Some (DGlobal (flags, lid, 0, typ, e))
 
-    | RecordDecl {name; fields; _} ->
+    | RecordDecl {name; fields; attributes; _} ->
+        let is_box = Attributes.has_box_attr attributes in
         let fields = List.map translate_field fields in
         struct_map := StructMap.update name (function
-          | None -> Some (Flat fields)
+          | None -> Some (Flat fields, is_box)
           | Some _ -> Printf.eprintf "A type declaration already exists for struct %s\n" name; failwith "redefining a structure type")
         !struct_map;
         None
 
     | TypedefDecl {name; underlying_type} ->
-        let ty = elaborate_typ underlying_type in
-        Some (DType ((FileMap.find name !name_map, name), [], 0, 0, ty))
+        let ty, is_box = elaborate_typ underlying_type in
+        let lid = FileMap.find name !name_map, name in
+        if is_box then boxed_types := Krml.AstToMiniRust.LidSet.add lid !boxed_types;
+        Some (DType (lid, [], 0, 0, ty))
 
     | _ ->
         raise Unsupported
@@ -1035,7 +1068,7 @@ let translate_compil_unit (ast: translation_unit) (wanted_c_file: string) =
   (* Format.printf "@[%a@]@." (Refl.pp [%refl: Clang.Ast.translation_unit] []) ast; *)
   let files = split_into_files lib_dirs ast in
   let files = List.filter_map (translate_file wanted_c_file) files in
-  files
+  !boxed_types, files
 
 let read_file (filename: string) : translation_unit =
   Format.printf "Clang version is %s\n" (Clang.get_clang_version());

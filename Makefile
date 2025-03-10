@@ -1,6 +1,6 @@
 # We try to figure out the best include paths, compiler options, etc. from the build system.
 
-SCYLLA_OPTS = --ccopts -DKRML_UNROLL_MAX=0,-I,test/include
+SCYLLA_OPTS = --ccopts -DKRML_UNROLL_MAX=0,-I,test/include,-I,test/
 
 # On OSX, querying xcrun appears to provide the sysroot.
 ifeq ($(shell uname -s),Darwin)
@@ -34,9 +34,13 @@ test: regen-outputs
 
 # We extract all of the tests into the same hacl directory
 .PHONY: regen-outputs
-regen-outputs: test-chacha test-bignum_base
+regen-outputs: test-chacha test-bignum_base test-bignum
 	for f in rs/*.rs; do cp $$f out/hacl/src/; done
+
+test-bignum:
+	./scylla $(SCYLLA_OPTS) test/internal/Hacl_Bignum_Base.h test/Hacl_Bignum.c test/Hacl_Bignum4096.c --output out/hacl/src/
 
 .PHONY: test-%
 test-%: test/%.c $(wildcard test/include/*) scylla
 	./scylla $(SCYLLA_OPTS) $< --output out/hacl/src/
+

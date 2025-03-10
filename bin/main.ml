@@ -52,12 +52,14 @@ Supported options:|}
   if files = [] then
     fatal_error "%s" (Arg.usage_string spec usage);
 
-  let files = List.concat_map (fun (f: string) ->
-    Scylla.ClangToAst.translate_compil_unit (Scylla.ClangToAst.read_file f) f
-  ) files in
+  let boxed_types, files = List.fold_left_map (fun acc (f: string) ->
+    let boxed_types, files = Scylla.ClangToAst.translate_compil_unit (Scylla.ClangToAst.read_file f) f in
+    Krml.AstToMiniRust.LidSet.union acc boxed_types, files
+  ) Krml.AstToMiniRust.LidSet.empty files in
+  let files = List.concat files in
   let files = Krml.Bundles.topological_sort files in
   let files = Krml.Simplify.sequence_to_let#visit_files () files in
-  let files = Krml.AstToMiniRust.translate_files files in
+  let files = Krml.AstToMiniRust.translate_files_with_boxed_types files boxed_types in
   let files = Krml.OptimizeMiniRust.cleanup_minirust files in
   let files = Krml.OptimizeMiniRust.infer_mut_borrows files in
   let files = Krml.OptimizeMiniRust.simplify_minirust files in

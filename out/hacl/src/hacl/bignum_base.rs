@@ -4,7 +4,8 @@
 #![allow(unused_assignments)]
 #![allow(unreachable_patterns)]
 
-pub fn Hacl_Bignum_Base_mul_wide_add2_u32(a: u32, b: u32, c_in: u32, out: &mut [u32]) -> u32
+#[inline] pub fn Hacl_Bignum_Base_mul_wide_add2_u32(a: u32, b: u32, c_in: u32, out: &mut [u32]) ->
+    u32
 {
   let out0: u32 = out[0usize];
   let res: u64 =
@@ -13,7 +14,8 @@ pub fn Hacl_Bignum_Base_mul_wide_add2_u32(a: u32, b: u32, c_in: u32, out: &mut [
   return res.wrapping_shr(32u32) as u32
 }
 
-pub fn Hacl_Bignum_Base_mul_wide_add2_u64(a: u64, b: u64, c_in: u64, out: &mut [u64]) -> u64
+#[inline] pub fn Hacl_Bignum_Base_mul_wide_add2_u64(a: u64, b: u64, c_in: u64, out: &mut [u64]) ->
+    u64
 {
   let out0: u64 = out[0usize];
   let res: crate::types::FStar_UInt128_uint128 =
@@ -31,7 +33,11 @@ pub fn Hacl_Bignum_Base_mul_wide_add2_u64(a: u64, b: u64, c_in: u64, out: &mut [
   )
 }
 
-pub fn Hacl_Bignum_Convert_bn_from_bytes_be_uint64(len: u32, b: &[u8], res: &mut [u64])
+#[inline] pub fn Hacl_Bignum_Convert_bn_from_bytes_be_uint64(
+  len: u32,
+  b: &[u8],
+  res: &mut [u64]
+)
 {
   let bnLen: u32 = len.wrapping_sub(1u32).wrapping_div(8u32).wrapping_add(1u32);
   let tmpLen: u32 = 8u32.wrapping_mul(bnLen);
@@ -51,7 +57,7 @@ pub fn Hacl_Bignum_Convert_bn_from_bytes_be_uint64(len: u32, b: &[u8], res: &mut
   }
 }
 
-pub fn Hacl_Bignum_Convert_bn_to_bytes_be_uint64(len: u32, b: &[u64], res: &mut [u8])
+#[inline] pub fn Hacl_Bignum_Convert_bn_to_bytes_be_uint64(len: u32, b: &[u64], res: &mut [u8])
 {
   let bnLen: u32 = len.wrapping_sub(1u32).wrapping_div(8u32).wrapping_add(1u32);
   let tmpLen: u32 = 8u32.wrapping_mul(bnLen);
@@ -68,7 +74,7 @@ pub fn Hacl_Bignum_Convert_bn_to_bytes_be_uint64(len: u32, b: &[u64], res: &mut 
   )
 }
 
-pub fn Hacl_Bignum_Lib_bn_get_top_index_u32(len: u32, b: &[u32]) -> u32
+#[inline] pub fn Hacl_Bignum_Lib_bn_get_top_index_u32(len: u32, b: &[u32]) -> u32
 {
   let mut r#priv: u32 = 0u32;
   for i in 0u32..len
@@ -79,7 +85,7 @@ pub fn Hacl_Bignum_Lib_bn_get_top_index_u32(len: u32, b: &[u32]) -> u32
   return r#priv
 }
 
-pub fn Hacl_Bignum_Lib_bn_get_top_index_u64(len: u32, b: &[u64]) -> u64
+#[inline] pub fn Hacl_Bignum_Lib_bn_get_top_index_u64(len: u32, b: &[u64]) -> u64
 {
   let mut r#priv: u64 = 0u64;
   for i in 0u32..len
@@ -90,7 +96,7 @@ pub fn Hacl_Bignum_Lib_bn_get_top_index_u64(len: u32, b: &[u64]) -> u64
   return r#priv
 }
 
-pub fn Hacl_Bignum_Lib_bn_get_bits_u32(len: u32, b: &[u32], i: u32, l: u32) -> u32
+#[inline] pub fn Hacl_Bignum_Lib_bn_get_bits_u32(len: u32, b: &[u32], i: u32, l: u32) -> u32
 {
   let i1: u32 = i.wrapping_div(32u32);
   let j: u32 = i.wrapping_rem(32u32);
@@ -103,7 +109,7 @@ pub fn Hacl_Bignum_Lib_bn_get_bits_u32(len: u32, b: &[u32], i: u32, l: u32) -> u
   return ite & 1u32.wrapping_shl(l).wrapping_sub(1u32)
 }
 
-pub fn Hacl_Bignum_Lib_bn_get_bits_u64(len: u32, b: &[u64], i: u32, l: u32) -> u64
+#[inline] pub fn Hacl_Bignum_Lib_bn_get_bits_u64(len: u32, b: &[u64], i: u32, l: u32) -> u64
 {
   let i1: u32 = i.wrapping_div(64u32);
   let j: u32 = i.wrapping_rem(64u32);
@@ -116,7 +122,12 @@ pub fn Hacl_Bignum_Lib_bn_get_bits_u64(len: u32, b: &[u64], i: u32, l: u32) -> u
   return ite & 1u64.wrapping_shl(l).wrapping_sub(1u64)
 }
 
-pub fn Hacl_Bignum_Addition_bn_sub_eq_len_u32(aLen: u32, a: &[u32], b: &[u32], res: &mut [u32]) ->
+#[inline] pub fn Hacl_Bignum_Addition_bn_sub_eq_len_u32(
+  aLen: u32,
+  a: &[u32],
+  b: &[u32],
+  res: &mut [u32]
+) ->
     u32
 {
   let mut c: u32 = 0u32;
@@ -149,7 +160,12 @@ pub fn Hacl_Bignum_Addition_bn_sub_eq_len_u32(aLen: u32, a: &[u32], b: &[u32], r
   return c
 }
 
-pub fn Hacl_Bignum_Addition_bn_sub_eq_len_u64(aLen: u32, a: &[u64], b: &[u64], res: &mut [u64]) ->
+#[inline] pub fn Hacl_Bignum_Addition_bn_sub_eq_len_u64(
+  aLen: u32,
+  a: &[u64],
+  b: &[u64],
+  res: &mut [u64]
+) ->
     u64
 {
   let mut c: u64 = 0u64;
@@ -182,7 +198,12 @@ pub fn Hacl_Bignum_Addition_bn_sub_eq_len_u64(aLen: u32, a: &[u64], b: &[u64], r
   return c
 }
 
-pub fn Hacl_Bignum_Addition_bn_add_eq_len_u32(aLen: u32, a: &[u32], b: &[u32], res: &mut [u32]) ->
+#[inline] pub fn Hacl_Bignum_Addition_bn_add_eq_len_u32(
+  aLen: u32,
+  a: &[u32],
+  b: &[u32],
+  res: &mut [u32]
+) ->
     u32
 {
   let mut c: u32 = 0u32;
@@ -215,7 +236,12 @@ pub fn Hacl_Bignum_Addition_bn_add_eq_len_u32(aLen: u32, a: &[u32], b: &[u32], r
   return c
 }
 
-pub fn Hacl_Bignum_Addition_bn_add_eq_len_u64(aLen: u32, a: &[u64], b: &[u64], res: &mut [u64]) ->
+#[inline] pub fn Hacl_Bignum_Addition_bn_add_eq_len_u64(
+  aLen: u32,
+  a: &[u64],
+  b: &[u64],
+  res: &mut [u64]
+) ->
     u64
 {
   let mut c: u64 = 0u64;
@@ -248,7 +274,7 @@ pub fn Hacl_Bignum_Addition_bn_add_eq_len_u64(aLen: u32, a: &[u64], b: &[u64], r
   return c
 }
 
-pub fn Hacl_Bignum_Multiplication_bn_mul_u32(
+#[inline] pub fn Hacl_Bignum_Multiplication_bn_mul_u32(
   aLen: u32,
   a: &[u32],
   bLen: u32,
@@ -290,7 +316,7 @@ pub fn Hacl_Bignum_Multiplication_bn_mul_u32(
   }
 }
 
-pub fn Hacl_Bignum_Multiplication_bn_mul_u64(
+#[inline] pub fn Hacl_Bignum_Multiplication_bn_mul_u64(
   aLen: u32,
   a: &[u64],
   bLen: u32,
@@ -332,7 +358,7 @@ pub fn Hacl_Bignum_Multiplication_bn_mul_u64(
   }
 }
 
-pub fn Hacl_Bignum_Multiplication_bn_sqr_u32(aLen: u32, a: &[u32], res: &mut [u32])
+#[inline] pub fn Hacl_Bignum_Multiplication_bn_sqr_u32(aLen: u32, a: &[u32], res: &mut [u32])
 {
   (res[0usize..aLen.wrapping_add(aLen) as usize]).copy_from_slice(
     &vec![0u32; aLen.wrapping_add(aLen) as usize].into_boxed_slice()
@@ -378,6 +404,7 @@ pub fn Hacl_Bignum_Multiplication_bn_sqr_u32(aLen: u32, a: &[u32], res: &mut [u3
   let r: u32 =
       Hacl_Bignum_Addition_bn_add_eq_len_u32(aLen.wrapping_add(aLen), &a_copy0, &b_copy0, res);
   let c0: u32 = r;
+  crate::lowstar::ignore::ignore::<u32>(c0);
   let mut tmp: Box<[u32]> = vec![0u32; aLen.wrapping_add(aLen) as usize].into_boxed_slice();
   for i in 0u32..aLen
   {
@@ -398,10 +425,10 @@ pub fn Hacl_Bignum_Multiplication_bn_sqr_u32(aLen: u32, a: &[u32], res: &mut [u3
   let r0: u32 =
       Hacl_Bignum_Addition_bn_add_eq_len_u32(aLen.wrapping_add(aLen), &a_copy, &b_copy, res);
   let c1: u32 = r0;
-  ()
+  crate::lowstar::ignore::ignore::<u32>(c1)
 }
 
-pub fn Hacl_Bignum_Multiplication_bn_sqr_u64(aLen: u32, a: &[u64], res: &mut [u64])
+#[inline] pub fn Hacl_Bignum_Multiplication_bn_sqr_u64(aLen: u32, a: &[u64], res: &mut [u64])
 {
   (res[0usize..aLen.wrapping_add(aLen) as usize]).copy_from_slice(
     &vec![0u64; aLen.wrapping_add(aLen) as usize].into_boxed_slice()
