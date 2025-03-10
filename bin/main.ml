@@ -29,7 +29,7 @@ Supported options:|}
   let spec = Arg.align spec in
   let files = ref [] in
   let fatal_error fmt =
-    Printf.kprintf (fun s ->
+    Printf.ksprintf (fun s ->
         print_endline s;
         exit 255) fmt
   in
