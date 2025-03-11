@@ -317,9 +317,18 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' =
   else
   match e.desc with
   | IntegerLiteral n ->
-      let ty = Helpers.assert_tint t in
-      let signed = K.is_signed ty in
-      EConstant (ty, Clang.Ast.string_of_integer_literal ~signed n)
+      begin match t with
+      | TBool ->
+          begin match n with
+          | Int 0 -> EBool false
+          | Int 1 ->  EBool true
+          | _ -> failwith "Not a boolean literal"
+          end
+      | _ ->
+        let ty = Helpers.assert_tint t in
+        let signed = K.is_signed ty in
+        EConstant (ty, Clang.Ast.string_of_integer_literal ~signed n)
+      end
 
   | FloatingLiteral _ -> failwith "translate_expr: floating literal"
   | StringLiteral _ -> failwith "translate_expr: string literal"
