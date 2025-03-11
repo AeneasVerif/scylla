@@ -311,6 +311,16 @@ let extract_sizeof_ty = function
   | ArgumentExpr _ -> failwith "ArgumentExpr not supported"
   | ArgumentType ty -> translate_typ ty
 
+let extract_constarray_size (ty: qual_type) = match ty.desc with
+  | ConstantArray {size; _} -> size, Helpers.mk_uint32 size
+  | _ ->
+      Format.eprintf "Expected ConstantArray, got type %a\n" Clang.Type.pp ty;
+      failwith "Type is not a ConstantArray"
+
+let is_constantarray (ty: qual_type) = match ty.desc with
+  | ConstantArray _ -> true
+  | _ -> false
+
 (* Translate expression [e], with expected type [t] *)
 let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' =
   if is_null e then EBufNull
@@ -339,6 +349,37 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' =
   | ImaginaryLiteral _ -> failwith "translate_expr: imaginary literal"
   | BoolLiteral _ -> failwith "translate_expr: bool literal"
   | NullPtrLiteral -> failwith "translate_expr: null ptr literal"
+
+  | CompoundLiteral {qual_type; init = {desc = InitList l; _}} when is_constantarray qual_type ->
+        let size, size_e = extract_constarray_size qual_type in
+        if List.length l = 1 then
+          (* One element initializer, possibly repeated *)
+          let e = translate_expr env (Helpers.assert_tbuf t) (List.hd l) in
+          (* TODO: Arrays are not on stack if at top-level *)
+          EBufCreate (Krml.Common.Stack, e, size_e)
+        else (
+          assert (List.length l = size);
+          let ty = Helpers.assert_tbuf t in
+          let es = List.map (translate_expr env ty) l in
+          EBufCreateL (Krml.Common.Stack, es)
+        )
+
+  (* We handled above the case of array initialization, this should
+     be a struct initialization *)
+  | CompoundLiteral {init = {desc = InitList l; _}; _} ->
+      let translate_field_expr (e : expr) = match e.desc with
+        | DesignatedInit { designators; init }  ->
+            begin match designators with
+            | [FieldDesignator name] ->
+                let e = translate_expr env (typ_of_expr init) init in
+                (Some name, e)
+            | [_] -> failwith "expected a field designator"
+            | _ -> failwith "assigning to several fields during struct initialization is not supported"
+            end
+      | _ -> failwith "a designated initializer was expected when initializing a struct"
+      in
+     EFlat (List.map translate_field_expr l)
+
 
   | UnaryOperator {kind = PostInc; operand = { desc = DeclRef {name; _}; _ }} ->
       (* This is a special case for loop increments. The current Karamel
@@ -548,16 +589,6 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' =
 
 and translate_expr (env: env) (t: typ) (e: expr) : Krml.Ast.expr =
   Krml.Ast.with_type t (translate_expr' env t e)
-
-let extract_constarray_size (ty: qual_type) = match ty.desc with
-  | ConstantArray {size; _} -> size, Helpers.mk_uint32 size
-  | _ ->
-      Format.eprintf "Expected ConstantArray, got type %a\n" Clang.Type.pp ty;
-      failwith "Type is not a ConstantArray"
-
-let is_constantarray (ty: qual_type) = match ty.desc with
-  | ConstantArray _ -> true
-  | _ -> false
 
 (* Create a default value associated to a given type [typ] *)
 let create_default_value typ = match typ with
