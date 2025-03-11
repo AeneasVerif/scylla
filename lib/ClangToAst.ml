@@ -927,10 +927,16 @@ let translate_decl (decl: decl) =
         None
 
     | TypedefDecl {name; underlying_type} ->
-        let ty, is_box = elaborate_typ underlying_type in
         let lid = FileMap.find name !name_map, name in
-        if is_box then boxed_types := Krml.AstToMiniRust.LidSet.add lid !boxed_types;
-        Some (DType (lid, [], 0, 0, ty))
+        begin match underlying_type.desc with
+        | Typedef {name; _} ->
+            let name = get_id_name name in
+            Some (DType (lid, [], 0, 0, Abbrev (TQualified (FileMap.find name !name_map, name))))
+        | _ ->
+          let ty, is_box = elaborate_typ underlying_type in
+          if is_box then boxed_types := Krml.AstToMiniRust.LidSet.add lid !boxed_types;
+          Some (DType (lid, [], 0, 0, ty))
+        end
 
     | _ ->
         raise Unsupported
