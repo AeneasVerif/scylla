@@ -324,10 +324,13 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' =
           | Int 1 ->  EBool true
           | _ -> failwith "Not a boolean literal"
           end
-      | _ ->
+      | TInt _ ->
         let ty = Helpers.assert_tint t in
         let signed = K.is_signed ty in
         EConstant (ty, Clang.Ast.string_of_integer_literal ~signed n)
+      | _ ->
+        (* TODO: Handle this better *)
+        EConstant (UInt32, Clang.Ast.string_of_integer_literal n)
       end
 
   | FloatingLiteral _ -> failwith "translate_expr: floating literal"
@@ -559,7 +562,7 @@ let is_constantarray (ty: qual_type) = match ty.desc with
 (* Create a default value associated to a given type [typ] *)
 let create_default_value typ = match typ with
   | TInt w -> Helpers.zero w
-  | _ -> failwith "Creating a default value is only supported for integer types"
+  | _ -> Helpers.any
 
 let translate_vardecl (env: env) (vdecl: var_decl_desc) : env * binder * Krml.Ast.expr =
   let vname = vdecl.var_name in
@@ -803,9 +806,17 @@ let rec translate_stmt' (env: env) (t: typ) (s: stmt_desc) : expr' = match s wit
       in
       EIfThenElse (cond, then_b, else_b)
 
-  | Switch _ -> failwith "translate_stmt: switch"
-  | Case _ -> failwith "translate_stmt: case"
-  | Default _ -> failwith "translate_stmt: default"
+  | Switch {init; condition_variable; cond; body} ->
+      (* C++ constructs *)
+      assert (init = None);
+      assert (condition_variable = None);
+
+      let cond = translate_expr env (typ_of_expr cond) cond in
+      let branches = translate_branches env t body.desc in
+      EMatch (Unchecked, cond, branches)
+
+  | Case _ -> failwith "case not encapsulated in a switch"
+  | Default _ -> failwith "default not encapsulated in a switch"
 
   | While _ -> failwith "translate_stmt: while"
   | Do { body; cond } ->
@@ -850,6 +861,31 @@ let rec translate_stmt' (env: env) (t: typ) (s: stmt_desc) : expr' = match s wit
 
 and translate_stmt (env: env) (t: typ) (s: stmt_desc) : Krml.Ast.expr =
   Krml.Ast.with_type t (translate_stmt' env t s)
+
+(* Translate case and default statements inside a switch to a list of branches for
+   structured pattern-matching.
+   The original C branches must consist of a list of `case` statements, terminated by
+   a `default` statement *)
+and translate_branches (env: env) (t: typ) (s: stmt_desc) : Krml.Ast.branches = match s with
+  | Compound [{desc = Default body; _}] ->
+      let body = translate_stmt env t body.desc in
+      (* The last case is a fallback, the pattern corresponds to a wildcard *)
+      [([], Krml.Ast.with_type TAny PWild, body)]
+  | Compound ({desc = Case {lhs; rhs; body}; _} :: tl) ->
+      (* Unsupported GCC extension *)
+      assert (rhs = None);
+      let pat_ty = typ_of_expr lhs in
+      let pat = translate_expr' env (typ_of_expr lhs) lhs in
+      let body = translate_stmt env t body.desc in
+      (* We only support pattern-matching on constants here.
+         This allows to translate switches corresponding to pattern
+         matching on a tagged union *)
+      begin match pat with
+      | EConstant n -> ([], Krml.Ast.with_type pat_ty (PConstant n), body)
+      | _ -> failwith "Only constant patterns supported"
+      end :: translate_branches env t (Compound tl)
+  | _ -> failwith "Ill-formed switch branches: Expected a case or a default"
+
 
 let translate_param (p: parameter) : binder * string =
   let p = p.desc in
