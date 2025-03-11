@@ -931,7 +931,7 @@ let translate_decl (decl: decl) =
         begin match underlying_type.desc with
         | Typedef {name; _} ->
             let name = get_id_name name in
-            Some (DType (lid, [], 0, 0, Abbrev (TQualified (FileMap.find name !name_map, name))))
+            Some (DType (lid, [], 0, 0, Abbrev (translate_typ_name name)))
         | _ ->
           let ty, is_box = elaborate_typ underlying_type in
           if is_box then boxed_types := Krml.AstToMiniRust.LidSet.add lid !boxed_types;
