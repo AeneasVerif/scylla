@@ -205,10 +205,21 @@ inline static void store32_le(uint8_t *b, uint32_t i) {
   store32(b, htole32(i));
 }
 
+__attribute__((annotate("scylla_opaque")))
+inline static uint32_t load32_be(uint8_t *b) {
+  return be32toh(load32(b));
+}
+
+__attribute__((annotate("scylla_opaque")))
+__attribute__((annotate("scylla_mutability(mut, _)")))
+inline static void store32_be(uint8_t *b, uint32_t i) {
+  store32(b, htobe32(i));
+}
+
 // #define load32_le(b) (le32toh(load32(b)))
 // #define store32_le(b, i) (store32(b, htole32(i)))
-#define load32_be(b) (be32toh(load32(b)))
-#define store32_be(b, i) (store32(b, htobe32(i)))
+// #define load32_be(b) (be32toh(load32(b)))
+// #define store32_be(b, i) (store32(b, htobe32(i)))
 
 __attribute__((annotate("scylla_opaque")))
 inline static uint64_t load64_le(uint8_t *b) {
