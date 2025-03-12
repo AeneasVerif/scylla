@@ -379,12 +379,12 @@ pub fn exp_check(n: &[u64], a: &[u64], bBits: u32, b: &[u64]) -> u64
   };
   let m10: u64 = acc0;
   let m00: u64 = m0 & m10;
-  let mut bLen: u32 = 0u32;
+  let mut bLen: u32;
   if bBits == 0u32
   { bLen = 1u32 }
   else
   { bLen = bBits.wrapping_sub(1u32).wrapping_div(64u32).wrapping_add(1u32) };
-  let mut m1: u64 = 0u64;
+  let mut m1: u64;
   if bBits < 64u32.wrapping_mul(bLen)
   {
     let mut b2: Box<[u64]> = vec![0u64; bLen as usize].into_boxed_slice();
@@ -463,7 +463,7 @@ pub fn exp_check(n: &[u64], a: &[u64], bBits: u32, b: &[u64]) -> u64
   let mut aM: [u64; 64] = [0u64; 64usize];
   to(n, mu, r2, a, &mut aM);
   let mut resM: [u64; 64] = [0u64; 64usize];
-  let mut bLen: u32 = 0u32;
+  let mut bLen: u32;
   if bBits == 0u32
   { bLen = 1u32 }
   else
@@ -608,7 +608,7 @@ pub fn exp_check(n: &[u64], a: &[u64], bBits: u32, b: &[u64]) -> u64
   let mut aM: [u64; 64] = [0u64; 64usize];
   to(n, mu, r2, a, &mut aM);
   let mut resM: [u64; 64] = [0u64; 64usize];
-  let mut bLen: u32 = 0u32;
+  let mut bLen: u32;
   if bBits == 0u32
   { bLen = 1u32 }
   else

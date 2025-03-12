@@ -113,7 +113,7 @@ pub fn Hacl_Bignum_Karatsuba_bn_karatsuba_mul_uint32(
   let r: (&mut [u32], &mut [u32]) = res.split_at_mut(aLen.wrapping_add(aLen2) as usize);
   let c01: u32 =
       crate::lib_intrinsics::Lib_IntTypes_Intrinsics_add_carry_u32(0u32, r.1[0usize], c7, r.1);
-  let mut r1: u32 = 0u32;
+  let mut r1: u32;
   if 1u32 < aLen.wrapping_add(aLen).wrapping_sub(aLen.wrapping_add(aLen2))
   {
     let res1: (&mut [u32], &mut [u32]) = r.1.split_at_mut(1usize);
@@ -266,7 +266,7 @@ pub fn Hacl_Bignum_Karatsuba_bn_karatsuba_mul_uint64(
   let r: (&mut [u64], &mut [u64]) = res.split_at_mut(aLen.wrapping_add(aLen2) as usize);
   let c01: u64 =
       crate::lib_intrinsics::Lib_IntTypes_Intrinsics_add_carry_u64(0u64, r.1[0usize], c7, r.1);
-  let mut r1: u64 = 0u64;
+  let mut r1: u64;
   if 1u32 < aLen.wrapping_add(aLen).wrapping_sub(aLen.wrapping_add(aLen2))
   {
     let res1: (&mut [u64], &mut [u64]) = r.1.split_at_mut(1usize);
@@ -387,7 +387,7 @@ pub fn Hacl_Bignum_Karatsuba_bn_karatsuba_sqr_uint32(
   let r: (&mut [u32], &mut [u32]) = res.split_at_mut(aLen.wrapping_add(aLen2) as usize);
   let c01: u32 =
       crate::lib_intrinsics::Lib_IntTypes_Intrinsics_add_carry_u32(0u32, r.1[0usize], c7, r.1);
-  let mut r1: u32 = 0u32;
+  let mut r1: u32;
   if 1u32 < aLen.wrapping_add(aLen).wrapping_sub(aLen.wrapping_add(aLen2))
   {
     let res1: (&mut [u32], &mut [u32]) = r.1.split_at_mut(1usize);
@@ -508,7 +508,7 @@ pub fn Hacl_Bignum_Karatsuba_bn_karatsuba_sqr_uint64(
   let r: (&mut [u64], &mut [u64]) = res.split_at_mut(aLen.wrapping_add(aLen2) as usize);
   let c01: u64 =
       crate::lib_intrinsics::Lib_IntTypes_Intrinsics_add_carry_u64(0u64, r.1[0usize], c7, r.1);
-  let mut r1: u64 = 0u64;
+  let mut r1: u64;
   if 1u32 < aLen.wrapping_add(aLen).wrapping_sub(aLen.wrapping_add(aLen2))
   {
     let res1: (&mut [u64], &mut [u64]) = r.1.split_at_mut(1usize);
@@ -1437,12 +1437,12 @@ pub fn Hacl_Bignum_Exponentiation_bn_check_mod_exp_u32(
   };
   let m10: u32 = acc0;
   let m00: u32 = m0 & m10;
-  let mut bLen: u32 = 0u32;
+  let mut bLen: u32;
   if bBits == 0u32
   { bLen = 1u32 }
   else
   { bLen = bBits.wrapping_sub(1u32).wrapping_div(32u32).wrapping_add(1u32) };
-  let mut m1: u32 = 0u32;
+  let mut m1: u32;
   if bBits < 32u32.wrapping_mul(bLen)
   {
     let mut b2: Box<[u32]> = vec![0u32; bLen as usize].into_boxed_slice();
@@ -1524,7 +1524,7 @@ pub fn Hacl_Bignum_Exponentiation_bn_mod_exp_vartime_precomp_u32(
   let mut aM: Box<[u32]> = vec![0u32; len as usize].into_boxed_slice();
   Hacl_Bignum_Montgomery_bn_to_mont_u32(len, n, mu, r2, a, &mut aM);
   let mut resM: Box<[u32]> = vec![0u32; len as usize].into_boxed_slice();
-  let mut bLen: u32 = 0u32;
+  let mut bLen: u32;
   if bBits == 0u32
   { bLen = 1u32 }
   else
@@ -1678,7 +1678,7 @@ pub fn Hacl_Bignum_Exponentiation_bn_mod_exp_consttime_precomp_u32(
   let mut aM: Box<[u32]> = vec![0u32; len as usize].into_boxed_slice();
   Hacl_Bignum_Montgomery_bn_to_mont_u32(len, n, mu, r2, a, &mut aM);
   let mut resM: Box<[u32]> = vec![0u32; len as usize].into_boxed_slice();
-  let mut bLen: u32 = 0u32;
+  let mut bLen: u32;
   if bBits == 0u32
   { bLen = 1u32 }
   else
@@ -1845,12 +1845,12 @@ pub fn Hacl_Bignum_Exponentiation_bn_check_mod_exp_u64(
   };
   let m10: u64 = acc0;
   let m00: u64 = m0 & m10;
-  let mut bLen: u32 = 0u32;
+  let mut bLen: u32;
   if bBits == 0u32
   { bLen = 1u32 }
   else
   { bLen = bBits.wrapping_sub(1u32).wrapping_div(64u32).wrapping_add(1u32) };
-  let mut m1: u64 = 0u64;
+  let mut m1: u64;
   if bBits < 64u32.wrapping_mul(bLen)
   {
     let mut b2: Box<[u64]> = vec![0u64; bLen as usize].into_boxed_slice();
@@ -1932,7 +1932,7 @@ pub fn Hacl_Bignum_Exponentiation_bn_mod_exp_vartime_precomp_u64(
   let mut aM: Box<[u64]> = vec![0u64; len as usize].into_boxed_slice();
   Hacl_Bignum_Montgomery_bn_to_mont_u64(len, n, mu, r2, a, &mut aM);
   let mut resM: Box<[u64]> = vec![0u64; len as usize].into_boxed_slice();
-  let mut bLen: u32 = 0u32;
+  let mut bLen: u32;
   if bBits == 0u32
   { bLen = 1u32 }
   else
@@ -2086,7 +2086,7 @@ pub fn Hacl_Bignum_Exponentiation_bn_mod_exp_consttime_precomp_u64(
   let mut aM: Box<[u64]> = vec![0u64; len as usize].into_boxed_slice();
   Hacl_Bignum_Montgomery_bn_to_mont_u64(len, n, mu, r2, a, &mut aM);
   let mut resM: Box<[u64]> = vec![0u64; len as usize].into_boxed_slice();
-  let mut bLen: u32 = 0u32;
+  let mut bLen: u32;
   if bBits == 0u32
   { bLen = 1u32 }
   else

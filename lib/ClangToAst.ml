@@ -592,8 +592,7 @@ and translate_expr (env: env) (t: typ) (e: expr) : Krml.Ast.expr =
 
 (* Create a default value associated to a given type [typ] *)
 let create_default_value typ = match typ with
-  | TInt w -> Helpers.zero w
-  | _ -> Helpers.any
+  | _ -> Krml.Ast.with_type typ EAny
 
 let translate_vardecl (env: env) (vdecl: var_decl_desc) : env * binder * Krml.Ast.expr =
   let vname = vdecl.var_name in

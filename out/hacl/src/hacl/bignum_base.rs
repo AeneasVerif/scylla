@@ -101,7 +101,7 @@
   let i1: u32 = i.wrapping_div(32u32);
   let j: u32 = i.wrapping_rem(32u32);
   let p1: u32 = (b[i1 as usize]).wrapping_shr(j);
-  let mut ite: u32 = 0u32;
+  let mut ite: u32;
   if i1.wrapping_add(1u32) < len && 0u32 < j
   { ite = p1 | (b[i1.wrapping_add(1u32) as usize]).wrapping_shl(32u32.wrapping_sub(j)) }
   else
@@ -114,7 +114,7 @@
   let i1: u32 = i.wrapping_div(64u32);
   let j: u32 = i.wrapping_rem(64u32);
   let p1: u64 = (b[i1 as usize]).wrapping_shr(j);
-  let mut ite: u64 = 0u64;
+  let mut ite: u64;
   if i1.wrapping_add(1u32) < len && 0u32 < j
   { ite = p1 | (b[i1.wrapping_add(1u32) as usize]).wrapping_shl(64u32.wrapping_sub(j)) }
   else
