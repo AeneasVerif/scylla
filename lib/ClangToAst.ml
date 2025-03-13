@@ -355,13 +355,19 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' =
           (* If we have a named type, we expect it to be a type abbreviation to
              a constant type. *)
           begin try
-            let underlying_type = Krml.AstToMiniRust.LidMap.find lid !abbrev_map in
-            translate_expr' env underlying_type e
-          with Not_found -> failwith "Expected type is not a type alias when trying to translate an integer constant"
+            let underlying_type = match Krml.AstToMiniRust.LidMap.find lid !abbrev_map with
+              | BuiltinType t -> translate_builtin_typ t
+              | Typedef { name; _ } ->
+                  get_id_name name |> translate_typ_name
+              | _ -> failwith "impossible"
+            in translate_expr' env underlying_type e
+          with Not_found ->
+            Krml.KPrint.beprintf "Tried to type integer literal with type %a\n" Krml.PrintAst.ptyp t;
+            failwith "Expected type is not a type alias when trying to translate an integer constant"
           end
       | _ ->
         (* TODO: Handle this better *)
-        Krml.KPrint.beprintf "Tried to type integerliteral as %a\n" Krml.PrintAst.ptyp t;
+        Krml.KPrint.beprintf "Tried to type integer literal as %a\n" Krml.PrintAst.ptyp t;
         EConstant (UInt32, Clang.Ast.string_of_integer_literal n)
       end
 
@@ -1027,18 +1033,10 @@ let translate_decl (decl: decl) =
         begin match underlying_type.desc with
         | BuiltinType t ->
             let ty = translate_builtin_typ t in
-            abbrev_map := Krml.AstToMiniRust.LidMap.update lid (function
-              | None -> Some ty
-              | Some _ -> Printf.eprintf "A type alias already exists for type %s\n" name; failwith "redefining a type alias")
-            !abbrev_map;
             Some (DType (lid, [], 0, 0, Abbrev ty))
         | Typedef {name; _} ->
             let name = get_id_name name in
             let ty = translate_typ_name name in
-            abbrev_map := Krml.AstToMiniRust.LidMap.update lid (function
-              | None -> Some ty
-              | Some _ -> Printf.eprintf "A type alias already exists for type %s\n" name; failwith "redefining a type alias")
-            !abbrev_map;
             Some (DType (lid, [], 0, 0, Abbrev ty))
         | _ ->
           let ty, is_box = elaborate_typ underlying_type in
@@ -1152,7 +1150,19 @@ let add_lident_mapping (decl: decl) (filename: string) =
         (function | None -> Some path | Some _ ->
           Format.printf "Typedef declaration %s appears twice in translation unit\n" tdecl.name;
           Some path)
-        !name_map
+        !name_map;
+      (* To normalize correctly, we might need to retrieve types beyond the file currently
+         being translated. We thus construct this map here rather than during type declaration translation *)
+      begin match tdecl.underlying_type.desc with
+      | BuiltinType _ | Typedef _ as t ->
+            let lid = path, tdecl.name in
+            abbrev_map := Krml.AstToMiniRust.LidMap.update lid (function
+              | None -> Some t
+              | Some t' when t = t' -> Some t
+              | _ -> Printf.eprintf "A type alias already exists for type %s\n" tdecl.name; failwith "redefining a type alias")
+            !abbrev_map;
+      | _ -> ()
+      end
 
   (* TODO: Do we need to support this mapping for more decls *)
   | _ -> ()
