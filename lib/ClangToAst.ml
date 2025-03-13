@@ -995,6 +995,8 @@ let translate_decl (decl: decl) =
     | TypedefDecl {name; underlying_type} ->
         let lid = FileMap.find name !name_map, name in
         begin match underlying_type.desc with
+        | BuiltinType t ->
+            Some (DType (lid, [], 0, 0, Abbrev (translate_builtin_typ t)))
         | Typedef {name; _} ->
             let name = get_id_name name in
             Some (DType (lid, [], 0, 0, Abbrev (translate_typ_name name)))
