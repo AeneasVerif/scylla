@@ -610,20 +610,25 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' =
   | Paren _ -> failwith "translate_expr: paren"
 
   | Member {base; arrow; field} ->
-      (* TODO: Support for arrow access *)
-      assert (not arrow);
       let base = match base with
       | None -> failwith "field accesses without a base expression are not supported"
       | Some b -> b
       in
-      let base = translate_expr env (typ_of_expr base) base in
+      let t_base = normalize_type (typ_of_expr base) in
+      let base = translate_expr env t_base base in
 
       let f = match field with
       | FieldName {desc; _} -> get_id_name desc.name
       | _ -> failwith "member node: only field accesses supported"
       in
 
-      EField (base, f)
+      if not arrow then
+        (* base.f *)
+        EField (base, f)
+      else
+        (* base->f *)
+        let deref_base = Helpers.(with_type (assert_tbuf t_base) (EBufRead (base, Helpers.zero_usize))) in
+        EField (deref_base, f)
 
   | _ ->
     Format.eprintf "Trying to translate expression %a@." Clang.Expr.pp e;
@@ -1120,13 +1125,7 @@ let add_to_list x data m =
   FileMap.update x add m
 
 let add_lident_mapping (decl: decl) (filename: string) =
-  let sep =
-    (* We need to translate the separator to a char.
-       We assume we are on a system where it is one character (Unix or Windows) *)
-    assert (String.length Filename.dir_sep = 1);
-    String.get Filename.dir_sep 0
-  in
-  let path = [ Filename.remove_extension filename |> String.split_on_char sep |> Krml.KList.last ] in
+  let path = [ Filename.(remove_extension (basename filename)) ] in
   match decl.desc with
   | Function fdecl ->
       let name = get_id_name fdecl.name in
@@ -1162,6 +1161,7 @@ let add_lident_mapping (decl: decl) (filename: string) =
       begin match tdecl.underlying_type.desc with
       | BuiltinType _ | Typedef _ as t ->
             let lid = path, tdecl.name in
+            (* Krml.KPrint.bprintf "adding %a in the abbreviation map\n" Krml.PrintAst.Ops.plid lid; *)
             abbrev_map := LidMap.update lid (function
               | None -> Some t
               | Some t' when t = t' -> Some t
@@ -1179,8 +1179,9 @@ let split_into_files (lib_dirs: string list) (ast: translation_unit) =
     (* If this belongs to the C library, do not extract it *)
     (* TODO: This could be done more efficiently by filtering after splitting into files,
        to avoid repeated traversals of lib_dirs *)
-    if List.exists (fun x -> String.starts_with ~prefix:x loc.filename) lib_dirs then acc
-    else (
+    if List.exists (fun x -> String.starts_with ~prefix:x loc.filename) lib_dirs then (
+      acc
+    ) else (
       add_lident_mapping decl loc.filename;
       (* We merge .h and .c files here. Duplicated declarations (e.g., prototypes in the
          .h file, and definitions in the .c file) will be filtered during the translation
