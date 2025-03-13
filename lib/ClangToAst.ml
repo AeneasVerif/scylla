@@ -266,6 +266,14 @@ let is_free (e: expr) = match e.desc with
       name = "free"
   | _ -> false
 
+(* Check whether a given Clang expression is an exit callee *)
+let is_exit (e: expr) = match e.desc with
+  | DeclRef { name; _ } ->
+      let name = get_id_name name in
+      name = "exit"
+  | _ -> false
+
+
 (* Check whether a variable declaration has a malloc initializer. If so,
    we will rewrite it based on the initializer that follows *)
 let is_malloc_vdecl (vdecl: var_decl_desc) = match vdecl.var_init with
@@ -542,6 +550,14 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' =
       | [ptr] -> EBufFree (translate_expr env (typ_of_expr ptr) ptr)
       | _ -> failwith "ill-formed free: too many arguments"
       end
+
+  | Call {callee; _} when is_exit callee ->
+      (* TODO: We should likely check the exit code, and possibly translate this to
+         std::process::exit.
+         However, std::process:exit immediately terminates the process and does not
+         run destructors. As it is likely used as an abort in our usecases, we instead
+         translate it to EAbort, which will become a `panic` *)
+      EAbort (Some t, Some "")
 
   | Call {callee; args} ->
       (* In C, a function type is a pointer. We need to strip it to retrieve

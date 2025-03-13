@@ -52,7 +52,7 @@
 #endif
 
 #ifndef KRML_HOST_EXIT
-#  define KRML_HOST_EXIT // exit
+#  define KRML_HOST_EXIT exit
 #endif
 
 #ifndef KRML_HOST_MALLOC
