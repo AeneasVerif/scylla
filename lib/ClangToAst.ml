@@ -23,6 +23,11 @@ let name_map = ref FileMap.empty
 *)
 let struct_map = ref StructMap.empty
 
+(* A map from type alias names to their underlying implementation.
+   It is needed to retrieve the type of, e.g., constants
+   when the expected type is an alias to an integer type *)
+let abbrev_map = ref Krml.AstToMiniRust.LidMap.empty
+
 (* A map storing types that are annotated with `scylla_box`, indicating
    that internal pointers should be translated to Boxes instead of borrows *)
 let boxed_types = ref Krml.AstToMiniRust.LidSet.empty
@@ -346,8 +351,17 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' =
         let ty = Helpers.assert_tint t in
         let signed = K.is_signed ty in
         EConstant (ty, Clang.Ast.string_of_integer_literal ~signed n)
+      | TQualified lid ->
+          (* If we have a named type, we expect it to be a type abbreviation to
+             a constant type. *)
+          begin try
+            let underlying_type = Krml.AstToMiniRust.LidMap.find lid !abbrev_map in
+            translate_expr' env underlying_type e
+          with Not_found -> failwith "Expected type is not a type alias when trying to translate an integer constant"
+          end
       | _ ->
         (* TODO: Handle this better *)
+        Krml.KPrint.beprintf "Tried to type integerliteral as %a\n" Krml.PrintAst.ptyp t;
         EConstant (UInt32, Clang.Ast.string_of_integer_literal n)
       end
 
@@ -1012,10 +1026,20 @@ let translate_decl (decl: decl) =
         let lid = FileMap.find name !name_map, name in
         begin match underlying_type.desc with
         | BuiltinType t ->
-            Some (DType (lid, [], 0, 0, Abbrev (translate_builtin_typ t)))
+            let ty = translate_builtin_typ t in
+            abbrev_map := Krml.AstToMiniRust.LidMap.update lid (function
+              | None -> Some ty
+              | Some _ -> Printf.eprintf "A type alias already exists for type %s\n" name; failwith "redefining a type alias")
+            !abbrev_map;
+            Some (DType (lid, [], 0, 0, Abbrev ty))
         | Typedef {name; _} ->
             let name = get_id_name name in
-            Some (DType (lid, [], 0, 0, Abbrev (translate_typ_name name)))
+            let ty = translate_typ_name name in
+            abbrev_map := Krml.AstToMiniRust.LidMap.update lid (function
+              | None -> Some ty
+              | Some _ -> Printf.eprintf "A type alias already exists for type %s\n" name; failwith "redefining a type alias")
+            !abbrev_map;
+            Some (DType (lid, [], 0, 0, Abbrev ty))
         | _ ->
           let ty, is_box = elaborate_typ underlying_type in
           if is_box then boxed_types := Krml.AstToMiniRust.LidSet.add lid !boxed_types;
@@ -1164,7 +1188,6 @@ let get_sdkroot () =
 
 let translate_compil_unit (ast: translation_unit) (wanted_c_file: string) =
   let lib_dirs = get_sdkroot () @ Clang.default_include_directories () in
-  (* Format.printf "@[%a@]@." (Refl.pp [%refl: Clang.Ast.translation_unit] []) ast; *)
   let files = split_into_files lib_dirs ast in
   let files = List.filter_map (translate_file wanted_c_file) files in
   !boxed_types, files
