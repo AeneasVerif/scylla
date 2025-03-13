@@ -344,6 +344,7 @@ let normalize_type t =
         | BuiltinType t -> translate_builtin_typ t
         | Typedef { name; _ } ->
             get_id_name name |> translate_typ_name
+        | Pointer t -> TBuf (translate_typ t, false)
         | _ -> failwith "impossible"
         end
     | _ -> t
@@ -1124,7 +1125,18 @@ let add_to_list x data m =
   let add = function None -> Some [data] | Some l -> Some (data :: l) in
   FileMap.update x add m
 
+let name_of_decl (decl: decl): string =
+  match decl.desc with
+  | Function { name; _ } -> get_id_name name
+  | EnumDecl { name; _ } -> name
+  | RecordDecl { name; _ } -> name
+  | TypedefDecl { name; _ } -> name
+  | Field { name; _ } -> name
+  | Var desc -> desc.var_name
+  | _ -> "unknown"
+
 let add_lident_mapping (decl: decl) (filename: string) =
+  Format.printf "add_lident_mapping: %s\n" (name_of_decl decl);
   let path = [ Filename.(remove_extension (basename filename)) ] in
   match decl.desc with
   | Function fdecl ->
@@ -1159,19 +1171,47 @@ let add_lident_mapping (decl: decl) (filename: string) =
       (* To normalize correctly, we might need to retrieve types beyond the file currently
          being translated. We thus construct this map here rather than during type declaration translation *)
       begin match tdecl.underlying_type.desc with
-      | BuiltinType _ | Typedef _ as t ->
+      | BuiltinType _ | Typedef _ | Pointer _ as t ->
             let lid = path, tdecl.name in
-            (* Krml.KPrint.bprintf "adding %a in the abbreviation map\n" Krml.PrintAst.Ops.plid lid; *)
+            Krml.KPrint.bprintf "adding %a in the abbreviation map\n" Krml.PrintAst.Ops.plid lid;
             abbrev_map := LidMap.update lid (function
               | None -> Some t
-              | Some t' when t = t' -> Some t
+              | Some t' when true || t = t' -> Some t
               | _ -> Printf.eprintf "A type alias already exists for type %s\n" tdecl.name; failwith "redefining a type alias")
             !abbrev_map;
-      | _ -> ()
+      | LValueReference _ -> Format.printf "TypedefDecl: skipping a LValueReference\n"
+      | RValueReference _ -> Format.printf "TypedefDecl: skipping a RValueReference\n"
+      | ConstantArray _ -> Format.printf "TypedefDecl: skipping a ConstantArray\n"
+      | Vector _ -> Format.printf "TypedefDecl: skipping a Vector\n"
+      | IncompleteArray _ -> Format.printf "TypedefDecl: skipping a IncompleteArray\n"
+      | VariableArray _ -> Format.printf "TypedefDecl: skipping a VariableArray\n"
+      | Elaborated _ -> Format.printf "TypedefDecl: skipping a Elaborated\n"
+      | Enum _ -> Format.printf "TypedefDecl: skipping a Enum\n"
+      | FunctionType _ -> Format.printf "TypedefDecl: skipping a FunctionType\n"
+      | Record _ -> Format.printf "TypedefDecl: skipping a Record\n"
+      | Complex _ -> Format.printf "TypedefDecl: skipping a Complex\n"
+      | Attributed _ -> Format.printf "TypedefDecl: skipping a Attributed\n"
+      | ParenType _ -> Format.printf "TypedefDecl: skipping a ParenType\n"
+      | TemplateTypeParm _ -> Format.printf "TypedefDecl: skipping a TemplateTypeParm\n"
+      | SubstTemplateTypeParm _ -> Format.printf "TypedefDecl: skipping a SubstTemplateTypeParm\n"
+      | TemplateSpecialization _ -> Format.printf "TypedefDecl: skipping a TemplateSpecialization\n"
+      | Auto -> Format.printf "TypedefDecl: skipping a Auto\n"
+      | PackExpansion _ -> Format.printf "TypedefDecl: skipping a PackExpansion\n"
+      | MemberPointer _ -> Format.printf "TypedefDecl: skipping a MemberPointer\n"
+      | Decltype _ -> Format.printf "TypedefDecl: skipping a Decltype\n"
+      | InjectedClassName _ -> Format.printf "TypedefDecl: skipping a InjectedClassName\n"
+      | Using _ -> Format.printf "TypedefDecl: skipping a Using\n"
+      | Atomic _ -> Format.printf "TypedefDecl: skipping a Atomic\n"
+      | TypeOf _ -> Format.printf "TypedefDecl: skipping a TypeOf\n"
+      | UnexposedType _ -> Format.printf "TypedefDecl: skipping a UnexposedType\n"
+      | InvalidType -> Format.printf "TypedefDecl: skipping a InvalidType\n"
       end
 
   (* TODO: Do we need to support this mapping for more decls *)
-  | _ -> ()
+  | _ ->
+      ()
+      (* Format.printf "add_lident_mapping: ignoring %a\n" Clang.Decl.pp decl *)
+
 
 let split_into_files (lib_dirs: string list) (ast: translation_unit) =
   let add_decl acc decl =
