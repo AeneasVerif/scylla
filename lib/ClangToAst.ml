@@ -8,6 +8,8 @@ module Helpers = Krml.Helpers
 
 module FileMap = Map.Make(String)
 module StructMap = Map.Make(String)
+module LidMap = Krml.AstToMiniRust.LidMap
+module LidSet = Krml.AstToMiniRust.LidSet
 
 (* A map from function names to the string list used in their fully qualified
    name. It is filled at the beginning of the translation, when exploring the
@@ -26,11 +28,11 @@ let struct_map = ref StructMap.empty
 (* A map from type alias names to their underlying implementation.
    It is needed to retrieve the type of, e.g., constants
    when the expected type is an alias to an integer type *)
-let abbrev_map = ref Krml.AstToMiniRust.LidMap.empty
+let abbrev_map = ref LidMap.empty
 
 (* A map storing types that are annotated with `scylla_box`, indicating
    that internal pointers should be translated to Boxes instead of borrows *)
-let boxed_types = ref Krml.AstToMiniRust.LidSet.empty
+let boxed_types = ref LidSet.empty
 
 type env = {
   (* Variables in the context *)
@@ -334,37 +336,41 @@ let is_constantarray (ty: qual_type) = match ty.desc with
   | ConstantArray _ -> true
   | _ -> false
 
+let normalize_type t =
+  try
+    match t with
+    | TQualified lid ->
+        begin match LidMap.find lid !abbrev_map with
+        | BuiltinType t -> translate_builtin_typ t
+        | Typedef { name; _ } ->
+            get_id_name name |> translate_typ_name
+        | _ -> failwith "impossible"
+        end
+    | _ -> t
+  with Not_found ->
+    t
+
 (* Translate expression [e], with expected type [t] *)
 let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' =
   if is_null e then EBufNull
   else
   match e.desc with
   | IntegerLiteral n ->
-      begin match t with
+      begin match normalize_type t with
       | TBool ->
           begin match n with
           | Int 0 -> EBool false
           | Int 1 ->  EBool true
           | _ -> failwith "Not a boolean literal"
           end
-      | TInt _ ->
-        let ty = Helpers.assert_tint t in
-        let signed = K.is_signed ty in
-        EConstant (ty, Clang.Ast.string_of_integer_literal ~signed n)
-      | TQualified lid ->
+      | TInt w ->
+        let signed = K.is_signed w in
+        EConstant (w, Clang.Ast.string_of_integer_literal ~signed n)
+      | TQualified _ ->
           (* If we have a named type, we expect it to be a type abbreviation to
              a constant type. *)
-          begin try
-            let underlying_type = match Krml.AstToMiniRust.LidMap.find lid !abbrev_map with
-              | BuiltinType t -> translate_builtin_typ t
-              | Typedef { name; _ } ->
-                  get_id_name name |> translate_typ_name
-              | _ -> failwith "impossible"
-            in translate_expr' env underlying_type e
-          with Not_found ->
-            Krml.KPrint.beprintf "Tried to type integer literal with type %a\n" Krml.PrintAst.ptyp t;
-            failwith "Expected type is not a type alias when trying to translate an integer constant"
-          end
+          Krml.KPrint.beprintf "Tried to type integer literal with type %a\n" Krml.PrintAst.ptyp t;
+          failwith "Expected type is not a type alias when trying to translate an integer constant"
       | _ ->
         (* TODO: Handle this better *)
         Krml.KPrint.beprintf "Tried to type integer literal as %a\n" Krml.PrintAst.ptyp t;
@@ -465,7 +471,7 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' =
       end
 
   | BinaryOperator {lhs; kind; rhs} ->
-      let lhs_ty = typ_of_expr lhs in
+      let lhs_ty = normalize_type (typ_of_expr lhs) in
       let lhs = translate_expr env lhs_ty lhs in
       let rhs_ty = typ_of_expr rhs in
       let rhs = translate_expr env rhs_ty rhs in
@@ -1040,7 +1046,7 @@ let translate_decl (decl: decl) =
             Some (DType (lid, [], 0, 0, Abbrev ty))
         | _ ->
           let ty, is_box = elaborate_typ underlying_type in
-          if is_box then boxed_types := Krml.AstToMiniRust.LidSet.add lid !boxed_types;
+          if is_box then boxed_types := LidSet.add lid !boxed_types;
           Some (DType (lid, [], 0, 0, ty))
         end
 
@@ -1156,7 +1162,7 @@ let add_lident_mapping (decl: decl) (filename: string) =
       begin match tdecl.underlying_type.desc with
       | BuiltinType _ | Typedef _ as t ->
             let lid = path, tdecl.name in
-            abbrev_map := Krml.AstToMiniRust.LidMap.update lid (function
+            abbrev_map := LidMap.update lid (function
               | None -> Some t
               | Some t' when t = t' -> Some t
               | _ -> Printf.eprintf "A type alias already exists for type %s\n" tdecl.name; failwith "redefining a type alias")
