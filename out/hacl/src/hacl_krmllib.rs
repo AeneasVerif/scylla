@@ -94,6 +94,11 @@ pub fn FStar_UInt128_add(a: crate::fstar_uint128::uint128, b: crate::fstar_uint1
 }
 
 #[inline(always)]
+pub fn FStar_UInt128_shift_left(a: crate::fstar_uint128::uint128, b: u32) -> crate::fstar_uint128::uint128 {
+    crate::fstar_uint128::shift_left(a, b)
+}
+
+#[inline(always)]
 pub fn FStar_UInt128_shift_right(a: crate::fstar_uint128::uint128, b: u32) -> crate::fstar_uint128::uint128 {
     crate::fstar_uint128::shift_right(a, b)
 }
@@ -111,4 +116,12 @@ pub fn FStar_UInt128_uint64_to_uint128(a: u64) -> crate::fstar_uint128::uint128 
 #[inline(always)]
 pub fn FStar_UInt128_uint128_to_uint64(a: crate::fstar_uint128::uint128) -> u64 {
     crate::fstar_uint128::uint128_to_uint64(a)
+}
+
+pub fn load128_be(bytes: &[u8]) -> u128 {
+    u128::from_be_bytes(bytes[0..16].try_into().unwrap())
+}
+
+pub fn store128_be(bytes: &mut[u8], x: u128) {
+    bytes[0..16].copy_from_slice(&u128::to_be_bytes(x))
 }
