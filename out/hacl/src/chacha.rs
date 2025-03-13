@@ -78,8 +78,8 @@ pub fn quarter_round(st: &mut [u32], a: u32, b: u32, c: u32, d: u32)
   for i in 0u32..16u32
   {
     let x: u32 = (k[i as usize]).wrapping_add(ctx[i as usize]);
-    let os: (&mut [u32], &mut [u32]) = k.split_at_mut(0usize);
-    os.1[i as usize] = x
+    let os: &mut [u32] = k;
+    os[i as usize] = x
   };
   k[12usize] = (k[12usize]).wrapping_add(ctr_u32)
 }
@@ -89,8 +89,8 @@ pub fn chacha20_init(ctx: &mut [u32], k: &[u8], n: &[u8], ctr: u32)
   for i in 0u32..4u32
   {
     let x: u32 = (&chacha20_constants)[i as usize];
-    let os: (&mut [u32], &mut [u32]) = ctx.split_at_mut(0usize);
-    os.1[i as usize] = x
+    let os: &mut [u32] = ctx;
+    os[i as usize] = x
   };
   let uu____0: (&mut [u32], &mut [u32]) = ctx.split_at_mut(4usize);
   for i in 0u32..8u32
@@ -99,8 +99,8 @@ pub fn chacha20_init(ctx: &mut [u32], k: &[u8], n: &[u8], ctr: u32)
     let u: u32 = crate::lowstar_endianness::load32_le(bj.1);
     let r: u32 = u;
     let x: u32 = r;
-    let os: (&mut [u32], &mut [u32]) = uu____0.1.split_at_mut(0usize);
-    os.1[i as usize] = x
+    let os: &mut [u32] = uu____0.1;
+    os[i as usize] = x
   };
   ctx[12usize] = ctr;
   let uu____1: (&mut [u32], &mut [u32]) = ctx.split_at_mut(13usize);
@@ -110,8 +110,8 @@ pub fn chacha20_init(ctx: &mut [u32], k: &[u8], n: &[u8], ctr: u32)
     let u: u32 = crate::lowstar_endianness::load32_le(bj.1);
     let r: u32 = u;
     let x: u32 = r;
-    let os: (&mut [u32], &mut [u32]) = uu____1.1.split_at_mut(0usize);
-    os.1[i as usize] = x
+    let os: &mut [u32] = uu____1.1;
+    os[i as usize] = x
   }
 }
 
@@ -126,14 +126,14 @@ pub fn chacha20_encrypt_block(ctx: &[u32], out: &mut [u8], incr: u32, text: &[u8
     let u: u32 = crate::lowstar_endianness::load32_le(bj.1);
     let r: u32 = u;
     let x: u32 = r;
-    let os: (&mut [u32], &mut [u32]) = bl.split_at_mut(0usize);
-    os.1[i as usize] = x
+    let os: &mut [u32] = &mut bl;
+    os[i as usize] = x
   };
   for i in 0u32..16u32
   {
     let x: u32 = (&bl)[i as usize] ^ (&k)[i as usize];
-    let os: (&mut [u32], &mut [u32]) = bl.split_at_mut(0usize);
-    os.1[i as usize] = x
+    let os: &mut [u32] = &mut bl;
+    os[i as usize] = x
   };
   for i in 0u32..16u32
   {

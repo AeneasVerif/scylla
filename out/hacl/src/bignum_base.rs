@@ -46,8 +46,8 @@ pub fn Hacl_Bignum_Convert_bn_from_bytes_be_uint64(len: u32, b: &[u8], res: &mut
           &(&tmp)[bnLen.wrapping_sub(i).wrapping_sub(1u32).wrapping_mul(8u32) as usize..]
         );
     let x: u64 = u;
-    let os: (&mut [u64], &mut [u64]) = res.split_at_mut(0usize);
-    os.1[i as usize] = x
+    let os: &mut [u64] = res;
+    os[i as usize] = x
   }
 }
 
@@ -340,27 +340,27 @@ pub fn Hacl_Bignum_Multiplication_bn_sqr_u32(aLen: u32, a: &[u32], res: &mut [u3
   for i0 in 0u32..aLen
   {
     let a_j: u32 = a[i0 as usize];
-    let ab: (&[u32], &[u32]) = a.split_at(0usize);
+    let ab: &[u32] = a;
     let res_j: (&mut [u32], &mut [u32]) = res.split_at_mut(i0 as usize);
     let mut c: u32 = 0u32;
     for i in 0u32..i0.wrapping_div(4u32)
     {
-      let a_i: u32 = ab.1[4u32.wrapping_mul(i) as usize];
+      let a_i: u32 = ab[4u32.wrapping_mul(i) as usize];
       let res_i0: (&mut [u32], &mut [u32]) = res_j.1.split_at_mut(4u32.wrapping_mul(i) as usize);
       c = Hacl_Bignum_Base_mul_wide_add2_u32(a_i, a_j, c, res_i0.1);
-      let a_i0: u32 = ab.1[4u32.wrapping_mul(i).wrapping_add(1u32) as usize];
+      let a_i0: u32 = ab[4u32.wrapping_mul(i).wrapping_add(1u32) as usize];
       let res_i1: (&mut [u32], &mut [u32]) = res_i0.1.split_at_mut(1usize);
       c = Hacl_Bignum_Base_mul_wide_add2_u32(a_i0, a_j, c, res_i1.1);
-      let a_i1: u32 = ab.1[4u32.wrapping_mul(i).wrapping_add(2u32) as usize];
+      let a_i1: u32 = ab[4u32.wrapping_mul(i).wrapping_add(2u32) as usize];
       let res_i2: (&mut [u32], &mut [u32]) = res_i1.1.split_at_mut(1usize);
       c = Hacl_Bignum_Base_mul_wide_add2_u32(a_i1, a_j, c, res_i2.1);
-      let a_i2: u32 = ab.1[4u32.wrapping_mul(i).wrapping_add(3u32) as usize];
+      let a_i2: u32 = ab[4u32.wrapping_mul(i).wrapping_add(3u32) as usize];
       let res_i: (&mut [u32], &mut [u32]) = res_i2.1.split_at_mut(1usize);
       c = Hacl_Bignum_Base_mul_wide_add2_u32(a_i2, a_j, c, res_i.1)
     };
     for i in i0.wrapping_div(4u32).wrapping_mul(4u32)..i0
     {
-      let a_i: u32 = ab.1[i as usize];
+      let a_i: u32 = ab[i as usize];
       let res_i: (&mut [u32], &mut [u32]) = res_j.1.split_at_mut(i as usize);
       c = Hacl_Bignum_Base_mul_wide_add2_u32(a_i, a_j, c, res_i.1)
     };
@@ -409,27 +409,27 @@ pub fn Hacl_Bignum_Multiplication_bn_sqr_u64(aLen: u32, a: &[u64], res: &mut [u6
   for i0 in 0u32..aLen
   {
     let a_j: u64 = a[i0 as usize];
-    let ab: (&[u64], &[u64]) = a.split_at(0usize);
+    let ab: &[u64] = a;
     let res_j: (&mut [u64], &mut [u64]) = res.split_at_mut(i0 as usize);
     let mut c: u64 = 0u64;
     for i in 0u32..i0.wrapping_div(4u32)
     {
-      let a_i: u64 = ab.1[4u32.wrapping_mul(i) as usize];
+      let a_i: u64 = ab[4u32.wrapping_mul(i) as usize];
       let res_i0: (&mut [u64], &mut [u64]) = res_j.1.split_at_mut(4u32.wrapping_mul(i) as usize);
       c = Hacl_Bignum_Base_mul_wide_add2_u64(a_i, a_j, c, res_i0.1);
-      let a_i0: u64 = ab.1[4u32.wrapping_mul(i).wrapping_add(1u32) as usize];
+      let a_i0: u64 = ab[4u32.wrapping_mul(i).wrapping_add(1u32) as usize];
       let res_i1: (&mut [u64], &mut [u64]) = res_i0.1.split_at_mut(1usize);
       c = Hacl_Bignum_Base_mul_wide_add2_u64(a_i0, a_j, c, res_i1.1);
-      let a_i1: u64 = ab.1[4u32.wrapping_mul(i).wrapping_add(2u32) as usize];
+      let a_i1: u64 = ab[4u32.wrapping_mul(i).wrapping_add(2u32) as usize];
       let res_i2: (&mut [u64], &mut [u64]) = res_i1.1.split_at_mut(1usize);
       c = Hacl_Bignum_Base_mul_wide_add2_u64(a_i1, a_j, c, res_i2.1);
-      let a_i2: u64 = ab.1[4u32.wrapping_mul(i).wrapping_add(3u32) as usize];
+      let a_i2: u64 = ab[4u32.wrapping_mul(i).wrapping_add(3u32) as usize];
       let res_i: (&mut [u64], &mut [u64]) = res_i2.1.split_at_mut(1usize);
       c = Hacl_Bignum_Base_mul_wide_add2_u64(a_i2, a_j, c, res_i.1)
     };
     for i in i0.wrapping_div(4u32).wrapping_mul(4u32)..i0
     {
-      let a_i: u64 = ab.1[i as usize];
+      let a_i: u64 = ab[i as usize];
       let res_i: (&mut [u64], &mut [u64]) = res_j.1.split_at_mut(i as usize);
       c = Hacl_Bignum_Base_mul_wide_add2_u64(a_i, a_j, c, res_i.1)
     };

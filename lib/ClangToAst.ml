@@ -228,67 +228,60 @@ let elaborate_typ (typ: qual_type) = match typ.desc with
 
 (* Takes a Clangml expression [e], and retrieves the corresponding karamel Ast type *)
 let typ_of_expr (e: expr) : typ = Clang.Type.of_node e |> translate_typ
+  (* let t = *)
+  (* Clang.Type.of_node ~options:({Clang.Ast.Options.default with ignore_implicit_cast = false}) e |> translate_typ *)
+  (* in *)
+  (* Krml.KPrint.beprintf "Got type %a\n" Krml.PrintAst.ptyp t; *)
+  (* Format.eprintf "for expr %a\n" Clang.Expr.pp e; *)
+  (* t *)
+
+let rec strip_implicit_casts (e: expr) = match e.desc with
+  | Cast {kind = Implicit; operand; _} -> strip_implicit_casts operand
+  | _ -> e
+
+(* Checks if a given Clang expression [e] is a callee corresponding to the
+   list of names [names]. To do so, it first strips all implicit casts *)
+let is_callee_name names (e: expr) = match (strip_implicit_casts e).desc with
+  | DeclRef {name; _ } ->
+      let name = get_id_name name in
+      List.mem name names
+  | _ -> false
 
 (* Check whether a given Clang expression is a scylla_reset callee *)
-let is_scylla_reset (e: expr) = match e.desc with
-  | DeclRef { name; _ } ->
-      let name = get_id_name name in
-      name = "scylla_reset"
-  | _ -> false
+let is_scylla_reset = is_callee_name ["scylla_reset"]
 
 (* Check whether a given Clang expression is a memcpy callee *)
-let is_memcpy (e: expr) = match e.desc with
-  | DeclRef { name; _ } ->
-      let name = get_id_name name in
-      name = "__builtin___memcpy_chk" || name = "memcpy"
-  | _ -> false
+let rec is_memcpy = is_callee_name ["__builtin___memcpy_chk"; "memcpy"]
 
 (* Check whether a given Clang expression is a memset callee *)
-let is_memset (e: expr) = match e.desc with
-  | DeclRef { name; _ } ->
-      let name = get_id_name name in
-      name = "__builtin___memset_chk" || name = "memset"
-  | _ -> false
+let is_memset = is_callee_name ["__builtin___memset_chk"; "memset"]
 
 (* Check whether a given Clang expression is a calloc callee *)
-let is_calloc (e: expr) = match e.desc with
-  | DeclRef { name; _ } ->
-      let name = get_id_name name in
-      name = "calloc"
-  | _ -> false
+let is_calloc = is_callee_name ["calloc"]
 
 (* Check whether a given Clang expression is a malloc callee *)
-let is_malloc (e: expr) = match e.desc with
-  | DeclRef { name; _ } ->
-      let name = get_id_name name in
-      name = "malloc"
-  | _ -> false
+let is_malloc = is_callee_name ["malloc"]
 
 (* Check whether a given Clang expression is a free callee *)
-let is_free (e: expr) = match e.desc with
-  | DeclRef { name; _ } ->
-      let name = get_id_name name in
-      name = "free"
-  | _ -> false
+let is_free = is_callee_name ["free"]
 
 (* Check whether a given Clang expression is an exit callee *)
-let is_exit (e: expr) = match e.desc with
-  | DeclRef { name; _ } ->
-      let name = get_id_name name in
-      name = "exit"
-  | _ -> false
-
+let is_exit = is_callee_name ["exit"]
 
 (* Check whether a variable declaration has a malloc initializer. If so,
    we will rewrite it based on the initializer that follows *)
-let is_malloc_vdecl (vdecl: var_decl_desc) = match vdecl.var_init with
-  | Some {desc = Call {callee; _}; _}
+let is_malloc_vdecl' (e: expr) = match e.desc with
+  | Call {callee; _}
   (* There commonly is a cast around malloc to the type of the variable. We omit it when translating it to Rust,
      as the allocation will be typed *)
-  | Some {desc = Cast {operand = {desc = Call {callee; _}; _}; _}; _} when is_malloc callee ->
+  | Cast {operand = {desc = Call {callee; _}; _}; _} when is_malloc callee ->
       true
 
   | _ -> false
+
+let is_malloc_vdecl (vdecl: var_decl_desc) = match vdecl.var_init with
+  | None -> false
+  | Some e -> strip_implicit_casts e |> is_malloc_vdecl'
 
 (* Check whether expression [e] is a pointer *)
 let has_pointer_type (e: expr) = match typ_of_expr e with
@@ -302,7 +295,7 @@ let rec is_null (e: expr) = match e.desc with
 
 let is_null_check var_name (e: expr) = match e.desc with
   | BinaryOperator {lhs = {desc = DeclRef { name; _}; _}; kind = NE; rhs } ->
-      if get_id_name name = var_name && is_null rhs then true else false
+      if get_id_name name = var_name && is_null (strip_implicit_casts rhs) then true else false
   | _ -> false
 
 (* Check whether statement [s] corresponds to a malloc initializer for
@@ -310,7 +303,7 @@ let is_null_check var_name (e: expr) = match e.desc with
     will therefore be rewritten in combination with malloc to generate
     a standard array or Vec declaration in Rust *)
 let is_malloc_initializer (vdecl: var_decl_desc) (s: stmt_desc) = match s with
-  | If { cond; _ } when is_null_check vdecl.var_name cond -> true (* {cond; then_branch; else_branch; _} -> true *)
+  | If { cond; _ } when is_null_check vdecl.var_name (strip_implicit_casts cond) -> true (* {cond; then_branch; else_branch; _} -> true *)
   | _ -> false
 
 (* Simple heuristics to detect whether a loop condition is always false, in this case we can omit the loop.
@@ -588,6 +581,9 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' =
       let args = List.map (fun x -> translate_expr env (typ_of_expr x) x) args in
       EApp (callee, args)
 
+  | Cast {kind = Implicit; operand; _} ->
+      translate_expr' env t operand
+
   | Cast {qual_type; operand; _} ->
       (* Format.printf "Cast %a@."  Clang.Expr.pp e; *)
       let typ = translate_typ qual_type in
@@ -726,7 +722,7 @@ let translate_vardecl_with_memset (env: env) (vdecl: var_decl_desc) (args: expr 
   match args with
   | dst :: v :: len :: _ ->
       (* Check that the destination is the variable declared just before *)
-      begin match dst.desc with
+      begin match (strip_implicit_casts dst).desc with
       | DeclRef {name; _} when get_id_name name = vname -> ()
       | _ -> failwith "not calling memset on the variable that was just declared"
       end;
@@ -1198,6 +1194,7 @@ let get_sdkroot () =
 
 let translate_compil_unit (ast: translation_unit) (wanted_c_file: string) =
   let lib_dirs = get_sdkroot () @ Clang.default_include_directories () in
+  (* Format.printf "@[%a@]@." (Refl.pp [%refl: Clang.Ast.translation_unit] []) ast; *)
   let files = split_into_files lib_dirs ast in
   let files = List.filter_map (translate_file wanted_c_file) files in
   !boxed_types, files
@@ -1207,4 +1204,5 @@ let read_file (filename: string) : translation_unit =
   let command_line_args = !Scylla__Options.ccopts @
     List.map Clang.Command_line.include_directory (Clang.default_include_directories ()) in
   Format.printf "Arguments passed to clang are: %s\n" (String.concat " " command_line_args);
-  parse_file ~command_line_args filename
+  parse_file ~command_line_args ~options:({Clang.Ast.Options.default with ignore_implicit_cast = false}) filename
+  (* parse_file ~command_line_args filename *)
