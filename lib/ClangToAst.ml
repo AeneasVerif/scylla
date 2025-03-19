@@ -8,6 +8,8 @@ module Helpers = Krml.Helpers
 
 module FileMap = Map.Make(String)
 module StructMap = Map.Make(String)
+module LidMap = Krml.AstToMiniRust.LidMap
+module LidSet = Krml.AstToMiniRust.LidSet
 
 (* A map from function names to the string list used in their fully qualified
    name. It is filled at the beginning of the translation, when exploring the
@@ -26,11 +28,11 @@ let struct_map = ref StructMap.empty
 (* A map from type alias names to their underlying implementation.
    It is needed to retrieve the type of, e.g., constants
    when the expected type is an alias to an integer type *)
-let abbrev_map = ref Krml.AstToMiniRust.LidMap.empty
+let abbrev_map = ref LidMap.empty
 
 (* A map storing types that are annotated with `scylla_box`, indicating
    that internal pointers should be translated to Boxes instead of borrows *)
-let boxed_types = ref Krml.AstToMiniRust.LidSet.empty
+let boxed_types = ref LidSet.empty
 
 type env = {
   (* Variables in the context *)
@@ -327,37 +329,44 @@ let is_constantarray (ty: qual_type) = match ty.desc with
   | ConstantArray _ -> true
   | _ -> false
 
+let rec normalize_type t =
+  try
+    match t with
+    | TQualified lid ->
+        begin match LidMap.find lid !abbrev_map with
+        | BuiltinType t -> translate_builtin_typ t
+        | Typedef { name; _ } ->
+            get_id_name name |> translate_typ_name
+        | Pointer t -> TBuf (translate_typ t, false)
+        | _ -> failwith "impossible"
+        end
+        (* We might have a chain of aliases, we recurse on the resulting type *)
+        |> normalize_type
+    | _ -> t
+  with Not_found ->
+    t
+
 (* Translate expression [e], with expected type [t] *)
 let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' =
   if is_null e then EBufNull
   else
   match e.desc with
   | IntegerLiteral n ->
-      begin match t with
+      begin match normalize_type t with
       | TBool ->
           begin match n with
           | Int 0 -> EBool false
           | Int 1 ->  EBool true
           | _ -> failwith "Not a boolean literal"
           end
-      | TInt _ ->
-        let ty = Helpers.assert_tint t in
-        let signed = K.is_signed ty in
-        EConstant (ty, Clang.Ast.string_of_integer_literal ~signed n)
-      | TQualified lid ->
+      | TInt w ->
+        let signed = K.is_signed w in
+        EConstant (w, Clang.Ast.string_of_integer_literal ~signed n)
+      | TQualified _ ->
           (* If we have a named type, we expect it to be a type abbreviation to
              a constant type. *)
-          begin try
-            let underlying_type = match Krml.AstToMiniRust.LidMap.find lid !abbrev_map with
-              | BuiltinType t -> translate_builtin_typ t
-              | Typedef { name; _ } ->
-                  get_id_name name |> translate_typ_name
-              | _ -> failwith "impossible"
-            in translate_expr' env underlying_type e
-          with Not_found ->
-            Krml.KPrint.beprintf "Tried to type integer literal with type %a\n" Krml.PrintAst.ptyp t;
-            failwith "Expected type is not a type alias when trying to translate an integer constant"
-          end
+          Krml.KPrint.beprintf "Tried to type integer literal with type %a\n" Krml.PrintAst.ptyp t;
+          failwith "Expected type is not a type alias when trying to translate an integer constant"
       | _ ->
         (* TODO: Handle this better *)
         Krml.KPrint.beprintf "Tried to type integer literal as %a\n" Krml.PrintAst.ptyp t;
@@ -458,7 +467,7 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' =
       end
 
   | BinaryOperator {lhs; kind; rhs} ->
-      let lhs_ty = typ_of_expr lhs in
+      let lhs_ty = normalize_type (typ_of_expr lhs) in
       let lhs = translate_expr env lhs_ty lhs in
       let rhs_ty = typ_of_expr rhs in
       let rhs = translate_expr env rhs_ty rhs in
@@ -600,20 +609,25 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' =
   | Paren _ -> failwith "translate_expr: paren"
 
   | Member {base; arrow; field} ->
-      (* TODO: Support for arrow access *)
-      assert (not arrow);
       let base = match base with
       | None -> failwith "field accesses without a base expression are not supported"
       | Some b -> b
       in
-      let base = translate_expr env (typ_of_expr base) base in
+      let t_base = normalize_type (typ_of_expr base) in
+      let base = translate_expr env t_base base in
 
       let f = match field with
       | FieldName {desc; _} -> get_id_name desc.name
       | _ -> failwith "member node: only field accesses supported"
       in
 
-      EField (base, f)
+      if not arrow then
+        (* base.f *)
+        EField (base, f)
+      else
+        (* base->f *)
+        let deref_base = Helpers.(with_type (assert_tbuf t_base) (EBufRead (base, Helpers.zero_usize))) in
+        EField (deref_base, f)
 
   | _ ->
     Format.eprintf "Trying to translate expression %a@." Clang.Expr.pp e;
@@ -1036,7 +1050,7 @@ let translate_decl (decl: decl) =
             Some (DType (lid, [], 0, 0, Abbrev ty))
         | _ ->
           let ty, is_box = elaborate_typ underlying_type in
-          if is_box then boxed_types := Krml.AstToMiniRust.LidSet.add lid !boxed_types;
+          if is_box then boxed_types := LidSet.add lid !boxed_types;
           Some (DType (lid, [], 0, 0, ty))
         end
 
@@ -1109,14 +1123,19 @@ let add_to_list x data m =
   let add = function None -> Some [data] | Some l -> Some (data :: l) in
   FileMap.update x add m
 
+let name_of_decl (decl: decl): string =
+  match decl.desc with
+  | Function { name; _ } -> get_id_name name
+  | EnumDecl { name; _ } -> name
+  | RecordDecl { name; _ } -> name
+  | TypedefDecl { name; _ } -> name
+  | Field { name; _ } -> name
+  | Var desc -> desc.var_name
+  | _ -> "unknown"
+
 let add_lident_mapping (decl: decl) (filename: string) =
-  let sep =
-    (* We need to translate the separator to a char.
-       We assume we are on a system where it is one character (Unix or Windows) *)
-    assert (String.length Filename.dir_sep = 1);
-    String.get Filename.dir_sep 0
-  in
-  let path = [ Filename.remove_extension filename |> String.split_on_char sep |> Krml.KList.last ] in
+  Format.printf "add_lident_mapping: %s\n" (name_of_decl decl);
+  let path = [ Filename.(remove_extension (basename filename)) ] in
   match decl.desc with
   | Function fdecl ->
       let name = get_id_name fdecl.name in
@@ -1150,18 +1169,47 @@ let add_lident_mapping (decl: decl) (filename: string) =
       (* To normalize correctly, we might need to retrieve types beyond the file currently
          being translated. We thus construct this map here rather than during type declaration translation *)
       begin match tdecl.underlying_type.desc with
-      | BuiltinType _ | Typedef _ as t ->
+      | BuiltinType _ | Typedef _ | Pointer _ as t ->
             let lid = path, tdecl.name in
-            abbrev_map := Krml.AstToMiniRust.LidMap.update lid (function
+            Krml.KPrint.bprintf "adding %a in the abbreviation map\n" Krml.PrintAst.Ops.plid lid;
+            abbrev_map := LidMap.update lid (function
               | None -> Some t
-              | Some t' when t = t' -> Some t
+              | Some t' when true || t = t' -> Some t
               | _ -> Printf.eprintf "A type alias already exists for type %s\n" tdecl.name; failwith "redefining a type alias")
             !abbrev_map;
-      | _ -> ()
+      | LValueReference _ -> Format.printf "TypedefDecl: skipping a LValueReference\n"
+      | RValueReference _ -> Format.printf "TypedefDecl: skipping a RValueReference\n"
+      | ConstantArray _ -> Format.printf "TypedefDecl: skipping a ConstantArray\n"
+      | Vector _ -> Format.printf "TypedefDecl: skipping a Vector\n"
+      | IncompleteArray _ -> Format.printf "TypedefDecl: skipping a IncompleteArray\n"
+      | VariableArray _ -> Format.printf "TypedefDecl: skipping a VariableArray\n"
+      | Elaborated _ -> Format.printf "TypedefDecl: skipping a Elaborated\n"
+      | Enum _ -> Format.printf "TypedefDecl: skipping a Enum\n"
+      | FunctionType _ -> Format.printf "TypedefDecl: skipping a FunctionType\n"
+      | Record _ -> Format.printf "TypedefDecl: skipping a Record\n"
+      | Complex _ -> Format.printf "TypedefDecl: skipping a Complex\n"
+      | Attributed _ -> Format.printf "TypedefDecl: skipping a Attributed\n"
+      | ParenType _ -> Format.printf "TypedefDecl: skipping a ParenType\n"
+      | TemplateTypeParm _ -> Format.printf "TypedefDecl: skipping a TemplateTypeParm\n"
+      | SubstTemplateTypeParm _ -> Format.printf "TypedefDecl: skipping a SubstTemplateTypeParm\n"
+      | TemplateSpecialization _ -> Format.printf "TypedefDecl: skipping a TemplateSpecialization\n"
+      | Auto -> Format.printf "TypedefDecl: skipping a Auto\n"
+      | PackExpansion _ -> Format.printf "TypedefDecl: skipping a PackExpansion\n"
+      | MemberPointer _ -> Format.printf "TypedefDecl: skipping a MemberPointer\n"
+      | Decltype _ -> Format.printf "TypedefDecl: skipping a Decltype\n"
+      | InjectedClassName _ -> Format.printf "TypedefDecl: skipping a InjectedClassName\n"
+      | Using _ -> Format.printf "TypedefDecl: skipping a Using\n"
+      | Atomic _ -> Format.printf "TypedefDecl: skipping a Atomic\n"
+      | TypeOf _ -> Format.printf "TypedefDecl: skipping a TypeOf\n"
+      | UnexposedType _ -> Format.printf "TypedefDecl: skipping a UnexposedType\n"
+      | InvalidType -> Format.printf "TypedefDecl: skipping a InvalidType\n"
       end
 
   (* TODO: Do we need to support this mapping for more decls *)
-  | _ -> ()
+  | _ ->
+      ()
+      (* Format.printf "add_lident_mapping: ignoring %a\n" Clang.Decl.pp decl *)
+
 
 let split_into_files (lib_dirs: string list) (ast: translation_unit) =
   let add_decl acc decl =
@@ -1169,8 +1217,9 @@ let split_into_files (lib_dirs: string list) (ast: translation_unit) =
     (* If this belongs to the C library, do not extract it *)
     (* TODO: This could be done more efficiently by filtering after splitting into files,
        to avoid repeated traversals of lib_dirs *)
-    if List.exists (fun x -> String.starts_with ~prefix:x loc.filename) lib_dirs then acc
-    else (
+    if List.exists (fun x -> String.starts_with ~prefix:x loc.filename) lib_dirs then (
+      acc
+    ) else (
       add_lident_mapping decl loc.filename;
       (* We merge .h and .c files here. Duplicated declarations (e.g., prototypes in the
          .h file, and definitions in the .c file) will be filtered during the translation
