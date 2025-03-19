@@ -434,18 +434,16 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' =
      EFlat (List.map translate_field_expr l)
 
 
-  | UnaryOperator {kind = PostInc; operand = { desc = DeclRef {name; _}; _ }} ->
+  | UnaryOperator {kind = PostInc | PreInc; operand } ->
       (* This is a special case for loop increments. The current Karamel
          extraction pipeline only supports a specific case of loops *)
-      let var_name = get_id_name name in
-      (* TODO: Retrieve correct width *)
-      let w = K.UInt32 in
-      let t = TInt w in
-      let v = find_var env var_name in
+      let t = normalize_type (typ_of_expr operand) in
+      let w = Helpers.assert_tint t in
+      let o = translate_expr env t operand in
       (* We rewrite `name++` into `name := name + 1` *)
       EAssign (
-        Krml.Ast.with_type t v,
-        Krml.Ast.with_type t (EApp (Helpers.mk_op K.Add w, [Krml.Ast.with_type t v; Helpers.one w]))
+        o,
+        Krml.Ast.with_type t (EApp (Helpers.mk_op K.Add w, [o; Helpers.one w]))
       )
 
   | UnaryOperator {kind = Not; operand } ->
@@ -648,6 +646,14 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' =
         (* base->f *)
         let deref_base = Helpers.(with_type (assert_tbuf t_base) (EBufRead (base, Helpers.zero_usize))) in
         EField (deref_base, f)
+
+  | UnaryExpr {kind = SizeOf; argument = ArgumentType t; _ } ->
+      begin match normalize_type (translate_typ t) with
+      | TInt w -> (Helpers.mk_sizet (Krml.Constant.bytes_of_width w)).node
+      | _ ->
+          Format.printf "Trying to translate unary expr %a@." Clang.Expr.pp e;
+          failwith "translate_expr: unary expr"
+      end
 
   | _ ->
     Format.eprintf "Trying to translate expression %a@." Clang.Expr.pp e;
