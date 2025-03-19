@@ -438,12 +438,35 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' =
       (* This is a special case for loop increments. The current Karamel
          extraction pipeline only supports a specific case of loops *)
       let t = normalize_type (typ_of_expr operand) in
+      begin match t with
+      | TInt w ->
+          let o = translate_expr env t operand in
+          (* We rewrite `name++` into `name := name + 1` *)
+          EAssign (
+            o,
+            Krml.Ast.with_type t (EApp (Helpers.mk_op K.Add w, [o; Helpers.one w]))
+          )
+      | TBuf (t, _) ->
+          let o = translate_expr env t operand in
+          (* We rewrite `name++` into `name := name + 1` *)
+          EAssign (
+            o,
+            Krml.Ast.with_type t (EBufSub (o, Helpers.one SizeT))
+          )
+      | _ ->
+          failwith "cannot increment this type"
+      end
+
+  | UnaryOperator {kind = PostDec | PreDec; operand } ->
+      (* This is a special case for loop increments. The current Karamel
+         extraction pipeline only supports a specific case of loops *)
+      let t = normalize_type (typ_of_expr operand) in
       let w = Helpers.assert_tint t in
       let o = translate_expr env t operand in
       (* We rewrite `name++` into `name := name + 1` *)
       EAssign (
         o,
-        Krml.Ast.with_type t (EApp (Helpers.mk_op K.Add w, [o; Helpers.one w]))
+        Krml.Ast.with_type t (EApp (Helpers.mk_op K.Sub w, [o; Helpers.one w]))
       )
 
   | UnaryOperator {kind = Not; operand } ->
@@ -458,9 +481,14 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' =
       (Helpers.mk_not o).node
 
   | UnaryOperator {kind = Deref; operand } ->
-      let ty = Helpers.assert_tbuf (typ_of_expr operand) in
+      let ty = Helpers.assert_tbuf (normalize_type (typ_of_expr operand)) in
       let o = translate_expr env (TBuf (ty, false)) operand in
       EBufRead (o, Helpers.zero_usize)
+
+  | UnaryOperator {kind = AddrOf; operand } ->
+      let ty = typ_of_expr operand in
+      let o = translate_expr env ty operand in
+      EAddrOf o
 
   | UnaryOperator _ ->
       Format.printf "Trying to translate unary operator %a@." Clang.Expr.pp e;
@@ -920,7 +948,19 @@ let rec translate_stmt' (env: env) (t: typ) (s: stmt_desc) : expr' = match s wit
   | Case _ -> failwith "case not encapsulated in a switch"
   | Default _ -> failwith "default not encapsulated in a switch"
 
-  | While _ -> failwith "translate_stmt: while"
+  | While { condition_variable = _; cond; body } ->
+      let cond_ty = typ_of_expr cond in
+      let cond = translate_expr env cond_ty cond in
+      let cond = match cond_ty with
+        | TBool -> cond
+        | TInt w ->
+          (* If we have an integer expression [e], the condition is equivalent to `e != 0` *)
+          Helpers.mk_neq cond (Helpers.zero w)
+        | _ -> failwith "incorrect type for while condition"
+      in
+      let body = translate_stmt env t body.desc in
+      EWhile (cond, body)
+
   | Do { body; cond } ->
     (* The do statements first executes the body before behaving as a while loop.
        We thus translate it as a sequence of the body and the corresponding while loop *)
