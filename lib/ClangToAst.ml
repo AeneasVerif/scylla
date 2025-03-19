@@ -336,7 +336,7 @@ let is_constantarray (ty: qual_type) = match ty.desc with
   | ConstantArray _ -> true
   | _ -> false
 
-let normalize_type t =
+let rec normalize_type t =
   try
     match t with
     | TQualified lid ->
@@ -347,6 +347,8 @@ let normalize_type t =
         | Pointer t -> TBuf (translate_typ t, false)
         | _ -> failwith "impossible"
         end
+        (* We might have a chain of aliases, we recurse on the resulting type *)
+        |> normalize_type
     | _ -> t
   with Not_found ->
     t
