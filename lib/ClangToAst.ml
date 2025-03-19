@@ -362,6 +362,8 @@ let rec normalize_type t =
       | BuiltinType t -> translate_builtin_typ t
       | Typedef { name; _ } ->
           get_id_name name |> translate_typ_name
+        (* We might have a chain of aliases, we recurse on the resulting type *)
+        |> normalize_type
       | Pointer t -> TBuf (normalize_type (translate_typ t), false)
       | _ -> failwith "impossible"
       end
