@@ -10,6 +10,10 @@ module FileMap = Map.Make(String)
 module StructMap = Map.Make(String)
 module LidMap = Krml.AstToMiniRust.LidMap
 module LidSet = Krml.AstToMiniRust.LidSet
+module ElaboratedMap = Map.Make(struct
+  type t = declaration_name * [ `Struct ]
+  let compare = compare
+end)
 
 (* A map from function names to the string list used in their fully qualified
    name. It is filled at the beginning of the translation, when exploring the
@@ -24,6 +28,10 @@ let name_map = ref FileMap.empty
    a struct type `name`
 *)
 let struct_map = ref StructMap.empty
+
+(* A map from an elaborated type reference (e.g. `struct S`) to the lid it has been assigned in the
+ translation -- we always eliminate elaborated types in favor of lids. *)
+let elaborated_map = ref ElaboratedMap.empty
 
 (* A map from type alias names to their underlying implementation.
    It is needed to retrieve the type of, e.g., constants
@@ -214,6 +222,14 @@ let rec translate_typ (typ: qual_type) = match typ.desc with
 
   | BuiltinType t -> translate_builtin_typ t
 
+  | Elaborated { keyword = Struct; named_type = { desc = Record {name; _}; _}; _ } ->
+      begin try
+        TQualified (ElaboratedMap.find (name, `Struct) !elaborated_map)
+      with Not_found ->
+        Format.eprintf "Trying to translate type %a\n" Clang.Type.pp typ;
+        failwith "translate_typ: unsupported type"
+      end
+
   | _ ->
       Format.eprintf "Trying to translate type %a\n" Clang.Type.pp typ;
       failwith "translate_typ: unsupported type"
@@ -336,20 +352,20 @@ let is_constantarray (ty: qual_type) = match ty.desc with
   | ConstantArray _ -> true
   | _ -> false
 
-let normalize_type t =
-  try
-    match t with
-    | TQualified lid ->
-        begin match LidMap.find lid !abbrev_map with
-        | BuiltinType t -> translate_builtin_typ t
-        | Typedef { name; _ } ->
-            get_id_name name |> translate_typ_name
-        | Pointer t -> TBuf (translate_typ t, false)
-        | _ -> failwith "impossible"
-        end
-    | _ -> t
-  with Not_found ->
-    t
+let rec normalize_type t =
+  match t with
+  | TQualified lid ->
+      begin match LidMap.find lid !abbrev_map with
+      | exception Not_found ->
+          Krml.KPrint.bprintf "Not in the abbrev map: %a\n" Krml.PrintAst.Ops.plid lid;
+          t
+      | BuiltinType t -> translate_builtin_typ t
+      | Typedef { name; _ } ->
+          get_id_name name |> translate_typ_name
+      | Pointer t -> TBuf (normalize_type (translate_typ t), false)
+      | _ -> failwith "impossible"
+      end
+  | _ -> t
 
 (* Translate expression [e], with expected type [t] *)
 let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' =
@@ -1008,10 +1024,21 @@ let translate_field (decl: decl) =
       (Some name, (translate_typ qual_type, false))
   | _ -> failwith "Struct declarations should only contain fields"
 
+let name_of_decl (decl: decl): string =
+  match decl.desc with
+  | Function { name; _ } -> get_id_name name
+  | EnumDecl { name; _ } -> name
+  | RecordDecl { name; _ } -> name
+  | TypedefDecl { name; _ } -> name
+  | Field { name; _ } -> name
+  | Var desc -> desc.var_name
+  | _ -> "unknown"
+
 (* Returning an option is only a hack to make progress.
    TODO: Proper handling of  decls *)
 let translate_decl (decl: decl) =
   let exception Unsupported in
+  Format.printf "visiting decl %s\n" (name_of_decl decl);
   try
     match decl.desc with
     | Function fdecl ->
@@ -1051,9 +1078,9 @@ let translate_decl (decl: decl) =
             let ty = translate_typ_name name in
             Some (DType (lid, [], 0, 0, Abbrev ty))
         | _ ->
-          let ty, is_box = elaborate_typ underlying_type in
-          if is_box then boxed_types := LidSet.add lid !boxed_types;
-          Some (DType (lid, [], 0, 0, ty))
+            let ty, is_box = elaborate_typ underlying_type in
+            if is_box then boxed_types := LidSet.add lid !boxed_types;
+            Some (DType (lid, [], 0, 0, ty))
         end
 
     | _ ->
@@ -1125,16 +1152,6 @@ let add_to_list x data m =
   let add = function None -> Some [data] | Some l -> Some (data :: l) in
   FileMap.update x add m
 
-let name_of_decl (decl: decl): string =
-  match decl.desc with
-  | Function { name; _ } -> get_id_name name
-  | EnumDecl { name; _ } -> name
-  | RecordDecl { name; _ } -> name
-  | TypedefDecl { name; _ } -> name
-  | Field { name; _ } -> name
-  | Var desc -> desc.var_name
-  | _ -> "unknown"
-
 let add_lident_mapping (decl: decl) (filename: string) =
   Format.printf "add_lident_mapping: %s\n" (name_of_decl decl);
   let path = [ Filename.(remove_extension (basename filename)) ] in
@@ -1170,22 +1187,40 @@ let add_lident_mapping (decl: decl) (filename: string) =
         !name_map;
       (* To normalize correctly, we might need to retrieve types beyond the file currently
          being translated. We thus construct this map here rather than during type declaration translation *)
+      let lid = path, tdecl.name in
       begin match tdecl.underlying_type.desc with
       | BuiltinType _ | Typedef _ | Pointer _ as t ->
-            let lid = path, tdecl.name in
             Krml.KPrint.bprintf "adding %a in the abbreviation map\n" Krml.PrintAst.Ops.plid lid;
             abbrev_map := LidMap.update lid (function
               | None -> Some t
-              | Some t' when true || t = t' -> Some t
+              | Some t' when true || t = t' ->
+                  (* Invalid_argument("compare: abstract value")
+                     Values of type `type_desc` are probably not intended to be compared directly. I
+                     cannot find in the Clang API where the would be an equality predicate for
+                     `type_desc`s -- FIXME.
+
+                     With the `true ||` above, we override any previous typedef (but will the
+                     frontend allow this to happen?). *)
+                  Some t
               | _ -> Printf.eprintf "A type alias already exists for type %s\n" tdecl.name; failwith "redefining a type alias")
             !abbrev_map;
+
+      | Elaborated { keyword = Struct; named_type = { desc = Record {name; _}; _}; _ } ->
+          Krml.KPrint.bprintf "struct %s maps to %a\n" (get_id_name name) Krml.PrintAst.Ops.plid lid;
+          elaborated_map := ElaboratedMap.add (name, `Struct) lid !elaborated_map
+
+      (* (1* TODO: Similar workflow as structs *1) *)
+      (* | Elaborated { keyword = Enum; _} -> failwith "elaborated enums not supported" *)
+      (* | Elaborated _ -> failwith "elaborated types that are not enums or structs are not supported" *)
+
+      | Elaborated _ -> Format.printf "TypedefDecl: skipping a Elaborated\n"
+
       | LValueReference _ -> Format.printf "TypedefDecl: skipping a LValueReference\n"
       | RValueReference _ -> Format.printf "TypedefDecl: skipping a RValueReference\n"
       | ConstantArray _ -> Format.printf "TypedefDecl: skipping a ConstantArray\n"
       | Vector _ -> Format.printf "TypedefDecl: skipping a Vector\n"
       | IncompleteArray _ -> Format.printf "TypedefDecl: skipping a IncompleteArray\n"
       | VariableArray _ -> Format.printf "TypedefDecl: skipping a VariableArray\n"
-      | Elaborated _ -> Format.printf "TypedefDecl: skipping a Elaborated\n"
       | Enum _ -> Format.printf "TypedefDecl: skipping a Enum\n"
       | FunctionType _ -> Format.printf "TypedefDecl: skipping a FunctionType\n"
       | Record _ -> Format.printf "TypedefDecl: skipping a Record\n"
@@ -1209,9 +1244,7 @@ let add_lident_mapping (decl: decl) (filename: string) =
 
   (* TODO: Do we need to support this mapping for more decls *)
   | _ ->
-      ()
-      (* Format.printf "add_lident_mapping: ignoring %a\n" Clang.Decl.pp decl *)
-
+      Format.printf "add_lident_mapping: ignoring %a\n" Clang.Decl.pp decl
 
 let split_into_files (lib_dirs: string list) (ast: translation_unit) =
   let add_decl acc decl =
