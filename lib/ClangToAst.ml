@@ -81,7 +81,7 @@ let is_assign_op (kind: Clang.Ast.binary_operator_kind) = match kind with
   | XorAssign | OrAssign -> true
   | _ -> false
 
-let assign_to_bop (kind: Clang.Ast.binary_operator_kind) : Krml.Ast.expr =
+let assign_to_bop w (kind: Clang.Ast.binary_operator_kind) : Krml.Ast.expr =
   let op = match kind with
   (* TODO: Might need to disambiguate for pointer arithmetic *)
   | AddAssign -> K.Add
@@ -98,7 +98,7 @@ let assign_to_bop (kind: Clang.Ast.binary_operator_kind) : Krml.Ast.expr =
   | _ -> failwith "not an assign op"
   in
   (* TODO: Infer width and type from types of operands *)
-  Krml.Ast.with_type Helpers.uint32 (EOp (op, UInt32))
+  Krml.Ast.with_type (TInt w) (EOp (op, w))
 
 let translate_binop (kind: Clang.Ast.binary_operator_kind) : K.op = match kind with
   | PtrMemD | PtrMemI -> failwith "translate_binop: ptr mem"
@@ -159,9 +159,11 @@ let translate_typ_name = function
         | hd :: tl -> hd, String.concat "_" (List.rev tl)
         in TQualified ([path], name)
 
+(* We assume a modern system where sizeof int == 4, sizeof long long == 8, and sizeof long is
+   determined at configure-time (see DataModel.ml). *)
 let translate_builtin_typ (t: Clang.Ast.builtin_type) = match [@warnerror "-11"] t with
   | Void -> TUnit
-  | UInt -> TInt UInt32 (* TODO: How to retrieve exact width? *)
+  | UInt -> TInt UInt32
   | UShort -> failwith "translate_builtin_typ: ushort"
   | ULong ->
       begin match DataModel.size_long with
@@ -172,10 +174,7 @@ let translate_builtin_typ (t: Clang.Ast.builtin_type) = match [@warnerror "-11"]
   | ULongLong -> TInt UInt64
   | UInt128 -> failwith "translate_builtin_typ: uint128"
 
-  | Int -> TInt Int32 (* TODO: Retrieve exact width *)
-  (* JP: this depends on the *data model* -- int is always 4 bytes, long long is always 8
-     bytes, and the size of long depends on windows vs the rest of the world (we assume no PDP-11)
-     *)
+  | Int -> TInt Int32
 
   | Short
   | Long
@@ -357,7 +356,7 @@ let rec normalize_type t =
   | TQualified lid ->
       begin match LidMap.find lid !abbrev_map with
       | exception Not_found ->
-          Krml.KPrint.bprintf "Not in the abbrev map: %a\n" Krml.PrintAst.Ops.plid lid;
+          (* Krml.KPrint.bprintf "Not in the abbrev map: %a\n" Krml.PrintAst.Ops.plid lid; *)
           t
       | BuiltinType t -> translate_builtin_typ t
       | Typedef { name; _ } ->
@@ -470,10 +469,10 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' =
       )
 
   | UnaryOperator {kind = Not; operand } ->
+      (* Bitwise not: ~ syntax, operates on integers *)
       let ty = typ_of_expr operand in
       let o = translate_expr env ty operand in
-      (* TODO: Retrieve type *)
-      EApp (Helpers.mk_op K.Not UInt32, [o])
+      EApp (Helpers.mk_op K.Not (Helpers.assert_tint ty), [o])
 
   | UnaryOperator {kind = LNot; operand } ->
       (* Logical not: The operand should be a boolean *)
@@ -504,11 +503,14 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' =
       end
 
   | BinaryOperator {lhs; kind; rhs} when is_assign_op kind ->
+      (* TODO: looks like this is not catching the case of pointer arithmetic *)
       let lhs_ty = typ_of_expr lhs in
+      (* Interpreting operations as homogenous *)
+      let w = Helpers.assert_tint (typ_of_expr rhs) in
       let lhs = translate_expr env (typ_of_expr lhs) lhs in
       let rhs = translate_expr env (typ_of_expr rhs) rhs in
       (* Rewrite the rhs into the compound expression, using the underlying operator *)
-      let rhs = Krml.Ast.with_type lhs_ty (EApp (assign_to_bop kind, [lhs; rhs])) in
+      let rhs = Krml.Ast.with_type lhs_ty (EApp (assign_to_bop w kind, [lhs; rhs])) in
       begin match lhs.node with
       (* Special-case rewriting for buffer assignments *)
       | EBufRead (base, index) -> EBufWrite (base, index, rhs)
@@ -563,7 +565,15 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' =
         EApp (op, [lhs; rhs])
       end
 
-  | DeclRef {name; _} -> get_id_name name |> find_var env
+  | DeclRef {name; _} ->
+      let e = get_id_name name |> find_var env in
+      e
+      (* (1* TODO: hoist this towards a maybe_convert that can be used in other places *1) *)
+      (* begin match e.typ, t with *)
+      (* | TInt _, TInt _ -> *)
+      (*     (1* Implicit cast e.g. from uint32 to size_t for array access *1) *)
+      (*     ECast (t, *) 
+
 
   | Call {callee; args} when is_scylla_reset callee ->
       begin match args with
@@ -1086,7 +1096,7 @@ let name_of_decl (decl: decl): string =
    TODO: Proper handling of  decls *)
 let translate_decl (decl: decl) =
   let exception Unsupported in
-  Format.printf "visiting decl %s\n" (name_of_decl decl);
+  (* Format.printf "visiting decl %s\n" (name_of_decl decl); *)
   try
     match decl.desc with
     | Function fdecl ->
@@ -1201,7 +1211,7 @@ let add_to_list x data m =
   FileMap.update x add m
 
 let add_lident_mapping (decl: decl) (filename: string) =
-  Format.printf "add_lident_mapping: %s\n" (name_of_decl decl);
+  (* Format.printf "add_lident_mapping: %s\n" (name_of_decl decl); *)
   let path = [ Filename.(remove_extension (basename filename)) ] in
   match decl.desc with
   | Function fdecl ->
@@ -1238,7 +1248,7 @@ let add_lident_mapping (decl: decl) (filename: string) =
       let lid = path, tdecl.name in
       begin match tdecl.underlying_type.desc with
       | BuiltinType _ | Typedef _ | Pointer _ as t ->
-            Krml.KPrint.bprintf "adding %a in the abbreviation map\n" Krml.PrintAst.Ops.plid lid;
+            (* Krml.KPrint.bprintf "adding %a in the abbreviation map\n" Krml.PrintAst.Ops.plid lid; *)
             abbrev_map := LidMap.update lid (function
               | None -> Some t
               | Some t' when true || t = t' ->
@@ -1292,7 +1302,8 @@ let add_lident_mapping (decl: decl) (filename: string) =
 
   (* TODO: Do we need to support this mapping for more decls *)
   | _ ->
-      Format.printf "add_lident_mapping: ignoring %a\n" Clang.Decl.pp decl
+      (* Format.printf "add_lident_mapping: ignoring %a\n" Clang.Decl.pp decl *)
+      ()
 
 let split_into_files (lib_dirs: string list) (ast: translation_unit) =
   let add_decl acc decl =

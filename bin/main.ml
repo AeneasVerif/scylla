@@ -57,6 +57,14 @@ Supported options:|}
     Krml.AstToMiniRust.LidSet.union acc boxed_types, files
   ) Krml.AstToMiniRust.LidSet.empty files in
   let files = List.concat files in
+
+  if Krml.Options.debug "ClangToAst" then
+    Krml.(Print.print (PPrint.(PrintAst.print_files files ^^ hardline)));
+
+  let had_errors, files = Krml.Checker.check_everything ~warn:true files in
+  if had_errors then
+    fatal_error "%s:%d: input Ast is ill-typed, aborting" __FILE__ __LINE__;
+
   let files = Krml.Bundles.topological_sort files in
   let files = Krml.Simplify.sequence_to_let#visit_files () files in
   let files = Krml.AstToMiniRust.translate_files_with_boxed_types files boxed_types in
