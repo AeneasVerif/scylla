@@ -296,19 +296,22 @@ let rec is_null (e: expr) = match e.desc with
   | _ -> false
 
 let is_null_check var_name (e: expr) = match e.desc with
-  | BinaryOperator {lhs = {desc = DeclRef { name; _}; _}; kind = NE; rhs } ->
-      if get_id_name name = var_name && is_null (strip_implicit_casts rhs) then true else false
+  | BinaryOperator {lhs; kind = NE; rhs } ->
+      begin match (strip_implicit_casts lhs).desc with
+      | DeclRef { name; _} ->
+          if get_id_name name = var_name && is_null (strip_implicit_casts rhs) then true else false
+      | _ -> false
+      end
   | _ -> false
 
-(* Check whether statement [s] corresponds to a malloc initializer for
-   , which
-    will therefore be rewritten in combination with malloc to generate
+(** Check whether statement [s] corresponds to a malloc initializer for [vdecl],
+    which  will therefore be rewritten in combination with malloc to generate
     a standard array or Vec declaration in Rust *)
 let is_malloc_initializer (vdecl: var_decl_desc) (s: stmt_desc) = match s with
   | If { cond; _ } when is_null_check vdecl.var_name (strip_implicit_casts cond) -> true (* {cond; then_branch; else_branch; _} -> true *)
   | _ -> false
 
-(* Simple heuristics to detect whether a loop condition is always false, in this case we can omit the loop.
+(** Simple heuristics to detect whether a loop condition is always false, in this case we can omit the loop.
    TODO: Should probably check for absence of side-effects in condition evaluation *)
 let is_trivial_false (e: Krml.Ast.expr) = match e.node with
   (* e != e is always false *)
@@ -787,23 +790,29 @@ let translate_vardecl_malloc (env: env) (vdecl: var_decl_desc) (s: stmt_desc)
 
   (* Check if expression [e] corresponds to accessing the 0-th element of array [var_name] *)
   let is_zero_access (e: expr) var_name = match e.desc with
-  | ArraySubscript {base = {desc = DeclRef {name; _}; _}; index = {desc = IntegerLiteral (Int 0); _}} ->
-      get_id_name name = var_name
+  | ArraySubscript {base; index} ->
+      begin match (strip_implicit_casts base).desc, (strip_implicit_casts index).desc with
+      | DeclRef {name; _},  IntegerLiteral (Int 0) -> get_id_name name = var_name
+      | _ -> false
+      end
   | _ -> false
   in
 
   let init_val = match s with
   (* We previously checked that this had shape 'if ptr != NULL { ... }`. *)
   | If {then_branch; _} -> begin match then_branch.desc with
-      | Compound [{desc = Expr {desc = BinaryOperator {lhs; kind = Assign; rhs}; _}; _}] when is_zero_access lhs vname ->
-          translate_expr env (Helpers.assert_tbuf typ) rhs
+      | Compound [{desc = Expr expr; _}] ->
+          begin match (strip_implicit_casts expr).desc with
+          | BinaryOperator {lhs; kind = Assign; rhs} when is_zero_access (strip_implicit_casts lhs) vname ->
+              translate_expr env (Helpers.assert_tbuf typ) rhs
+          | _ -> failwith "ill-formed malloc initializer"
+          end
       | _ -> failwith "ill-formed malloc initializer"
       end
   | _ -> failwith "ill-formed malloc initializer"
   in
 
   add_var env vname, Helpers.fresh_binder vname typ, Krml.Ast.with_type typ (EBufCreate (Krml.Common.Heap, init_val, Helpers.oneu32))
-
 
 
 let rec translate_stmt' (env: env) (t: typ) (s: stmt_desc) : expr' = match s with
