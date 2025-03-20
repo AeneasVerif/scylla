@@ -6,6 +6,12 @@ open Clang.Ast
 module K = Krml.Constant
 module Helpers = Krml.Helpers
 
+let fatal_error fmt =
+  Printf.kbprintf (fun b ->
+    Buffer.output_buffer stderr b;
+    exit 255
+  ) (Buffer.create 256) fmt
+
 module FileMap = Map.Make(String)
 module StructMap = Map.Make(String)
 module LidMap = Krml.AstToMiniRust.LidMap
@@ -566,13 +572,27 @@ let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' =
       end
 
   | DeclRef {name; _} ->
+      let actual_t = normalize_type (typ_of_expr e) in
       let e = get_id_name name |> find_var env in
-      e
-      (* (1* TODO: hoist this towards a maybe_convert that can be used in other places *1) *)
-      (* begin match e.typ, t with *)
-      (* | TInt _, TInt _ -> *)
-      (*     (1* Implicit cast e.g. from uint32 to size_t for array access *1) *)
-      (*     ECast (t, *) 
+      (* TODO: hoist this towards a maybe_convert that can be used in other places *)
+      begin match actual_t, (* expected *) t with
+      | TInt w, TInt w' when w <> w' ->
+          (* Implicit cast e.g. from uint32 to size_t for array access *)
+          ECast (with_type actual_t e, t)
+      | TBuf (TArrow _, _), TArrow _ ->
+          (* The clang type is not to be trusted here, since clang sees functions as function
+            pointers -- should this be taken care of in typ_of_expr, or normalize_type? *)
+          e
+      | TBuf (TUnit, _), TBuf _ ->
+          (* Incomplete clang information -- void* *)
+          e
+      | _ ->
+          if actual_t <> t then
+            let open Krml.PrintAst.Ops in
+            fatal_error "Cannot cast %s (Clang type: %a) into expected type %a" (get_id_name name) ptyp actual_t ptyp t
+          else
+            e
+      end
 
 
   | Call {callee; args} when is_scylla_reset callee ->
@@ -913,7 +933,8 @@ let rec translate_stmt' (env: env) (t: typ) (s: stmt_desc) : expr' = match s wit
           begin match init.desc with
           | Decl [{desc = Var vdecl; _}] ->
             let env, b, init = translate_vardecl env vdecl in
-            let cond = translate_expr env (typ_of_expr cond) cond in
+            (* Cannot use type_of_expr cond here since C uses `int` but we want bool *)
+            let cond = translate_expr env TBool cond in
             let inc = translate_stmt env TUnit inc.desc in
             let body = translate_stmt env t body.desc in
             EFor (b, init, cond, inc, body)
@@ -938,7 +959,7 @@ let rec translate_stmt' (env: env) (t: typ) (s: stmt_desc) : expr' = match s wit
       (* These two fields should be specific to C++ *)
       assert (init = None);
       assert (condition_variable = None);
-      let cond = translate_expr env (typ_of_expr cond) cond in
+      let cond = translate_expr env TBool cond in
       let then_b = translate_stmt env TUnit then_branch.desc in
       let else_b = match else_branch with
         | None -> Helpers.eunit
