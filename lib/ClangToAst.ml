@@ -51,7 +51,7 @@ let boxed_types = ref LidSet.empty
 
 type env = {
   (* Variables in the context *)
-  vars: string list
+  vars: (string * typ) list
 }
 
 let empty_env = {vars = []}
@@ -59,17 +59,24 @@ let empty_env = {vars = []}
 let add_var env var = {vars = var :: env.vars }
 
 (* TODO: Handle fully qualified names/namespaces/different files. *)
-let find_var env var =
-  try EBound (Krml.KList.index (fun x -> x = var) env.vars) with
-  (* This variable is not a local var *)
-  (* TODO: More robust check, likely need env for top-level decls *)
+let find_var env name =
+  let exception Found of int * typ in
+  try
+    List.iteri (fun i (name', t) ->
+      if name = name' then
+        raise (Found (i, t))
+    ) env.vars;
+    raise Not_found
+  with
+  | Found (i, t) ->
+      with_type t (EBound i)
   | Not_found ->
       try
-        let path = FileMap.find var !name_map in
-        EQualified (path, var)
+        let path, t = FileMap.find name !name_map in
+        with_type t (EQualified (path, name))
       with
       | Not_found ->
-          Printf.eprintf "Could not find variable %s\n" var;
+          Printf.eprintf "Could not find variable %s\n" name;
           raise Not_found
 
 let get_id_name (dname: declaration_name) = match dname with
@@ -156,7 +163,7 @@ let translate_typ_name = function
   | s ->
       (* We first try to find the type name in the environment *)
       match FileMap.find_opt s !name_map with
-      | Some t -> TQualified (t, s)
+      | Some (path, _t) -> TQualified (path, s)
       | None ->
         (* If the type is not found in the environment, we assume
            it is an external type, and translate A_B_ty to a_b::ty *)
@@ -564,7 +571,8 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
 
     | DeclRef {name; _} ->
         let e = get_id_name name |> find_var env in
-        e
+        (* TODO: should this be done more generally? *)
+        { e with typ = normalize_type e.typ }
         (* (1* TODO: hoist this towards a maybe_convert that can be used in other places *1) *)
         (* let actual_t = normalize_type (typ_of_expr e) in *)
         (* begin match actual_t, (1* expected *1) t with *)
@@ -589,7 +597,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
 
     | Call {callee; args} when is_scylla_reset callee ->
         begin match args with
-        | [e] -> let e = translate_expr env (typ_of_expr e) e in (Helpers.push_ignore e).node
+        | [e] -> Helpers.push_ignore (translate_expr env e)
         | _ -> failwith "wrong number of arguments for scylla_reset"
         end
 
@@ -608,14 +616,15 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
             let len, ty = match len.desc with
             (* We recognize the case `len = lhs * sizeof (_)` *)
               | BinaryOperator {lhs; kind = Mul; rhs = { desc = UnaryExpr {kind = SizeOf; argument}; _}} ->
-                  let len = translate_expr env Helpers.usize lhs in
+                  (* TODO: adjust to usize *)
+                  let len = translate_expr env lhs in
                   let ty = extract_sizeof_ty argument in
                   len, ty
               | _ -> failwith "ill-formed memcpy"
             in
-            let dst = translate_expr env (TBuf (ty, false)) dst in
-            let src = translate_expr env (TBuf (ty, false)) src in
-            EBufBlit (src, Helpers.zerou32, dst, Helpers.zerou32, len)
+            let dst = translate_expr env dst in
+            let src = translate_expr env src in
+            with_type TUnit @@ EBufBlit (src, Helpers.zerou32, dst, Helpers.zerou32, len)
 
         | _ -> failwith "memcpy does not have the right number of arguments"
         end
@@ -627,20 +636,21 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
             let len, ty = match len.desc with
             (* We recognize the case `len = lhs * sizeof (_)` *)
               | BinaryOperator {lhs; kind = Mul; rhs = { desc = UnaryExpr {kind = SizeOf; argument}; _}} ->
-                  let len = translate_expr env Helpers.usize lhs in
+                  (* TODO: adjust to usize *)
+                  let len = translate_expr env lhs in
                   let ty = extract_sizeof_ty argument in
                   len, ty
               | _ -> failwith "ill-formed memcpy"
             in
-            let dst = translate_expr env (TBuf (ty, false)) dst in
-            let elt = translate_expr env ty v in
-            EBufFill (dst, elt, len)
+            let dst = translate_expr env dst in
+            let elt = translate_expr env v in
+            with_type TUnit @@ EBufFill (dst, elt, len)
         | _ -> failwith "memset does not have the right number of arguments"
         end
 
     | Call {callee; args} when is_free callee ->
         begin match args with
-        | [ptr] -> EBufFree (translate_expr env (typ_of_expr ptr) ptr)
+        | [ptr] -> with_type TUnit @@ EBufFree (translate_expr env ptr)
         | _ -> failwith "ill-formed free: too many arguments"
         end
 
@@ -650,28 +660,28 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
            However, std::process:exit immediately terminates the process and does not
            run destructors. As it is likely used as an abort in our usecases, we instead
            translate it to EAbort, which will become a `panic` *)
-        EAbort (Some t, Some "")
+        with_type TAny (EAbort (None, Some ""))
 
     | Call {callee; args} ->
-        (* In C, a function type is a pointer. We need to strip it to retrieve
-           the standard arrow abstraction *)
-        let fun_typ = Helpers.assert_tbuf (typ_of_expr callee) in
         (* Format.printf "Trying to translate function call %a@." Clang.Expr.pp callee; *)
-        let callee = translate_expr env fun_typ callee in
-        let args = List.map (fun x -> translate_expr env (typ_of_expr x) x) args in
-        EApp (callee, args)
+        let callee = translate_expr env callee in
+        (* TODO: adjust the type of the callee to strip the pointer *)
+        let args = List.map (fun x -> translate_expr env x) args in
+        (* TODO: use the return type from the type of callee *)
+        with_type (typ_from_clang e) (EApp (callee, args))
 
     | Cast {qual_type; operand; _} ->
         (* Format.printf "Cast %a@."  Clang.Expr.pp e; *)
         let typ = translate_typ qual_type in
-        let e = translate_expr env (typ_of_expr operand) operand in
-        ECast (e, typ)
+        let e = translate_expr env operand in
+        with_type typ (ECast (e, typ))
 
     | ArraySubscript {base; index} ->
-        let base = translate_expr env (TBuf (t, false)) base in
-        let index = translate_expr env (TInt SizeT) index in
+        let base = translate_expr env base in
+        (* TODO: adjust to SizeT *)
+        let index = translate_expr env index in
         (* Is this only called on rvalues? Otherwise, might need EBufWrite *)
-        EBufRead (base, index)
+        with_type (Helpers.assert_tbuf_or_tarray base.typ) (EBufRead (base, index))
 
     | ConditionalOperator _ -> failwith "translate_expr: conditional operator"
     | Paren _ -> failwith "translate_expr: paren"
@@ -681,8 +691,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
         | None -> failwith "field accesses without a base expression are not supported"
         | Some b -> b
         in
-        let t_base = normalize_type (typ_of_expr base) in
-        let base = translate_expr env t_base base in
+        let base = translate_expr env base in
 
         let f = match field with
         | FieldName {desc; _} -> get_id_name desc.name
@@ -691,15 +700,17 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
 
         if not arrow then
           (* base.f *)
-          EField (base, f)
+          (* FIXME deduce this properly *)
+          with_type (typ_from_clang e) (EField (base, f))
         else
           (* base->f *)
-          let deref_base = Helpers.(with_type (assert_tbuf t_base) (EBufRead (base, Helpers.zero_usize))) in
-          EField (deref_base, f)
+          let deref_base = Helpers.(with_type (assert_tbuf base.typ) (EBufRead (base, Helpers.zero_usize))) in
+          (* FIXME deduce this properly *)
+          with_type (typ_from_clang e) (EField (deref_base, f))
 
     | UnaryExpr {kind = SizeOf; argument = ArgumentType t; _ } ->
         begin match normalize_type (translate_typ t) with
-        | TInt w -> (Helpers.mk_sizet (Krml.Constant.bytes_of_width w)).node
+        | TInt w -> (Helpers.mk_sizet (Krml.Constant.bytes_of_width w))
         | _ ->
             Format.printf "Trying to translate unary expr %a@." Clang.Expr.pp e;
             failwith "translate_expr: unary expr"
@@ -720,40 +731,42 @@ let translate_vardecl (env: env) (vdecl: var_decl_desc) : env * binder * Krml.As
   | None ->
         (* If there is no associated definition, we attempt to craft
            a default initialization value *)
-        add_var env vname, Helpers.fresh_binder vname typ, create_default_value typ
+        add_var env (vname, typ), Helpers.fresh_binder vname typ, create_default_value typ
 
   (* Intializing a constant array with a list of elements.
      For instance, uint32[2] = { 0 };
   *)
+  (* TODO understand why this case is needed *)
   | Some {desc = InitList l; _} when is_constantarray vdecl.var_type ->
         let size, size_e = extract_constarray_size vdecl.var_type in
         if List.length l = 1 then
           (* One element initializer, possibly repeated *)
-          let e = translate_expr env (Helpers.assert_tbuf typ) (List.hd l) in
+          let e = translate_expr env (List.hd l) in
           (* TODO: Arrays are not on stack if at top-level *)
-          add_var env vname, Helpers.fresh_binder vname typ, Krml.Ast.with_type typ (EBufCreate (Krml.Common.Stack, e, size_e))
+          add_var env (vname, typ), Helpers.fresh_binder vname typ, Krml.Ast.with_type typ (EBufCreate (Krml.Common.Stack, e, size_e))
         else (
           assert (List.length l = size);
           let ty = Helpers.assert_tbuf typ in
-          let es = List.map (translate_expr env ty) l in
-          add_var env vname, Helpers.fresh_binder vname typ, Krml.Ast.with_type typ (EBufCreateL (Krml.Common.Stack, es))
+          let es = List.map (translate_expr env) l in
+          add_var env (vname, typ), Helpers.fresh_binder vname typ, Krml.Ast.with_type typ (EBufCreateL (Krml.Common.Stack, es))
         )
 
   (* Initializing a struct value.
      TODO: We should check that the declaration type indeed corresponds to a struct type *)
+  (* TODO understand why this case is needed *)
   | Some {desc = InitList l; _} ->
       let translate_field_expr (e : expr) = match e.desc with
         | DesignatedInit { designators; init }  ->
             begin match designators with
             | [FieldDesignator name] ->
-                let e = translate_expr env (typ_of_expr init) init in
+                let e = translate_expr env init in
                 (Some name, e)
             | [_] -> failwith "expected a field designator"
             | _ -> failwith "assigning to several fields during struct initialization is not supported"
             end
       | _ -> failwith "a designated initializer was expected when initializing a struct"
       in
-      add_var env vname, Helpers.fresh_binder vname typ, Krml.Ast.with_type typ (EFlat (List.map translate_field_expr l))
+      add_var env (vname, typ), Helpers.fresh_binder vname typ, Krml.Ast.with_type typ (EFlat (List.map translate_field_expr l))
 
 
   | Some {desc = Call {callee; args}; _}
@@ -762,12 +775,13 @@ let translate_vardecl (env: env) (vdecl: var_decl_desc) : env * binder * Krml.As
   | Some {desc = Cast {operand = {desc = Call {callee; args}; _}; _}; _} when is_calloc callee ->
       begin match args with
       | [len; {desc = UnaryExpr {kind = SizeOf; argument}; _}] ->
-          let len = translate_expr env Helpers.usize len in
+          let len = translate_expr env len in
+          (* TODO: adjust usize *)
           (* Sanity check: calloc is of the right type *)
           let ty = Helpers.assert_tbuf typ in
           assert (extract_sizeof_ty argument = ty);
           let w = Helpers.assert_tint ty in
-          add_var env vname, Helpers.fresh_binder vname typ,
+          add_var env (vname, typ), Helpers.fresh_binder vname typ,
             Krml.Ast.with_type typ (EBufCreate (Krml.Common.Heap, Helpers.zero w, len))
       | _ -> failwith "calloc is expected to have two arguments"
       end
@@ -778,12 +792,12 @@ let translate_vardecl (env: env) (vdecl: var_decl_desc) : env * binder * Krml.As
       (* If we have a statement of the shape `let x = y` where y is a pointer,
          this likely corresponds to taking a slice of y, starting at index 0.
          We need to explicitly insert the EBufSub node to create a split tree *)
-      | TBuf _ | TArray _ -> EBufSub (Krml.Ast.with_type typ var, Helpers.zero_usize)
+      | TBuf _ | TArray _ -> with_type typ (EBufSub (var, Helpers.zero_usize))
       | _ -> var
       in
-      add_var env vname, Helpers.fresh_binder vname typ, Krml.Ast.with_type typ e
+      add_var env (vname, typ), Helpers.fresh_binder vname typ, e
 
-  | Some e -> add_var env vname, Helpers.fresh_binder vname typ, translate_expr env typ e
+  | Some e -> add_var env (vname, typ), Helpers.fresh_binder vname typ, translate_expr env e
 
 (* Translation of a variable declaration, followed by a memset of [args] *)
 let translate_vardecl_with_memset (env: env) (vdecl: var_decl_desc) (args: expr list)
@@ -794,17 +808,16 @@ let translate_vardecl_with_memset (env: env) (vdecl: var_decl_desc) (args: expr 
      second statement *)
   let vname = vdecl.var_name in
   let typ, size = match vdecl.var_type.desc with
-
-  | VariableArray { element; size } ->
-      TBuf (translate_typ element, false), translate_expr env (typ_of_expr size) size
-  | ConstantArray {element; size_as_expr; _} ->
-      let size = match size_as_expr with
-      | None -> failwith "Length of constant array is not an expr"
-      | Some size -> translate_expr env Helpers.usize size
-      in
-      TBuf (translate_typ element, false), size
-  | _ ->
-      failwith "The variable being memset is not a constantArray or variableArray"
+    | VariableArray { element; size } ->
+        TBuf (translate_typ element, false), translate_expr env size
+    | ConstantArray {element; size_as_expr; _} ->
+        let size = match size_as_expr with
+        | None -> failwith "Length of constant array is not an expr"
+        | Some size -> translate_expr env size (* TODO: adjust to usize *)
+        in
+        TBuf (translate_typ element, false), size
+    | _ ->
+        failwith "The variable being memset is not a constantArray or variableArray"
   in
   match args with
   | dst :: v :: len :: _ ->
@@ -821,11 +834,12 @@ let translate_vardecl_with_memset (env: env) (vdecl: var_decl_desc) (args: expr 
           lhs
       | _ -> failwith "memset length is not of the shape `N * sizeof(ty)`"
       in
-      let v = translate_expr env (Helpers.assert_tbuf typ) v in
-      let len = translate_expr env Helpers.usize len in
+      let v = translate_expr env v in
+      (* TODO: adjust usize *)
+      let len = translate_expr env len in
       (* Types might have been inferred differently, we only compare the expressions *)
       if len.node = size.node then
-        add_var env vname,
+        add_var env (vname, typ),
         Helpers.fresh_binder vname typ,
         Krml.Ast.with_type typ (EBufCreate (Krml.Common.Stack, v, len))
       else
@@ -869,17 +883,17 @@ let translate_vardecl_malloc (env: env) (vdecl: var_decl_desc) (s: stmt_desc)
   (* We previously checked that this had shape 'if ptr != NULL { ... }`. *)
   | If {then_branch; _} -> begin match then_branch.desc with
       | Compound [{desc = Expr {desc = BinaryOperator {lhs; kind = Assign; rhs}; _}; _}] when is_zero_access lhs vname ->
-          translate_expr env (Helpers.assert_tbuf typ) rhs
+          translate_expr env rhs
       | _ -> failwith "ill-formed malloc initializer"
       end
   | _ -> failwith "ill-formed malloc initializer"
   in
 
-  add_var env vname, Helpers.fresh_binder vname typ, Krml.Ast.with_type typ (EBufCreate (Krml.Common.Heap, init_val, Helpers.oneu32))
+  add_var env (vname, typ), Helpers.fresh_binder vname typ, Krml.Ast.with_type typ (EBufCreate (Krml.Common.Heap, init_val, Helpers.oneu32))
 
 
 
-let rec translate_stmt' (env: env) (t: typ) (s: stmt_desc) : expr' = match s with
+let rec translate_stmt' (env: env) (ret_t: typ) (s: stmt_desc) : expr' = match s with
   (* This is a null statement, not a null pointer. It corresponds to a no-op *)
   | Null -> EUnit
 
@@ -895,24 +909,24 @@ let rec translate_stmt' (env: env) (t: typ) (s: stmt_desc) : expr' = match s wit
       | Decl [{desc = Var vdecl; _}],
         Expr {desc = Call {callee; args}; _} when is_memset callee ->
           let env', b, e = translate_vardecl_with_memset env vdecl args in
-          ELet (b, e, translate_stmt env' t (Compound (List.tl tl)))
+          ELet (b, e, translate_stmt env' ret_t (Compound (List.tl tl)))
 
       (* Special case when we have a malloc followed by an initializer
          for the corresponding pointer: we rewrite this into a heap array
          initialization *)
       | Decl [{desc = Var vdecl; _}], stmt when is_malloc_vdecl vdecl && is_malloc_initializer vdecl stmt ->
           let env', b, e = translate_vardecl_malloc env vdecl stmt in
-          ELet (b, e, translate_stmt env' t (Compound (List.tl tl)))
+          ELet (b, e, translate_stmt env' ret_t (Compound (List.tl tl)))
 
       | Decl [{desc = Var vdecl; _ }], _ ->
           let env', b, e = translate_vardecl env vdecl in
-          ELet (b, e, translate_stmt env' t (Compound tl))
+          ELet (b, e, translate_stmt env' ret_t (Compound tl))
       | Decl [_], _ -> failwith "This decl is not a var declaration"
       | Decl _, _ -> failwith "multiple decls"
       | stmt, _ -> ELet (
         Helpers.sequence_binding (),
         translate_stmt env TUnit stmt,
-        translate_stmt (add_var env "_") t (Compound tl))
+        translate_stmt (add_var env ("_", TUnit)) ret_t (Compound tl))
    end
 
   | For {init; condition_variable; cond; inc; body} ->
@@ -923,9 +937,10 @@ let rec translate_stmt' (env: env) (t: typ) (s: stmt_desc) : expr' = match s wit
           | Decl [{desc = Var vdecl; _}] ->
             let env, b, init = translate_vardecl env vdecl in
             (* Cannot use type_of_expr cond here since C uses `int` but we want bool *)
-            let cond = translate_expr env TBool cond in
-            let inc = translate_stmt env TUnit inc.desc in
-            let body = translate_stmt env t body.desc in
+            let cond = translate_expr env cond in
+            (* TODO: adjust bool cond *)
+            let inc = translate_stmt env ret_t inc.desc in
+            let body = translate_stmt env ret_t body.desc in
             EFor (b, init, cond, inc, body)
           | _ -> failwith "loop variable must be declared in for loop initializer"
           end
@@ -962,7 +977,7 @@ let rec translate_stmt' (env: env) (t: typ) (s: stmt_desc) : expr' = match s wit
       assert (condition_variable = None);
 
       let cond = translate_expr env (typ_of_expr cond) cond in
-      let branches = translate_branches env t body.desc in
+      let branches = translate_branches env ret_t body.desc in
       EMatch (Unchecked, cond, branches)
 
   | Case _ -> failwith "case not encapsulated in a switch"
@@ -978,13 +993,13 @@ let rec translate_stmt' (env: env) (t: typ) (s: stmt_desc) : expr' = match s wit
           Helpers.mk_neq cond (Helpers.zero w)
         | _ -> failwith "incorrect type for while condition"
       in
-      let body = translate_stmt env t body.desc in
+      let body = translate_stmt env ret_t body.desc in
       EWhile (cond, body)
 
   | Do { body; cond } ->
     (* The do statements first executes the body before behaving as a while loop.
        We thus translate it as a sequence of the body and the corresponding while loop *)
-    let body = translate_stmt env t body.desc in
+    let body = translate_stmt env ret_t body.desc in
     (* TODO: Likely need to translate int conditions to boolean expressions *)
     let cond_ty = typ_of_expr cond in
     let cond = translate_expr env cond_ty cond in
@@ -1015,14 +1030,14 @@ let rec translate_stmt' (env: env) (t: typ) (s: stmt_desc) : expr' = match s wit
     end
 
   | Decl _ -> failwith "translate_stmt: decl"
-  | Expr e -> translate_expr' env t e
+  | Expr e -> translate_expr' env ret_t e
 
   | Try _ -> failwith "translate_stmt: try"
   | AttributedStmt _ -> failwith "translate_stmt: AttributedStmt"
   | UnknownStmt _ -> failwith "translate_stmt: UnknownStmt"
 
-and translate_stmt (env: env) (t: typ) (s: stmt_desc) : Krml.Ast.expr =
-  Krml.Ast.with_type t (translate_stmt' env t s)
+and translate_stmt (env: env) (ret_t: typ) (s: stmt_desc) : Krml.Ast.expr =
+  Krml.Ast.with_type ret_t (translate_stmt' env ret_t s)
 
 (* Translate case and default statements inside a switch to a list of branches for
    structured pattern-matching.
