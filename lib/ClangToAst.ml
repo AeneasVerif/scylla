@@ -2,6 +2,7 @@
 (* Licensed under the Apache 2.0 and MIT Licenses. *)
 
 open Krml.Ast
+open Krml.PrintAst.Ops
 open Clang.Ast
 module K = Krml.Constant
 module Helpers = Krml.Helpers
@@ -239,16 +240,6 @@ let rec translate_typ (typ: qual_type) = match typ.desc with
       Format.eprintf "Trying to translate type %a\n" Clang.Type.pp typ;
       failwith "translate_typ: unsupported type"
 
-(* Elaborate a type during a typedef declaration. Also return whether the type should be boxed *)
-let elaborate_typ (typ: qual_type) = match typ.desc with
-  | Elaborated { keyword = Struct; named_type = { desc = Record {name; _}; _}; _ } ->
-      let name = get_id_name name in
-      StructMap.find name !struct_map
-  (* TODO: Similar workflow as structs *)
-  | Elaborated { keyword = Enum; _} -> failwith "elaborated enums not supported"
-  | Elaborated _ -> failwith "elaborated types that are not enums or structs are not supported"
-  | _ -> failwith "The underlying type of a typedef is not an elaborated type"
-
 (* Takes a Clangml expression [e], and retrieves the corresponding karamel Ast type *)
 let typ_of_expr (e: expr) : typ = Clang.Type.of_node e |> translate_typ
 
@@ -374,351 +365,349 @@ let rec normalize_type t =
       end
   | _ -> t
 
-(* Translate expression [e], with expected type [t] *)
-let rec translate_expr' (env: env) (t: typ) (e: expr) : expr' =
-  if is_null e then EBufNull
-  else
-  match e.desc with
-  | IntegerLiteral n ->
-      begin match normalize_type t with
-      | TBool ->
-          begin match n with
-          | Int 0 -> EBool false
-          | Int 1 ->  EBool true
-          | _ -> failwith "Not a boolean literal"
-          end
-      | TInt w ->
-        let signed = K.is_signed w in
-        EConstant (w, Clang.Ast.string_of_integer_literal ~signed n)
-      | TQualified _ ->
-          (* If we have a named type, we expect it to be a type abbreviation to
-             a constant type. *)
-          Krml.KPrint.beprintf "Tried to type integer literal with type %a\n" Krml.PrintAst.ptyp t;
-          failwith "Expected type is not a type alias when trying to translate an integer constant"
-      | _ ->
-        (* TODO: Handle this better *)
-        Krml.KPrint.beprintf "Tried to type integer literal as %a\n" Krml.PrintAst.ptyp t;
-        EConstant (UInt32, Clang.Ast.string_of_integer_literal n)
-      end
+(* Indicate that we synthesize the type of an expression based on the information provided by
+   Clang. We aim to do this only in a few select cases:
+   - integer constants
+   - variable declarations
+   - function types (so, arguments and return types).
+   Every other type should be able to be deduced from the context. *)
+let typ_from_clang (e: Clang.Ast.expr): typ =
+  normalize_type (typ_of_expr e)
 
-  | FloatingLiteral _ -> failwith "translate_expr: floating literal"
-  | StringLiteral _ -> failwith "translate_expr: string literal"
-  | CharacterLiteral _ -> failwith "translate_expr character literal"
-  | ImaginaryLiteral _ -> failwith "translate_expr: imaginary literal"
-  | BoolLiteral _ -> failwith "translate_expr: bool literal"
-  | NullPtrLiteral -> failwith "translate_expr: null ptr literal"
+(* Translate expression [e].
 
-  | CompoundLiteral {qual_type; init = {desc = InitList l; _}} when is_constantarray qual_type ->
+ When adding a case to this function, two questions arise:
+ - does the context provide enough information to insert a call to `adjust`? example: translating a
+   While node, one must adjust the condition to be bool, because the typing rules of the krml ast
+   are different from C
+ - are we trusting the type from clang when we shouldn't? (i.e., is it ok to call typ_from_clang) --
+   this should generally be avoided, because it is not true that `(translate_expr e).typ =
+     typ_from_clang e`. *)
+let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
+  if is_null e then
+    with_type (TBuf (TAny, false)) EBufNull
+  else match e.desc with
+    | IntegerLiteral n ->
+        begin match typ_from_clang e with
+        | TInt w as t ->
+            let signed = K.is_signed w in
+            with_type t (EConstant (w, Clang.Ast.string_of_integer_literal ~signed n))
+        | t ->
+            fatal_error "integer literal does not have an int type, it has %a" ptyp t
+        end
+
+    | FloatingLiteral _ -> failwith "translate_expr: floating literal"
+    | StringLiteral _ -> failwith "translate_expr: string literal"
+    | CharacterLiteral _ -> failwith "translate_expr character literal"
+    | ImaginaryLiteral _ -> failwith "translate_expr: imaginary literal"
+    | BoolLiteral _ -> failwith "translate_expr: bool literal"
+    | NullPtrLiteral -> failwith "translate_expr: null ptr literal"
+
+    | CompoundLiteral {qual_type; init = {desc = InitList l; _}} when is_constantarray qual_type ->
+        (* TODO: understand why this is repeated between here and translate_vardecl -- share! *)
+        (* Also probably needs local downward propagation of the expected type (from the variable
+           declaration), to adjust proper casting of the integer types, followed by a call to
+           adjust. *)
         let size, size_e = extract_constarray_size qual_type in
         if List.length l = 1 then
           (* One element initializer, possibly repeated *)
-          let e = translate_expr env (Helpers.assert_tbuf t) (List.hd l) in
+          let e = translate_expr env (List.hd l) in
           (* TODO: Arrays are not on stack if at top-level *)
-          EBufCreate (Krml.Common.Stack, e, size_e)
+          with_type (TBuf (e.typ, false)) (EBufCreate (Krml.Common.Stack, e, size_e))
         else (
           assert (List.length l = size);
-          let ty = Helpers.assert_tbuf t in
-          let es = List.map (translate_expr env ty) l in
-          EBufCreateL (Krml.Common.Stack, es)
+          let es = List.map (translate_expr env) l in
+          with_type (TBuf ((List.hd es).typ, false)) (EBufCreateL (Krml.Common.Stack, es))
         )
 
-  (* We handled above the case of array initialization, this should
-     be a struct initialization *)
-  | CompoundLiteral {init = {desc = InitList l; _}; _} ->
-      let translate_field_expr (e : expr) = match e.desc with
-        | DesignatedInit { designators; init }  ->
-            begin match designators with
-            | [FieldDesignator name] ->
-                let e = translate_expr env (typ_of_expr init) init in
-                (Some name, e)
-            | [_] -> failwith "expected a field designator"
-            | _ -> failwith "assigning to several fields during struct initialization is not supported"
+    (* We handled above the case of array initialization, this should
+       be a struct initialization *)
+    | CompoundLiteral {init = {desc = InitList l; _}; _} ->
+        let translate_field_expr (e : expr) = match e.desc with
+          | DesignatedInit { designators; init }  ->
+              begin match designators with
+              | [FieldDesignator name] ->
+                  (* FIXME -- adjust type against expected field type, obtained via a lookup in
+                     struct_map *)
+                  let e = translate_expr env init in
+                  Some name, e
+              | [_] -> failwith "expected a field designator"
+              | _ -> failwith "assigning to several fields during struct initialization is not supported"
+              end
+        | _ -> failwith "a designated initializer was expected when initializing a struct"
+        in
+       with_type (typ_from_clang e) (EFlat (List.map translate_field_expr l))
+
+
+    | UnaryOperator {kind = PostInc | PreInc; operand } ->
+        (* This is a special case for loop increments. The current Karamel
+           extraction pipeline only supports a specific case of loops *)
+        let o = translate_expr env operand in
+        begin match o.typ with
+        | TInt w ->
+            (* We rewrite `name++` into `name := name + 1` *)
+            with_type TUnit @@ EAssign (
+              o,
+              Krml.Ast.with_type o.typ (EApp (Helpers.mk_op K.Add w, [o; Helpers.one w]))
+            )
+        | TBuf (t, _) as t_buf ->
+            (* We rewrite `name++` into `name := name + 1` *)
+            with_type TUnit @@ EAssign (
+              o,
+              Krml.Ast.with_type t_buf (EBufSub (o, Helpers.one SizeT))
+            )
+        | _ ->
+            failwith "cannot increment this type"
+        end
+
+    | UnaryOperator {kind = PostDec | PreDec; operand } ->
+        (* This is a special case for loop increments. The current Karamel
+           extraction pipeline only supports a specific case of loops *)
+        let o = translate_expr env operand in
+        let w = Helpers.assert_tint o.typ in
+        (* We rewrite `name++` into `name := name + 1` *)
+        with_type TUnit @@ EAssign (
+          o,
+          Krml.Ast.with_type o.typ (EApp (Helpers.mk_op K.Sub w, [o; Helpers.one w]))
+        )
+
+    | UnaryOperator {kind = Not; operand } ->
+        (* Bitwise not: ~ syntax, operates on integers *)
+        let o = translate_expr env operand in
+        with_type o.typ @@ EApp (Helpers.mk_op K.Not (Helpers.assert_tint o.typ), [o])
+
+    | UnaryOperator {kind = LNot; operand } ->
+        (* Logical not: The operand should be a boolean *)
+        let o = translate_expr env operand in
+        (* TODO: insert call to adjust here *)
+        Helpers.mk_not o
+
+    | UnaryOperator {kind = Deref; operand } ->
+        let o = translate_expr env operand in
+        let t = Helpers.assert_tbuf_or_tarray o.typ in
+        with_type t @@ EBufRead (o, Helpers.zero_usize)
+
+    | UnaryOperator {kind = AddrOf; operand } ->
+        let o = translate_expr env operand in
+        with_type (TBuf (o.typ, false)) (EAddrOf o)
+
+    | UnaryOperator _ ->
+        Format.printf "Trying to translate unary operator %a@." Clang.Expr.pp e;
+        failwith "translate_expr: unary operator"
+
+    | BinaryOperator {lhs; kind = Assign; rhs} ->
+        let lhs = translate_expr env lhs in
+        let rhs = translate_expr env rhs in
+        with_type TUnit begin match lhs.node with
+        (* Special-case rewriting for buffer assignments *)
+        | EBufRead (base, index) -> EBufWrite (base, index, rhs)
+        | _ -> EAssign (lhs, rhs)
+        end
+
+    | BinaryOperator {lhs; kind; rhs} when is_assign_op kind ->
+        (* Interpreting operations as homogenous *)
+        let lhs = translate_expr env lhs in
+        let rhs = translate_expr env rhs in
+        (* TODO: looks like this is not catching the case of pointer arithmetic -- can this be
+           redirected to the case below? *)
+        let w = Helpers.assert_tint rhs.typ in
+        (* Rewrite the rhs into the compound expression, using the underlying operator *)
+        let rhs = Krml.Ast.with_type lhs.typ (EApp (assign_to_bop w kind, [lhs; rhs])) in
+        with_type TUnit begin match lhs.node with
+        (* Special-case rewriting for buffer assignments *)
+        | EBufRead (base, index) -> EBufWrite (base, index, rhs)
+        | _ -> EAssign (lhs, rhs)
+        end
+
+    | BinaryOperator {lhs; kind; rhs} ->
+        let lhs = translate_expr env lhs in
+        let rhs = translate_expr env rhs in
+        let kind = translate_binop kind in
+
+        let apply_op kind lhs rhs =
+          let w = Helpers.assert_tint lhs.typ in
+          let op = Helpers.mk_op kind w in
+          with_type lhs.typ (EApp (op, [lhs; rhs]))
+        in
+
+        (* In case of pointer arithmetic, we need to perform a rewriting into EBufSub/Diff *)
+        with_type lhs.typ begin match lhs.typ, kind with
+        | TBuf _, Add ->
+            begin match lhs.node with
+            (* Successive pointer arithmetic operations are likely due to operator precedence, e.g.,
+               ptr + n - m parsed as (ptr + n) - m, when ptr + (n - m) might be intended.
+               We recognize these cases, and normalize them to perform pointer arithmetic only once
+            *)
+            | EBufSub (lhs', rhs') ->
+                (* (lhs' + rhs') + rhs --> lhs' + (rhs' + rhs) *)
+                EBufSub (lhs', apply_op Add rhs' rhs)
+            | EBufDiff (lhs', rhs') ->
+                (* (lhs' - rhs') + rhs --> lhs' + (rhs - rhs') *)
+                EBufSub (lhs', apply_op Sub rhs rhs')
+            | _ ->
+                EBufSub (lhs, rhs)
             end
-      | _ -> failwith "a designated initializer was expected when initializing a struct"
-      in
-     EFlat (List.map translate_field_expr l)
+        | TBuf _, Sub ->
+            begin match lhs.node with
+            | EBufSub (lhs', rhs') ->
+                (* (lhs' + rhs') - rhs --> lhs' + (rhs' - rhs) *)
+                EBufSub (lhs', apply_op Sub rhs' rhs)
+            | EBufDiff (lhs', rhs') ->
+                (* (lhs' - rhs') - rhs --> lhs' - (rhs' + rhs) *)
+                EBufDiff (lhs', apply_op Add rhs' rhs)
+            | _ ->
+                EBufDiff (lhs, rhs)
+            end
+        | _ ->
+            (apply_op kind lhs rhs).node
+        end
+
+    | DeclRef {name; _} ->
+        let e = get_id_name name |> find_var env in
+        e
+        (* (1* TODO: hoist this towards a maybe_convert that can be used in other places *1) *)
+        (* let actual_t = normalize_type (typ_of_expr e) in *)
+        (* begin match actual_t, (1* expected *1) t with *)
+        (* | TInt w, TInt w' when w <> w' -> *)
+        (*     (1* Implicit cast e.g. from uint32 to size_t for array access *1) *)
+        (*     ECast (with_type actual_t e, t) *)
+        (* | TBuf (TArrow _, _), TArrow _ -> *)
+        (*     (1* The clang type is not to be trusted here, since clang sees functions as function *)
+        (*       pointers -- should this be taken care of in typ_of_expr, or normalize_type? *1) *)
+        (*     e *)
+        (* | TBuf (TUnit, _), TBuf _ -> *)
+        (*     (1* Incomplete clang information -- void* *1) *)
+        (*     e *)
+        (* | _ -> *)
+        (*     if actual_t <> t then *)
+        (*       let open Krml.PrintAst.Ops in *)
+        (*       fatal_error "Cannot cast %s (Clang type: %a) into expected type %a" (get_id_name name) ptyp actual_t ptyp t *)
+        (*     else *)
+        (*       e *)
+        (* end *)
 
 
-  | UnaryOperator {kind = PostInc | PreInc; operand } ->
-      (* This is a special case for loop increments. The current Karamel
-         extraction pipeline only supports a specific case of loops *)
-      let t = normalize_type (typ_of_expr operand) in
-      begin match t with
-      | TInt w ->
-          let o = translate_expr env t operand in
-          (* We rewrite `name++` into `name := name + 1` *)
-          EAssign (
-            o,
-            Krml.Ast.with_type t (EApp (Helpers.mk_op K.Add w, [o; Helpers.one w]))
-          )
-      | TBuf (t, _) ->
-          let o = translate_expr env t operand in
-          (* We rewrite `name++` into `name := name + 1` *)
-          EAssign (
-            o,
-            Krml.Ast.with_type t (EBufSub (o, Helpers.one SizeT))
-          )
-      | _ ->
-          failwith "cannot increment this type"
-      end
+    | Call {callee; args} when is_scylla_reset callee ->
+        begin match args with
+        | [e] -> let e = translate_expr env (typ_of_expr e) e in (Helpers.push_ignore e).node
+        | _ -> failwith "wrong number of arguments for scylla_reset"
+        end
 
-  | UnaryOperator {kind = PostDec | PreDec; operand } ->
-      (* This is a special case for loop increments. The current Karamel
-         extraction pipeline only supports a specific case of loops *)
-      let t = normalize_type (typ_of_expr operand) in
-      let w = Helpers.assert_tint t in
-      let o = translate_expr env t operand in
-      (* We rewrite `name++` into `name := name + 1` *)
-      EAssign (
-        o,
-        Krml.Ast.with_type t (EApp (Helpers.mk_op K.Sub w, [o; Helpers.one w]))
-      )
+    | Call {callee; args} when is_memcpy callee ->
+        (* Format.printf "Trying to translate memcpy %a@." Clang.Expr.pp e; *)
+        begin match args with
+        (* We are assuming here that this is __builtin___memcpy_chk.
+           This function has a fourth argument, corresponding to the number of bytes
+           remaining in dst. We omit it during the translation *)
+        | dst :: src :: len :: _ ->
+            (* TODO: The type returned by clangml for the arguments is void*.
+               However, clang-analyzer is able to find the correct type, so it should be possible to get the correct type through clangml
 
-  | UnaryOperator {kind = Not; operand } ->
-      (* Bitwise not: ~ syntax, operates on integers *)
-      let ty = typ_of_expr operand in
-      let o = translate_expr env ty operand in
-      EApp (Helpers.mk_op K.Not (Helpers.assert_tint ty), [o])
+               In the meantime, we extract it from the sizeof call
+            *)
+            let len, ty = match len.desc with
+            (* We recognize the case `len = lhs * sizeof (_)` *)
+              | BinaryOperator {lhs; kind = Mul; rhs = { desc = UnaryExpr {kind = SizeOf; argument}; _}} ->
+                  let len = translate_expr env Helpers.usize lhs in
+                  let ty = extract_sizeof_ty argument in
+                  len, ty
+              | _ -> failwith "ill-formed memcpy"
+            in
+            let dst = translate_expr env (TBuf (ty, false)) dst in
+            let src = translate_expr env (TBuf (ty, false)) src in
+            EBufBlit (src, Helpers.zerou32, dst, Helpers.zerou32, len)
 
-  | UnaryOperator {kind = LNot; operand } ->
-      (* Logical not: The operand should be a boolean *)
-      let o = translate_expr env TBool operand in
-      (Helpers.mk_not o).node
+        | _ -> failwith "memcpy does not have the right number of arguments"
+        end
 
-  | UnaryOperator {kind = Deref; operand } ->
-      let ty = Helpers.assert_tbuf (normalize_type (typ_of_expr operand)) in
-      let o = translate_expr env (TBuf (ty, false)) operand in
-      EBufRead (o, Helpers.zero_usize)
+    | Call {callee; args} when is_memset callee ->
+        (* Format.printf "Trying to translate memset %a@." Clang.Expr.pp e; *)
+        begin match args with
+        | dst :: v :: len :: _ ->
+            let len, ty = match len.desc with
+            (* We recognize the case `len = lhs * sizeof (_)` *)
+              | BinaryOperator {lhs; kind = Mul; rhs = { desc = UnaryExpr {kind = SizeOf; argument}; _}} ->
+                  let len = translate_expr env Helpers.usize lhs in
+                  let ty = extract_sizeof_ty argument in
+                  len, ty
+              | _ -> failwith "ill-formed memcpy"
+            in
+            let dst = translate_expr env (TBuf (ty, false)) dst in
+            let elt = translate_expr env ty v in
+            EBufFill (dst, elt, len)
+        | _ -> failwith "memset does not have the right number of arguments"
+        end
 
-  | UnaryOperator {kind = AddrOf; operand } ->
-      let ty = typ_of_expr operand in
-      let o = translate_expr env ty operand in
-      EAddrOf o
+    | Call {callee; args} when is_free callee ->
+        begin match args with
+        | [ptr] -> EBufFree (translate_expr env (typ_of_expr ptr) ptr)
+        | _ -> failwith "ill-formed free: too many arguments"
+        end
 
-  | UnaryOperator _ ->
-      Format.printf "Trying to translate unary operator %a@." Clang.Expr.pp e;
-      failwith "translate_expr: unary operator"
+    | Call {callee; _} when is_exit callee ->
+        (* TODO: We should likely check the exit code, and possibly translate this to
+           std::process::exit.
+           However, std::process:exit immediately terminates the process and does not
+           run destructors. As it is likely used as an abort in our usecases, we instead
+           translate it to EAbort, which will become a `panic` *)
+        EAbort (Some t, Some "")
 
-  | BinaryOperator {lhs; kind = Assign; rhs} ->
-      let lhs = translate_expr env (typ_of_expr lhs) lhs in
-      let rhs = translate_expr env (typ_of_expr rhs) rhs in
-      begin match lhs.node with
-      (* Special-case rewriting for buffer assignments *)
-      | EBufRead (base, index) -> EBufWrite (base, index, rhs)
-      | _ -> EAssign (lhs, rhs)
-      end
+    | Call {callee; args} ->
+        (* In C, a function type is a pointer. We need to strip it to retrieve
+           the standard arrow abstraction *)
+        let fun_typ = Helpers.assert_tbuf (typ_of_expr callee) in
+        (* Format.printf "Trying to translate function call %a@." Clang.Expr.pp callee; *)
+        let callee = translate_expr env fun_typ callee in
+        let args = List.map (fun x -> translate_expr env (typ_of_expr x) x) args in
+        EApp (callee, args)
 
-  | BinaryOperator {lhs; kind; rhs} when is_assign_op kind ->
-      (* TODO: looks like this is not catching the case of pointer arithmetic *)
-      let lhs_ty = typ_of_expr lhs in
-      (* Interpreting operations as homogenous *)
-      let w = Helpers.assert_tint (typ_of_expr rhs) in
-      let lhs = translate_expr env (typ_of_expr lhs) lhs in
-      let rhs = translate_expr env (typ_of_expr rhs) rhs in
-      (* Rewrite the rhs into the compound expression, using the underlying operator *)
-      let rhs = Krml.Ast.with_type lhs_ty (EApp (assign_to_bop w kind, [lhs; rhs])) in
-      begin match lhs.node with
-      (* Special-case rewriting for buffer assignments *)
-      | EBufRead (base, index) -> EBufWrite (base, index, rhs)
-      | _ -> EAssign (lhs, rhs)
-      end
+    | Cast {qual_type; operand; _} ->
+        (* Format.printf "Cast %a@."  Clang.Expr.pp e; *)
+        let typ = translate_typ qual_type in
+        let e = translate_expr env (typ_of_expr operand) operand in
+        ECast (e, typ)
 
-  | BinaryOperator {lhs; kind; rhs} ->
-      let lhs_ty = normalize_type (typ_of_expr lhs) in
-      let lhs = translate_expr env lhs_ty lhs in
-      let rhs_ty = typ_of_expr rhs in
-      let rhs = translate_expr env rhs_ty rhs in
-      let kind = translate_binop kind in
+    | ArraySubscript {base; index} ->
+        let base = translate_expr env (TBuf (t, false)) base in
+        let index = translate_expr env (TInt SizeT) index in
+        (* Is this only called on rvalues? Otherwise, might need EBufWrite *)
+        EBufRead (base, index)
 
-      let combine_arith kind lhs rhs =
-        let w = Helpers.assert_tint rhs_ty in
-        let op_type = Helpers.type_of_op kind w in
-        let op = with_type op_type (EOp (kind, w)) in
-        with_type rhs_ty (EApp (op, [lhs; rhs]))
-      in
+    | ConditionalOperator _ -> failwith "translate_expr: conditional operator"
+    | Paren _ -> failwith "translate_expr: paren"
 
-      (* In case of pointer arithmetic, we need to perform a rewriting into EBufSub/Diff *)
-      begin match lhs_ty, kind with
-      | TBuf _, Add ->
-          begin match lhs.node with
-          (* Successive pointer arithmetic operations are likely due to operator precedence, e.g.,
-             ptr + n - m parsed as (ptr + n) - m, when ptr + (n - m) might be intended.
-             We recognize these cases, and normalize them to perform pointer arithmetic only once
-          *)
-          | EBufSub (lhs', rhs') ->
-              (* (lhs' + rhs') + rhs --> lhs' + (rhs' + rhs) *)
-              EBufSub (lhs', combine_arith Add rhs' rhs)
-          | EBufDiff (lhs', rhs') ->
-              (* (lhs' - rhs') + rhs --> lhs' + (rhs - rhs') *)
-              EBufSub (lhs', combine_arith Sub rhs rhs')
-          | _ -> EBufSub (lhs, rhs)
-          end
-      | TBuf _, Sub ->
-          begin match lhs.node with
-          | EBufSub (lhs', rhs') ->
-              (* (lhs' + rhs') - rhs --> lhs' + (rhs' - rhs) *)
-              EBufSub (lhs', combine_arith Sub rhs' rhs)
-          | EBufDiff (lhs', rhs') ->
-              (* (lhs' - rhs') - rhs --> lhs' - (rhs' + rhs) *)
-              EBufDiff (lhs', combine_arith Add rhs' rhs)
-          | _ -> EBufDiff (lhs, rhs)
-          end
-      | _ ->
-        (* TODO: Likely need a "assert_tint_or_tbool" *)
-        let lhs_w = Helpers.assert_tint lhs_ty in
-        let op_type = Helpers.type_of_op kind (Helpers.assert_tint lhs_ty) in
-        let op : Krml.Ast.expr = with_type op_type (EOp (kind, lhs_w)) in
-        EApp (op, [lhs; rhs])
-      end
+    | Member {base; arrow; field} ->
+        let base = match base with
+        | None -> failwith "field accesses without a base expression are not supported"
+        | Some b -> b
+        in
+        let t_base = normalize_type (typ_of_expr base) in
+        let base = translate_expr env t_base base in
 
-  | DeclRef {name; _} ->
-      let actual_t = normalize_type (typ_of_expr e) in
-      let e = get_id_name name |> find_var env in
-      (* TODO: hoist this towards a maybe_convert that can be used in other places *)
-      begin match actual_t, (* expected *) t with
-      | TInt w, TInt w' when w <> w' ->
-          (* Implicit cast e.g. from uint32 to size_t for array access *)
-          ECast (with_type actual_t e, t)
-      | TBuf (TArrow _, _), TArrow _ ->
-          (* The clang type is not to be trusted here, since clang sees functions as function
-            pointers -- should this be taken care of in typ_of_expr, or normalize_type? *)
-          e
-      | TBuf (TUnit, _), TBuf _ ->
-          (* Incomplete clang information -- void* *)
-          e
-      | _ ->
-          if actual_t <> t then
-            let open Krml.PrintAst.Ops in
-            fatal_error "Cannot cast %s (Clang type: %a) into expected type %a" (get_id_name name) ptyp actual_t ptyp t
-          else
-            e
-      end
+        let f = match field with
+        | FieldName {desc; _} -> get_id_name desc.name
+        | _ -> failwith "member node: only field accesses supported"
+        in
 
+        if not arrow then
+          (* base.f *)
+          EField (base, f)
+        else
+          (* base->f *)
+          let deref_base = Helpers.(with_type (assert_tbuf t_base) (EBufRead (base, Helpers.zero_usize))) in
+          EField (deref_base, f)
 
-  | Call {callee; args} when is_scylla_reset callee ->
-      begin match args with
-      | [e] -> let e = translate_expr env (typ_of_expr e) e in (Helpers.push_ignore e).node
-      | _ -> failwith "wrong number of arguments for scylla_reset"
-      end
+    | UnaryExpr {kind = SizeOf; argument = ArgumentType t; _ } ->
+        begin match normalize_type (translate_typ t) with
+        | TInt w -> (Helpers.mk_sizet (Krml.Constant.bytes_of_width w)).node
+        | _ ->
+            Format.printf "Trying to translate unary expr %a@." Clang.Expr.pp e;
+            failwith "translate_expr: unary expr"
+        end
 
-  | Call {callee; args} when is_memcpy callee ->
-      (* Format.printf "Trying to translate memcpy %a@." Clang.Expr.pp e; *)
-      begin match args with
-      (* We are assuming here that this is __builtin___memcpy_chk.
-         This function has a fourth argument, corresponding to the number of bytes
-         remaining in dst. We omit it during the translation *)
-      | dst :: src :: len :: _ ->
-          (* TODO: The type returned by clangml for the arguments is void*.
-             However, clang-analyzer is able to find the correct type, so it should be possible to get the correct type through clangml
-
-             In the meantime, we extract it from the sizeof call
-          *)
-          let len, ty = match len.desc with
-          (* We recognize the case `len = lhs * sizeof (_)` *)
-            | BinaryOperator {lhs; kind = Mul; rhs = { desc = UnaryExpr {kind = SizeOf; argument}; _}} ->
-                let len = translate_expr env Helpers.usize lhs in
-                let ty = extract_sizeof_ty argument in
-                len, ty
-            | _ -> failwith "ill-formed memcpy"
-          in
-          let dst = translate_expr env (TBuf (ty, false)) dst in
-          let src = translate_expr env (TBuf (ty, false)) src in
-          EBufBlit (src, Helpers.zerou32, dst, Helpers.zerou32, len)
-
-      | _ -> failwith "memcpy does not have the right number of arguments"
-      end
-
-  | Call {callee; args} when is_memset callee ->
-      (* Format.printf "Trying to translate memset %a@." Clang.Expr.pp e; *)
-      begin match args with
-      | dst :: v :: len :: _ ->
-          let len, ty = match len.desc with
-          (* We recognize the case `len = lhs * sizeof (_)` *)
-            | BinaryOperator {lhs; kind = Mul; rhs = { desc = UnaryExpr {kind = SizeOf; argument}; _}} ->
-                let len = translate_expr env Helpers.usize lhs in
-                let ty = extract_sizeof_ty argument in
-                len, ty
-            | _ -> failwith "ill-formed memcpy"
-          in
-          let dst = translate_expr env (TBuf (ty, false)) dst in
-          let elt = translate_expr env ty v in
-          EBufFill (dst, elt, len)
-      | _ -> failwith "memset does not have the right number of arguments"
-      end
-
-  | Call {callee; args} when is_free callee ->
-      begin match args with
-      | [ptr] -> EBufFree (translate_expr env (typ_of_expr ptr) ptr)
-      | _ -> failwith "ill-formed free: too many arguments"
-      end
-
-  | Call {callee; _} when is_exit callee ->
-      (* TODO: We should likely check the exit code, and possibly translate this to
-         std::process::exit.
-         However, std::process:exit immediately terminates the process and does not
-         run destructors. As it is likely used as an abort in our usecases, we instead
-         translate it to EAbort, which will become a `panic` *)
-      EAbort (Some t, Some "")
-
-  | Call {callee; args} ->
-      (* In C, a function type is a pointer. We need to strip it to retrieve
-         the standard arrow abstraction *)
-      let fun_typ = Helpers.assert_tbuf (typ_of_expr callee) in
-      (* Format.printf "Trying to translate function call %a@." Clang.Expr.pp callee; *)
-      let callee = translate_expr env fun_typ callee in
-      let args = List.map (fun x -> translate_expr env (typ_of_expr x) x) args in
-      EApp (callee, args)
-
-  | Cast {qual_type; operand; _} ->
-      (* Format.printf "Cast %a@."  Clang.Expr.pp e; *)
-      let typ = translate_typ qual_type in
-      let e = translate_expr env (typ_of_expr operand) operand in
-      ECast (e, typ)
-
-  | ArraySubscript {base; index} ->
-      let base = translate_expr env (TBuf (t, false)) base in
-      let index = translate_expr env (TInt SizeT) index in
-      (* Is this only called on rvalues? Otherwise, might need EBufWrite *)
-      EBufRead (base, index)
-
-  | ConditionalOperator _ -> failwith "translate_expr: conditional operator"
-  | Paren _ -> failwith "translate_expr: paren"
-
-  | Member {base; arrow; field} ->
-      let base = match base with
-      | None -> failwith "field accesses without a base expression are not supported"
-      | Some b -> b
-      in
-      let t_base = normalize_type (typ_of_expr base) in
-      let base = translate_expr env t_base base in
-
-      let f = match field with
-      | FieldName {desc; _} -> get_id_name desc.name
-      | _ -> failwith "member node: only field accesses supported"
-      in
-
-      if not arrow then
-        (* base.f *)
-        EField (base, f)
-      else
-        (* base->f *)
-        let deref_base = Helpers.(with_type (assert_tbuf t_base) (EBufRead (base, Helpers.zero_usize))) in
-        EField (deref_base, f)
-
-  | UnaryExpr {kind = SizeOf; argument = ArgumentType t; _ } ->
-      begin match normalize_type (translate_typ t) with
-      | TInt w -> (Helpers.mk_sizet (Krml.Constant.bytes_of_width w)).node
-      | _ ->
-          Format.printf "Trying to translate unary expr %a@." Clang.Expr.pp e;
-          failwith "translate_expr: unary expr"
-      end
-
-  | _ ->
-    Format.eprintf "Trying to translate expression %a@." Clang.Expr.pp e;
-    failwith "translate_expr: unsupported expression"
-
-and translate_expr (env: env) (t: typ) (e: expr) : Krml.Ast.expr =
-  Krml.Ast.with_type t (translate_expr' env t e)
+    | _ ->
+      Format.eprintf "Trying to translate expression %a@." Clang.Expr.pp e;
+      failwith "translate_expr: unsupported expression"
 
 (* Create a default value associated to a given type [typ] *)
 let create_default_value typ = match typ with
@@ -1113,6 +1102,22 @@ let name_of_decl (decl: decl): string =
   | Var desc -> desc.var_name
   | _ -> "unknown"
 
+(* When writing `typedef struct S { ... } T;` in C, we actually see two declarations:
+  - first, one for the `struct S { ... }` part (case RecordDecl)
+  - second, one for the the `typedef struct S T;` part (case TypedefDecl).
+  When visiting the first case, we generate the krml `type_decl` body, and store it in `struct_map`.
+  When visiting the second case, we retrieve the `type_decl` and construct a `DType` node.
+
+  This function performs the second task. *)
+let elaborate_typ (typ: qual_type) = match typ.desc with
+  | Elaborated { keyword = Struct; named_type = { desc = Record {name; _}; _}; _ } ->
+      let name = get_id_name name in
+      StructMap.find name !struct_map
+  (* TODO: Similar workflow as structs *)
+  | Elaborated { keyword = Enum; _} -> failwith "elaborated enums not supported"
+  | Elaborated _ -> failwith "elaborated types that are not enums or structs are not supported"
+  | _ -> failwith "The underlying type of a typedef is not an elaborated type"
+
 (* Returning an option is only a hack to make progress.
    TODO: Proper handling of  decls *)
 let translate_decl (decl: decl) =
@@ -1265,7 +1270,12 @@ let add_lident_mapping (decl: decl) (filename: string) =
           Some path)
         !name_map;
       (* To normalize correctly, we might need to retrieve types beyond the file currently
-         being translated. We thus construct this map here rather than during type declaration translation *)
+         being translated. We thus construct this map here rather than during type declaration
+         translation.
+
+         We substitute type abbreviations on the fly, via normalize_type. This allows us to match
+         synthesized type against expected type accurately during the translation, which in turn
+         allows us to insert casts in suitable places. *)
       let lid = path, tdecl.name in
       begin match tdecl.underlying_type.desc with
       | BuiltinType _ | Typedef _ | Pointer _ as t ->
@@ -1285,6 +1295,10 @@ let add_lident_mapping (decl: decl) (filename: string) =
             !abbrev_map;
 
       | Elaborated { keyword = Struct; named_type = { desc = Record {name; _}; _}; _ } ->
+          (* When writing `typedef Struct S { ... } T;` in C, we see a RecordDecl (`struct S { ... };`)
+             *and* a TypedefDecl (`typedef struct S T;`). This is the latter. We record a mapping
+             `struct S` ~~> `T` in our map, so that occurrence of the type `struct S` in the Clang
+             AST become nominal types `T` in the krml Ast. *)
           Krml.KPrint.bprintf "struct %s maps to %a\n" (get_id_name name) Krml.PrintAst.Ops.plid lid;
           elaborated_map := ElaboratedMap.add (name, `Struct) lid !elaborated_map
 
