@@ -51,12 +51,14 @@ let boxed_types = ref LidSet.empty
 
 type env = {
   (* Variables in the context *)
-  vars: (string * typ) list
+  vars: (string * typ) list;
+  (* Expected return typ of the function *)
+  ret_t: typ;
 }
 
-let empty_env = {vars = []}
+let empty_env = {vars = []; ret_t = TAny}
 
-let add_var env var = {vars = var :: env.vars }
+let add_var env var = {env with vars = var :: env.vars }
 
 (* TODO: Handle fully qualified names/namespaces/different files. *)
 let find_var env name =
@@ -893,16 +895,17 @@ let translate_vardecl_malloc (env: env) (vdecl: var_decl_desc) (s: stmt_desc)
 
 
 
-let rec translate_stmt' (env: env) (ret_t: typ) (s: stmt_desc) : expr' = match s with
+let rec translate_stmt (env: env) (s: Clang.Ast.stmt_desc) : Krml.Ast.expr =
+  match s with
   (* This is a null statement, not a null pointer. It corresponds to a no-op *)
-  | Null -> EUnit
+  | Null -> Helpers.eunit
 
   | Compound l -> begin match l with
-    | [] -> EUnit
+    | [] -> Helpers.eunit
     | [{desc = Decl [{desc = Var vdecl; _ }]; _}] ->
         let _, b, e = translate_vardecl env vdecl in
-        ELet (b, e, Helpers.eunit)
-    | [stmt] -> translate_stmt' env TUnit stmt.desc
+        with_type TUnit (ELet (b, e, Helpers.eunit))
+    | [stmt] -> translate_stmt env stmt.desc
     | hd :: tl -> match hd.desc, (List.hd tl).desc with
       (* Special case when we have a variable declaration followed by a
          memset: this likely corresponds to an array initialization *)
@@ -1035,9 +1038,6 @@ let rec translate_stmt' (env: env) (ret_t: typ) (s: stmt_desc) : expr' = match s
   | Try _ -> failwith "translate_stmt: try"
   | AttributedStmt _ -> failwith "translate_stmt: AttributedStmt"
   | UnknownStmt _ -> failwith "translate_stmt: UnknownStmt"
-
-and translate_stmt (env: env) (ret_t: typ) (s: stmt_desc) : Krml.Ast.expr =
-  Krml.Ast.with_type ret_t (translate_stmt' env ret_t s)
 
 (* Translate case and default statements inside a switch to a list of branches for
    structured pattern-matching.
