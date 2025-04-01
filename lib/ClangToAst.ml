@@ -425,6 +425,7 @@ end
 
 open ClangHelpers
 
+
 (* EXPRESSIONS *)
 
 let assign_to_bop w (kind: Clang.Ast.binary_operator_kind) : Krml.Ast.expr =
@@ -484,6 +485,40 @@ let translate_binop (kind: Clang.Ast.binary_operator_kind) : K.op = match kind w
 
   | Comma -> failwith "translate_binop: comma"
   | InvalidBinaryOperator -> failwith "translate_binop: invalid binop"
+
+(* Adjust the type of expression `e` to be `t`. We synthesize types bottom-up, but sometimes, the
+   context provides an expected type. So far, this happens in three situations:
+   - condition expressions, which krml wants to be booleans, but which in C are integers
+   - array indices, and operands of memory-related operations (e.g. memcpy), which in C might be ULL
+     constants (i.e., synthesized as UInt64 bottom-up), but which need to be SizeT
+   - enum tags, which are integers in C, but in krml need to be converted to constants. *)
+let adjust e t =
+  match e.node, t with
+  (* Conversions to integers: we rewrite constants on the fly, or emit a cast. *)
+  | EConstant (_, c), TInt w ->
+      with_type t (EConstant (w, c))
+  | _, TInt _ ->
+      if e.typ <> t then
+        with_type t (ECast (e, t))
+      else
+        e
+
+  (* Conversions to booleans: we rewrite constants on the fly, or emit `e != 0` *)
+  | EConstant (_, "0"), TBool ->
+      with_type TBool (EBool false)
+  | EConstant (_, "1"), TBool ->
+      with_type TBool (EBool true)
+  | _, TBool ->
+      if e.typ <> t then
+        let w = Helpers.assert_tint e.typ in
+        Helpers.mk_neq e (Helpers.zero w)
+      else
+        e
+
+  | _ ->
+      if e.typ <> t then
+        fatal_error "Could not convert expression %a to have type %a" pexpr e ptyp t;
+      e
 
 (* Translate expression [e].
 
@@ -590,8 +625,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
     | UnaryOperator {kind = LNot; operand } ->
         (* Logical not: The operand should be a boolean *)
         let o = translate_expr env operand in
-        (* TODO: insert call to adjust here *)
-        Helpers.mk_not o
+        Helpers.mk_not (adjust o TBool)
 
     | UnaryOperator {kind = Deref; operand } ->
         let o = translate_expr env operand in
@@ -638,13 +672,13 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
         let apply_op kind lhs rhs =
           let w = Helpers.assert_tint lhs.typ in
           let op = Helpers.mk_op kind w in
-          with_type lhs.typ (EApp (op, [lhs; rhs]))
+          with_type (fst (Helpers.flatten_arrow op.typ)) (EApp (op, [lhs; rhs]))
         in
 
         (* In case of pointer arithmetic, we need to perform a rewriting into EBufSub/Diff *)
-        with_type lhs.typ begin match lhs.typ, kind with
+        begin match lhs.typ, kind with
         | TBuf _, Add ->
-            begin match lhs.node with
+            with_type lhs.typ begin match lhs.node with
             (* Successive pointer arithmetic operations are likely due to operator precedence, e.g.,
                ptr + n - m parsed as (ptr + n) - m, when ptr + (n - m) might be intended.
                We recognize these cases, and normalize them to perform pointer arithmetic only once
@@ -659,7 +693,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
                 EBufSub (lhs, rhs)
             end
         | TBuf _, Sub ->
-            begin match lhs.node with
+            with_type lhs.typ begin match lhs.node with
             | EBufSub (lhs', rhs') ->
                 (* (lhs' + rhs') - rhs --> lhs' + (rhs' - rhs) *)
                 EBufSub (lhs', apply_op Sub rhs' rhs)
@@ -670,7 +704,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
                 EBufDiff (lhs, rhs)
             end
         | _ ->
-            (apply_op kind lhs rhs).node
+            apply_op kind lhs rhs
         end
 
     | DeclRef {name; _} ->
@@ -720,8 +754,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
             let len, _ty = match len.desc with
             (* We recognize the case `len = lhs * sizeof (_)` *)
               | BinaryOperator {lhs; kind = Mul; rhs = { desc = UnaryExpr {kind = SizeOf; argument}; _}} ->
-                  (* TODO: adjust to usize *)
-                  let len = translate_expr env lhs in
+                  let len = adjust (translate_expr env lhs) (TInt SizeT) in
                   let ty = extract_sizeof_ty argument in
                   len, ty
               | _ -> failwith "ill-formed memcpy"
@@ -740,8 +773,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
             let len, _ty = match len.desc with
             (* We recognize the case `len = lhs * sizeof (_)` *)
               | BinaryOperator {lhs; kind = Mul; rhs = { desc = UnaryExpr {kind = SizeOf; argument}; _}} ->
-                  (* TODO: adjust to usize *)
-                  let len = translate_expr env lhs in
+                  let len = adjust (translate_expr env lhs) (TInt SizeT) in
                   let ty = extract_sizeof_ty argument in
                   len, ty
               | _ -> failwith "ill-formed memcpy"
@@ -770,9 +802,9 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
         (* Format.printf "Trying to translate function call %a@." Clang.Expr.pp callee; *)
         let callee = translate_expr env callee in
         (* TODO: adjust the type of the callee to strip the pointer *)
+        (* NOTE: should not be necessary since the map is constructed properly without the pointer *)
         let args = List.map (fun x -> translate_expr env x) args in
-        (* TODO: use the return type from the type of callee *)
-        with_type (typ_from_clang e) (EApp (callee, args))
+        with_type (fst (Helpers.flatten_arrow callee.typ)) (EApp (callee, args))
 
     | Cast {qual_type; operand; _} ->
         (* Format.printf "Cast %a@."  Clang.Expr.pp e; *)
@@ -782,8 +814,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
 
     | ArraySubscript {base; index} ->
         let base = translate_expr env base in
-        (* TODO: adjust to SizeT *)
-        let index = translate_expr env index in
+        let index = adjust (translate_expr env index) (TInt SizeT) in
         (* Is this only called on rvalues? Otherwise, might need EBufWrite *)
         with_type (Helpers.assert_tbuf_or_tarray base.typ) (EBufRead (base, index))
 
@@ -879,8 +910,7 @@ let translate_vardecl (env: env) (vdecl: var_decl_desc) : env * binder * Krml.As
   | Some {desc = Cast {operand = {desc = Call {callee; args}; _}; _}; _} when is_calloc callee ->
       begin match args with
       | [len; {desc = UnaryExpr {kind = SizeOf; argument}; _}] ->
-          let len = translate_expr env len in
-          (* TODO: adjust usize *)
+          let len = adjust (translate_expr env len) (TInt SizeT) in
           (* Sanity check: calloc is of the right type *)
           let ty = Helpers.assert_tbuf typ in
           assert (extract_sizeof_ty argument = ty);
@@ -917,7 +947,7 @@ let translate_vardecl_with_memset (env: env) (vdecl: var_decl_desc) (args: expr 
     | ConstantArray {element; size_as_expr; _} ->
         let size = match size_as_expr with
         | None -> failwith "Length of constant array is not an expr"
-        | Some size -> translate_expr env size (* TODO: adjust to usize *)
+        | Some size -> adjust (translate_expr env size) (TInt SizeT)
         in
         TBuf (translate_typ element, false), size
     | _ ->
@@ -939,8 +969,7 @@ let translate_vardecl_with_memset (env: env) (vdecl: var_decl_desc) (args: expr 
       | _ -> failwith "memset length is not of the shape `N * sizeof(ty)`"
       in
       let v = translate_expr env v in
-      (* TODO: adjust usize *)
-      let len = translate_expr env len in
+      let len = adjust (translate_expr env len) (TInt SizeT) in
       (* Types might have been inferred differently, we only compare the expressions *)
       if len.node = size.node then
         add_var env (vname, typ),
@@ -1053,8 +1082,7 @@ let rec translate_stmt (env: env) (s: Clang.Ast.stmt_desc) : Krml.Ast.expr =
           | Decl [{desc = Var vdecl; _}] ->
             let env, b, init = translate_vardecl env vdecl in
             (* Cannot use type_of_expr cond here since C uses `int` but we want bool *)
-            let cond = translate_expr env cond in
-            (* TODO: adjust bool cond *)
+            let cond = adjust (translate_expr env cond) TBool in
             let inc = translate_stmt env inc.desc in
             let body = translate_stmt env body.desc in
             with_type TUnit (EFor (b, init, cond, inc, body))
@@ -1080,8 +1108,7 @@ let rec translate_stmt (env: env) (s: Clang.Ast.stmt_desc) : Krml.Ast.expr =
       (* These two fields should be specific to C++ *)
       assert (init = None);
       assert (condition_variable = None);
-      (* TODO adjust to bool *)
-      let cond = translate_expr env cond in
+      let cond = adjust (translate_expr env cond) TBool in
       let then_b = translate_stmt env then_branch.desc in
       let else_b = match else_branch with
         | None -> Helpers.eunit
@@ -1103,15 +1130,7 @@ let rec translate_stmt (env: env) (s: Clang.Ast.stmt_desc) : Krml.Ast.expr =
   | Default _ -> failwith "default not encapsulated in a switch"
 
   | While { condition_variable = _; cond; body } ->
-      let cond_ty = typ_of_expr cond in
-      let cond = translate_expr env cond in
-      let cond = match cond_ty with
-        | TBool -> cond
-        | TInt w ->
-          (* If we have an integer expression [e], the condition is equivalent to `e != 0` *)
-          Helpers.mk_neq cond (Helpers.zero w)
-        | _ -> failwith "incorrect type for while condition"
-      in
+      let cond = adjust (translate_expr env cond) TBool in
       let body = translate_stmt env body.desc in
       with_type TUnit (EWhile (cond, body))
 
@@ -1119,16 +1138,7 @@ let rec translate_stmt (env: env) (s: Clang.Ast.stmt_desc) : Krml.Ast.expr =
     (* The do statements first executes the body before behaving as a while loop.
        We thus translate it as a sequence of the body and the corresponding while loop *)
     let body = translate_stmt env body.desc in
-    (* TODO: Likely need to translate int conditions to boolean expressions *)
-    let cond_ty = typ_of_expr cond in
-    let cond = translate_expr env cond in
-    let cond = match cond_ty with
-      | TBool -> cond
-      | TInt w ->
-        (* If we have an integer expression [e], the condition is equivalent to `e != 0` *)
-        Helpers.mk_neq cond (Helpers.zero w)
-      | _ -> failwith "incorrect type for while condition"
-    in
+    let cond = adjust (translate_expr env cond) TBool in
     if is_trivial_false cond then body else
       with_type TUnit (ESequence [
         body;
