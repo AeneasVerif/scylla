@@ -400,6 +400,7 @@ module ClangHelpers = struct
   let is_trivial_false (e: Krml.Ast.expr) = match e.node with
     (* e != e is always false *)
     | EApp ({node = EOp (Neq, _); _ }, [e1; e2]) when e1 = e2 -> true
+    | EBool false -> true
     | _ -> false
 
   let extract_sizeof_ty = function
@@ -444,8 +445,7 @@ let assign_to_bop w (kind: Clang.Ast.binary_operator_kind) : Krml.Ast.expr =
   | OrAssign -> BOr
   | _ -> failwith "not an assign op"
   in
-  (* TODO: Infer width and type from types of operands *)
-  Krml.Ast.with_type (TInt w) (EOp (op, w))
+  Helpers.mk_op op w
 
 let translate_binop (kind: Clang.Ast.binary_operator_kind) : K.op = match kind with
   | PtrMemD | PtrMemI -> failwith "translate_binop: ptr mem"
@@ -514,6 +514,8 @@ let adjust e t =
         Helpers.mk_neq e (Helpers.zero w)
       else
         e
+
+  (* TODO: tag indices *)
 
   | _ ->
       if e.typ <> t then
@@ -711,27 +713,6 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
         let e = get_id_name name |> find_var env in
         (* TODO: should this be done more generally? *)
         { e with typ = normalize_type e.typ }
-        (* (1* TODO: hoist this towards a maybe_convert that can be used in other places *1) *)
-        (* let actual_t = normalize_type (typ_of_expr e) in *)
-        (* begin match actual_t, (1* expected *1) t with *)
-        (* | TInt w, TInt w' when w <> w' -> *)
-        (*     (1* Implicit cast e.g. from uint32 to size_t for array access *1) *)
-        (*     ECast (with_type actual_t e, t) *)
-        (* | TBuf (TArrow _, _), TArrow _ -> *)
-        (*     (1* The clang type is not to be trusted here, since clang sees functions as function *)
-        (*       pointers -- should this be taken care of in typ_of_expr, or normalize_type? *1) *)
-        (*     e *)
-        (* | TBuf (TUnit, _), TBuf _ -> *)
-        (*     (1* Incomplete clang information -- void* *1) *)
-        (*     e *)
-        (* | _ -> *)
-        (*     if actual_t <> t then *)
-        (*       let open Krml.PrintAst.Ops in *)
-        (*       fatal_error "Cannot cast %s (Clang type: %a) into expected type %a" (get_id_name name) ptyp actual_t ptyp t *)
-        (*     else *)
-        (*       e *)
-        (* end *)
-
 
     | Call {callee; args} when is_scylla_reset callee ->
         begin match args with
@@ -1081,6 +1062,7 @@ let rec translate_stmt (env: env) (s: Clang.Ast.stmt_desc) : Krml.Ast.expr =
           begin match init.desc with
           | Decl [{desc = Var vdecl; _}] ->
             let env, b, init = translate_vardecl env vdecl in
+            let b = Helpers.mark_mut b in
             (* Cannot use type_of_expr cond here since C uses `int` but we want bool *)
             let cond = adjust (translate_expr env cond) TBool in
             let inc = translate_stmt env inc.desc in
@@ -1131,8 +1113,11 @@ let rec translate_stmt (env: env) (s: Clang.Ast.stmt_desc) : Krml.Ast.expr =
 
   | While { condition_variable = _; cond; body } ->
       let cond = adjust (translate_expr env cond) TBool in
-      let body = translate_stmt env body.desc in
-      with_type TUnit (EWhile (cond, body))
+      if is_trivial_false cond then
+        Helpers.eunit
+      else
+        let body = translate_stmt env body.desc in
+        with_type TUnit (EWhile (cond, body))
 
   | Do { body; cond } ->
     (* The do statements first executes the body before behaving as a while loop.

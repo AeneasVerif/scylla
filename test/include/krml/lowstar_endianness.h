@@ -195,6 +195,7 @@ inline static void store64(uint8_t *b, uint64_t i) {
 #define store16_be(b, i) (store16(b, htobe16(i)))
 
 __attribute__((annotate("scylla_opaque")))
+__attribute__((annotate("scylla_mutability(mut)"))) // FIXME
 inline static uint32_t load32_le(uint8_t *b) {
   return le32toh(load32(b));
 }
@@ -206,6 +207,7 @@ inline static void store32_le(uint8_t *b, uint32_t i) {
 }
 
 __attribute__((annotate("scylla_opaque")))
+__attribute__((annotate("scylla_mutability(mut)"))) // FIXME
 inline static uint32_t load32_be(uint8_t *b) {
   return be32toh(load32(b));
 }
@@ -222,6 +224,7 @@ inline static void store32_be(uint8_t *b, uint32_t i) {
 // #define store32_be(b, i) (store32(b, htobe32(i)))
 
 __attribute__((annotate("scylla_opaque")))
+__attribute__((annotate("scylla_mutability(mut)"))) // FIXME
 inline static uint64_t load64_le(uint8_t *b) {
   return le64toh(load64(b));
 }
@@ -233,6 +236,7 @@ inline static void store64_le(uint8_t *b, uint64_t i) {
 }
 
 __attribute__((annotate("scylla_opaque")))
+__attribute__((annotate("scylla_mutability(mut)"))) // FIXME
 inline static uint64_t load64_be(uint8_t *b) {
   return be64toh(load64(b));
 }
