@@ -22,6 +22,8 @@ module ElaboratedMap = Map.Make(struct
   let compare = compare
 end)
 
+(* GLOBAL STATE *)
+
 (* A map from function names to the string list used in their fully qualified
    name. It is filled at the beginning of the translation, when exploring the
    translation unit *)
@@ -51,6 +53,9 @@ let abbrev_map = ref LidMap.empty
 (* A map storing types that are annotated with `scylla_box`, indicating
    that internal pointers should be translated to Boxes instead of borrows *)
 let boxed_types = ref LidSet.empty
+
+
+(* ENVIRONMENTS *)
 
 type env = {
   (* Variables in the context *)
@@ -84,6 +89,8 @@ let find_var env name =
           Printf.eprintf "Could not find variable %s\n" name;
           raise Not_found
 
+(* TYPES *)
+
 let get_id_name (dname: declaration_name) = match dname with
   | IdentifierName s -> s
   | ConstructorName _ -> failwith "constructor"
@@ -93,70 +100,6 @@ let get_id_name (dname: declaration_name) = match dname with
   | OperatorName _ -> failwith "operator name"
   | LiteralOperatorName _ -> failwith "literal operator name"
   | UsingDirectiveName -> failwith "using directive"
-
-let is_assign_op (kind: Clang.Ast.binary_operator_kind) = match kind with
-  | Assign | AddAssign | MulAssign | DivAssign | RemAssign
-  | SubAssign | ShlAssign | ShrAssign | AndAssign
-  | XorAssign | OrAssign -> true
-  | _ -> false
-
-let assign_to_bop w (kind: Clang.Ast.binary_operator_kind) : Krml.Ast.expr =
-  let op = match kind with
-  (* TODO: Might need to disambiguate for pointer arithmetic *)
-  | AddAssign -> K.Add
-  | MulAssign -> Mult
-  | DivAssign -> Div
-  | RemAssign -> Mod
-  | SubAssign -> Sub
-  | ShlAssign -> BShiftL
-  | ShrAssign -> BShiftR
-  | AndAssign -> BAnd
-  (* TODO: Disambiguate *)
-  | XorAssign -> BXor
-  | OrAssign -> BOr
-  | _ -> failwith "not an assign op"
-  in
-  (* TODO: Infer width and type from types of operands *)
-  Krml.Ast.with_type (TInt w) (EOp (op, w))
-
-let translate_binop (kind: Clang.Ast.binary_operator_kind) : K.op = match kind with
-  | PtrMemD | PtrMemI -> failwith "translate_binop: ptr mem"
-
-  (* Disambiguation for pointer arithmetic must be done when calling translate_binop:
-     This is a deeper rewriting than just disambiguating between two K.op *)
-  | Add -> Add
-  | Sub -> Sub
-  | Mul -> Mult
-  | Div -> Div
-  | Rem -> Mod
-
-  | Shl -> BShiftL
-  | Shr -> BShiftR
-
-  | Cmp -> failwith "translate_binop: cmp"
-
-  | LT -> Lt
-  | GT -> Gt
-  | LE -> Lte
-  | GE -> Gte
-  | EQ -> Eq
-  | NE -> Neq
-
-  | And -> BAnd
-  (* TODO: How to distinguish between Xor and BXor? Likely need typing info from operands *)
-  | Xor -> BXor
-  | Or -> BOr
-
-  | LAnd -> And
-  | LOr -> Or
-
-  | Assign | AddAssign | MulAssign | DivAssign | RemAssign
-  | SubAssign | ShlAssign | ShrAssign | AndAssign
-  | XorAssign | OrAssign ->
-      failwith "Assign operators should have been previously rewritten"
-
-  | Comma -> failwith "translate_binop: comma"
-  | InvalidBinaryOperator -> failwith "translate_binop: invalid binop"
 
 let translate_typ_name = function
   | "size_t" -> Helpers.usize
@@ -359,111 +302,6 @@ let rec translate_typ (typ: qual_type) = match typ.desc with
 (* Takes a Clangml expression [e], and retrieves the corresponding karamel Ast type *)
 let typ_of_expr (e: expr) : typ = Clang.Type.of_node e |> translate_typ
 
-(* Check whether a given Clang expression is a scylla_reset callee *)
-let is_scylla_reset (e: expr) = match e.desc with
-  | DeclRef { name; _ } ->
-      let name = get_id_name name in
-      name = "scylla_reset"
-  | _ -> false
-
-(* Check whether a given Clang expression is a memcpy callee *)
-let is_memcpy (e: expr) = match e.desc with
-  | DeclRef { name; _ } ->
-      let name = get_id_name name in
-      name = "__builtin___memcpy_chk" || name = "memcpy"
-  | _ -> false
-
-(* Check whether a given Clang expression is a memset callee *)
-let is_memset (e: expr) = match e.desc with
-  | DeclRef { name; _ } ->
-      let name = get_id_name name in
-      name = "__builtin___memset_chk" || name = "memset"
-  | _ -> false
-
-(* Check whether a given Clang expression is a calloc callee *)
-let is_calloc (e: expr) = match e.desc with
-  | DeclRef { name; _ } ->
-      let name = get_id_name name in
-      name = "calloc"
-  | _ -> false
-
-(* Check whether a given Clang expression is a malloc callee *)
-let is_malloc (e: expr) = match e.desc with
-  | DeclRef { name; _ } ->
-      let name = get_id_name name in
-      name = "malloc"
-  | _ -> false
-
-(* Check whether a given Clang expression is a free callee *)
-let is_free (e: expr) = match e.desc with
-  | DeclRef { name; _ } ->
-      let name = get_id_name name in
-      name = "free"
-  | _ -> false
-
-(* Check whether a given Clang expression is an exit callee *)
-let is_exit (e: expr) = match e.desc with
-  | DeclRef { name; _ } ->
-      let name = get_id_name name in
-      name = "exit"
-  | _ -> false
-
-
-(* Check whether a variable declaration has a malloc initializer. If so,
-   we will rewrite it based on the initializer that follows *)
-let is_malloc_vdecl (vdecl: var_decl_desc) = match vdecl.var_init with
-  | Some {desc = Call {callee; _}; _}
-  (* There commonly is a cast around malloc to the type of the variable. We omit it when translating it to Rust,
-     as the allocation will be typed *)
-  | Some {desc = Cast {operand = {desc = Call {callee; _}; _}; _}; _} when is_malloc callee ->
-      true
-
-  | _ -> false
-
-(* Check whether expression [e] is a pointer *)
-let has_pointer_type (e: expr) = match typ_of_expr e with
-  | TBuf _ | TArray _ -> true
-  | _ -> false
-
-(* Recognize several common patterns for the null pointer *)
-let rec is_null (e: expr) = match e.desc with
-  | Cast { qual_type = {desc = Pointer { desc = BuiltinType Void; _}; _} ; operand = {desc = IntegerLiteral (Int 0); _}; _ } -> true
-  | _ -> false
-
-let is_null_check var_name (e: expr) = match e.desc with
-  | BinaryOperator {lhs = {desc = DeclRef { name; _}; _}; kind = NE; rhs } ->
-      if get_id_name name = var_name && is_null rhs then true else false
-  | _ -> false
-
-(* Check whether statement [s] corresponds to a malloc initializer for
-   , which
-    will therefore be rewritten in combination with malloc to generate
-    a standard array or Vec declaration in Rust *)
-let is_malloc_initializer (vdecl: var_decl_desc) (s: stmt_desc) = match s with
-  | If { cond; _ } when is_null_check vdecl.var_name cond -> true (* {cond; then_branch; else_branch; _} -> true *)
-  | _ -> false
-
-(* Simple heuristics to detect whether a loop condition is always false, in this case we can omit the loop.
-   TODO: Should probably check for absence of side-effects in condition evaluation *)
-let is_trivial_false (e: Krml.Ast.expr) = match e.node with
-  (* e != e is always false *)
-  | EApp ({node = EOp (Neq, _); _ }, [e1; e2]) when e1 = e2 -> true
-  | _ -> false
-
-let extract_sizeof_ty = function
-  | ArgumentExpr _ -> failwith "ArgumentExpr not supported"
-  | ArgumentType ty -> translate_typ ty
-
-let extract_constarray_size (ty: qual_type) = match ty.desc with
-  | ConstantArray {size; _} -> size, Helpers.mk_uint32 size
-  | _ ->
-      Format.eprintf "Expected ConstantArray, got type %a\n" Clang.Type.pp ty;
-      failwith "Type is not a ConstantArray"
-
-let is_constantarray (ty: qual_type) = match ty.desc with
-  | ConstantArray _ -> true
-  | _ -> false
-
 let rec normalize_type t =
   match t with
   | TQualified lid ->
@@ -489,6 +327,163 @@ let rec normalize_type t =
    Every other type should be able to be deduced from the context. *)
 let typ_from_clang (e: Clang.Ast.expr): typ =
   normalize_type (typ_of_expr e)
+
+
+(* HELPERS *)
+
+(* Helpers to deal with the Clang AST, as opposed to Helpers which deals with the Krml AST. *)
+module ClangHelpers = struct
+
+  let is_known_name name' (e: expr) = match e.desc with
+    | DeclRef { name; _ } ->
+        let name = get_id_name name in
+        name = name'
+    | _ -> false
+
+  (* Check whether a given Clang expression is a scylla_reset callee *)
+  let is_scylla_reset = is_known_name "scylla_reset"
+
+  (* Check whether a given Clang expression is a memcpy callee *)
+  let is_memcpy e = is_known_name "__builtin___memcpy_chk" e || is_known_name "memcpy" e
+
+  (* Check whether a given Clang expression is a memset callee *)
+  let is_memset e = is_known_name "__builtin___memset_chk" e || is_known_name "memset" e
+
+  (* Check whether a given Clang expression is a calloc callee *)
+  let is_calloc = is_known_name "calloc"
+
+  (* Check whether a given Clang expression is a malloc callee *)
+  let is_malloc = is_known_name "malloc"
+
+  (* Check whether a given Clang expression is a free callee *)
+  let is_free = is_known_name "free"
+
+  (* Check whether a given Clang expression is an exit callee *)
+  let is_exit = is_known_name "exit"
+
+  (* Check whether a variable declaration has a malloc initializer. If so,
+     we will rewrite it based on the initializer that follows *)
+  let is_malloc_vdecl (vdecl: var_decl_desc) = match vdecl.var_init with
+    | Some {desc = Call {callee; _}; _}
+    (* There commonly is a cast around malloc to the type of the variable. We omit it when translating it to Rust,
+       as the allocation will be typed *)
+    | Some {desc = Cast {operand = {desc = Call {callee; _}; _}; _}; _} when is_malloc callee ->
+        true
+
+    | _ -> false
+
+  (* Check whether expression [e] is a pointer *)
+  let has_pointer_type (e: expr) = match typ_of_expr e with
+    | TBuf _ | TArray _ -> true
+    | _ -> false
+
+  (* Recognize several common patterns for the null pointer *)
+  let rec is_null (e: expr) = match e.desc with
+    | Cast { qual_type = {desc = Pointer { desc = BuiltinType Void; _}; _} ; operand = {desc = IntegerLiteral (Int 0); _}; _ } -> true
+    | _ -> false
+
+  let is_null_check var_name (e: expr) = match e.desc with
+    | BinaryOperator {lhs = {desc = DeclRef { name; _}; _}; kind = NE; rhs } ->
+        if get_id_name name = var_name && is_null rhs then true else false
+    | _ -> false
+
+  (* Check whether statement [s] corresponds to a malloc initializer for
+     , which
+      will therefore be rewritten in combination with malloc to generate
+      a standard array or Vec declaration in Rust *)
+  let is_malloc_initializer (vdecl: var_decl_desc) (s: stmt_desc) = match s with
+    | If { cond; _ } when is_null_check vdecl.var_name cond -> true (* {cond; then_branch; else_branch; _} -> true *)
+    | _ -> false
+
+  (* Simple heuristics to detect whether a loop condition is always false, in this case we can omit the loop.
+     TODO: Should probably check for absence of side-effects in condition evaluation *)
+  let is_trivial_false (e: Krml.Ast.expr) = match e.node with
+    (* e != e is always false *)
+    | EApp ({node = EOp (Neq, _); _ }, [e1; e2]) when e1 = e2 -> true
+    | _ -> false
+
+  let extract_sizeof_ty = function
+    | ArgumentExpr _ -> failwith "ArgumentExpr not supported"
+    | ArgumentType ty -> translate_typ ty
+
+  let extract_constarray_size (ty: qual_type) = match ty.desc with
+    | ConstantArray {size; _} -> size, Helpers.mk_uint32 size
+    | _ ->
+        Format.eprintf "Expected ConstantArray, got type %a\n" Clang.Type.pp ty;
+        failwith "Type is not a ConstantArray"
+
+  let is_constantarray (ty: qual_type) = match ty.desc with
+    | ConstantArray _ -> true
+    | _ -> false
+
+  let is_assign_op (kind: Clang.Ast.binary_operator_kind) = match kind with
+    | Assign | AddAssign | MulAssign | DivAssign | RemAssign
+    | SubAssign | ShlAssign | ShrAssign | AndAssign
+    | XorAssign | OrAssign -> true
+    | _ -> false
+end
+
+open ClangHelpers
+
+(* EXPRESSIONS *)
+
+let assign_to_bop w (kind: Clang.Ast.binary_operator_kind) : Krml.Ast.expr =
+  let op = match kind with
+  (* TODO: Might need to disambiguate for pointer arithmetic *)
+  | AddAssign -> K.Add
+  | MulAssign -> Mult
+  | DivAssign -> Div
+  | RemAssign -> Mod
+  | SubAssign -> Sub
+  | ShlAssign -> BShiftL
+  | ShrAssign -> BShiftR
+  | AndAssign -> BAnd
+  (* TODO: Disambiguate *)
+  | XorAssign -> BXor
+  | OrAssign -> BOr
+  | _ -> failwith "not an assign op"
+  in
+  (* TODO: Infer width and type from types of operands *)
+  Krml.Ast.with_type (TInt w) (EOp (op, w))
+
+let translate_binop (kind: Clang.Ast.binary_operator_kind) : K.op = match kind with
+  | PtrMemD | PtrMemI -> failwith "translate_binop: ptr mem"
+
+  (* Disambiguation for pointer arithmetic must be done when calling translate_binop:
+     This is a deeper rewriting than just disambiguating between two K.op *)
+  | Add -> Add
+  | Sub -> Sub
+  | Mul -> Mult
+  | Div -> Div
+  | Rem -> Mod
+
+  | Shl -> BShiftL
+  | Shr -> BShiftR
+
+  | Cmp -> failwith "translate_binop: cmp"
+
+  | LT -> Lt
+  | GT -> Gt
+  | LE -> Lte
+  | GE -> Gte
+  | EQ -> Eq
+  | NE -> Neq
+
+  | And -> BAnd
+  (* TODO: How to distinguish between Xor and BXor? Likely need typing info from operands *)
+  | Xor -> BXor
+  | Or -> BOr
+
+  | LAnd -> And
+  | LOr -> Or
+
+  | Assign | AddAssign | MulAssign | DivAssign | RemAssign
+  | SubAssign | ShlAssign | ShrAssign | AndAssign
+  | XorAssign | OrAssign ->
+      failwith "Assign operators should have been previously rewritten"
+
+  | Comma -> failwith "translate_binop: comma"
+  | InvalidBinaryOperator -> failwith "translate_binop: invalid binop"
 
 (* Translate expression [e].
 

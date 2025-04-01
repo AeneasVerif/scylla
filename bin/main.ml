@@ -58,8 +58,11 @@ Supported options:|}
   ) Krml.AstToMiniRust.LidSet.empty files in
   let files = List.concat files in
 
-  if Krml.Options.debug "ClangToAst" then
-    Krml.(Print.print (PPrint.(PrintAst.print_files files ^^ hardline)));
+  if Krml.Options.debug "ClangToAst" then begin
+    Format.printf "%!";
+    Format.eprintf "%!";
+    Krml.(Print.print (PPrint.(PrintAst.print_files files ^^ hardline)))
+  end;
 
   let had_errors, files = Krml.Checker.check_everything ~warn:true files in
   if had_errors then
