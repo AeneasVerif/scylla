@@ -180,7 +180,8 @@ let translate_typ_name = function
 
 (* We assume a modern system where sizeof int == 4, sizeof long long == 8, and sizeof long is
    determined at configure-time (see DataModel.ml). *)
-let translate_builtin_typ (t: Clang.Ast.builtin_type) = match [@warnerror "-11"] t with
+let translate_builtin_typ (t: Clang.Ast.builtin_type) =
+  match [@warnerror "-11"] t with
   | Void -> TUnit
   | UInt -> TInt UInt32
   | UShort -> failwith "translate_builtin_typ: ushort"
@@ -202,11 +203,114 @@ let translate_builtin_typ (t: Clang.Ast.builtin_type) = match [@warnerror "-11"]
   | Bool -> TBool
 
   | Pointer -> failwith "translate_builtin_typ: pointer"
+
+  | Invalid -> failwith "translate_builtin_typ: Invalid"
+  | Unexposed -> failwith "translate_builtin_typ: Unexposed"
+  | Char_U -> failwith "translate_builtin_typ: Char_U"
+  | UChar -> failwith "translate_builtin_typ: UChar"
+  | Char16 -> failwith "translate_builtin_typ: Char16"
+  | Char32 -> failwith "translate_builtin_typ: Char32"
+  | Char_S -> failwith "translate_builtin_typ: Char_S"
+  | SChar -> failwith "translate_builtin_typ: SChar"
+  | WChar -> failwith "translate_builtin_typ: WChar"
   | Float -> failwith "translate_builtin_typ: Float"
   | Double -> failwith "translate_builtin_typ: Double"
   | LongDouble -> failwith "translate_builtin_typ: LongDouble"
-
-  | _ -> failwith "translate_builtin_typ: unsupported type"
+  | NullPtr -> failwith "translate_builtin_typ: NullPtr"
+  | Overload -> failwith "translate_builtin_typ: Overload"
+  | Dependent -> failwith "translate_builtin_typ: Dependent"
+  | ObjCId -> failwith "translate_builtin_typ: ObjCId"
+  | ObjCClass -> failwith "translate_builtin_typ: ObjCClass"
+  | ObjCSel -> failwith "translate_builtin_typ: ObjCSel"
+  | Float128 -> failwith "translate_builtin_typ: Float128"
+  | Half -> failwith "translate_builtin_typ: Half"
+  | Float16 -> failwith "translate_builtin_typ: Float16"
+  | ShortAccum -> failwith "translate_builtin_typ: ShortAccum"
+  | Accum -> failwith "translate_builtin_typ: Accum"
+  | LongAccum -> failwith "translate_builtin_typ: LongAccum"
+  | UShortAccum -> failwith "translate_builtin_typ: UShortAccum"
+  | UAccum -> failwith "translate_builtin_typ: UAccum"
+  | ULongAccum -> failwith "translate_builtin_typ: ULongAccum"
+  | BFloat16 -> failwith "translate_builtin_typ: BFloat16"
+  | Ibm128 -> failwith "translate_builtin_typ: Ibm128"
+  | Complex -> failwith "translate_builtin_typ: Complex"
+  | BlockPointer -> failwith "translate_builtin_typ: BlockPointer"
+  | LValueReference -> failwith "translate_builtin_typ: LValueReference"
+  | RValueReference -> failwith "translate_builtin_typ: RValueReference"
+  | Record -> failwith "translate_builtin_typ: Record"
+  | Enum -> failwith "translate_builtin_typ: Enum"
+  | Typedef -> failwith "translate_builtin_typ: Typedef"
+  | ObjCInterface -> failwith "translate_builtin_typ: ObjCInterface"
+  | ObjCObjectPointer -> failwith "translate_builtin_typ: ObjCObjectPointer"
+  | FunctionNoProto -> failwith "translate_builtin_typ: FunctionNoProto"
+  | FunctionProto -> failwith "translate_builtin_typ: FunctionProto"
+  | ConstantArray -> failwith "translate_builtin_typ: ConstantArray"
+  | Vector -> failwith "translate_builtin_typ: Vector"
+  | IncompleteArray -> failwith "translate_builtin_typ: IncompleteArray"
+  | VariableArray -> failwith "translate_builtin_typ: VariableArray"
+  | DependentSizedArray -> failwith "translate_builtin_typ: DependentSizedArray"
+  | MemberPointer -> failwith "translate_builtin_typ: MemberPointer"
+  | Auto -> failwith "translate_builtin_typ: Auto"
+  | Elaborated -> failwith "translate_builtin_typ: Elaborated"
+  | Pipe -> failwith "translate_builtin_typ: Pipe"
+  | OCLImage1dRO -> failwith "translate_builtin_typ: OCLImage1dRO"
+  | OCLImage1dArrayRO -> failwith "translate_builtin_typ: OCLImage1dArrayRO"
+  | OCLImage1dBufferRO -> failwith "translate_builtin_typ: OCLImage1dBufferRO"
+  | OCLImage2dRO -> failwith "translate_builtin_typ: OCLImage2dRO"
+  | OCLImage2dArrayRO -> failwith "translate_builtin_typ: OCLImage2dArrayRO"
+  | OCLImage2dDepthRO -> failwith "translate_builtin_typ: OCLImage2dDepthRO"
+  | OCLImage2dArrayDepthRO -> failwith "translate_builtin_typ: OCLImage2dArrayDepthRO"
+  | OCLImage2dMSAARO -> failwith "translate_builtin_typ: OCLImage2dMSAARO"
+  | OCLImage2dArrayMSAARO -> failwith "translate_builtin_typ: OCLImage2dArrayMSAARO"
+  | OCLImage2dMSAADepthRO -> failwith "translate_builtin_typ: OCLImage2dMSAADepthRO"
+  | OCLImage2dArrayMSAADepthRO -> failwith "translate_builtin_typ: OCLImage2dArrayMSAADepthRO"
+  | OCLImage3dRO -> failwith "translate_builtin_typ: OCLImage3dRO"
+  | OCLImage1dWO -> failwith "translate_builtin_typ: OCLImage1dWO"
+  | OCLImage1dArrayWO -> failwith "translate_builtin_typ: OCLImage1dArrayWO"
+  | OCLImage1dBufferWO -> failwith "translate_builtin_typ: OCLImage1dBufferWO"
+  | OCLImage2dWO -> failwith "translate_builtin_typ: OCLImage2dWO"
+  | OCLImage2dArrayWO -> failwith "translate_builtin_typ: OCLImage2dArrayWO"
+  | OCLImage2dDepthWO -> failwith "translate_builtin_typ: OCLImage2dDepthWO"
+  | OCLImage2dArrayDepthWO -> failwith "translate_builtin_typ: OCLImage2dArrayDepthWO"
+  | OCLImage2dMSAAWO -> failwith "translate_builtin_typ: OCLImage2dMSAAWO"
+  | OCLImage2dArrayMSAAWO -> failwith "translate_builtin_typ: OCLImage2dArrayMSAAWO"
+  | OCLImage2dMSAADepthWO -> failwith "translate_builtin_typ: OCLImage2dMSAADepthWO"
+  | OCLImage2dArrayMSAADepthWO -> failwith "translate_builtin_typ: OCLImage2dArrayMSAADepthWO"
+  | OCLImage3dWO -> failwith "translate_builtin_typ: OCLImage3dWO"
+  | OCLImage1dRW -> failwith "translate_builtin_typ: OCLImage1dRW"
+  | OCLImage1dArrayRW -> failwith "translate_builtin_typ: OCLImage1dArrayRW"
+  | OCLImage1dBufferRW -> failwith "translate_builtin_typ: OCLImage1dBufferRW"
+  | OCLImage2dRW -> failwith "translate_builtin_typ: OCLImage2dRW"
+  | OCLImage2dArrayRW -> failwith "translate_builtin_typ: OCLImage2dArrayRW"
+  | OCLImage2dDepthRW -> failwith "translate_builtin_typ: OCLImage2dDepthRW"
+  | OCLImage2dArrayDepthRW -> failwith "translate_builtin_typ: OCLImage2dArrayDepthRW"
+  | OCLImage2dMSAARW -> failwith "translate_builtin_typ: OCLImage2dMSAARW"
+  | OCLImage2dArrayMSAARW -> failwith "translate_builtin_typ: OCLImage2dArrayMSAARW"
+  | OCLImage2dMSAADepthRW -> failwith "translate_builtin_typ: OCLImage2dMSAADepthRW"
+  | OCLImage2dArrayMSAADepthRW -> failwith "translate_builtin_typ: OCLImage2dArrayMSAADepthRW"
+  | OCLImage3dRW -> failwith "translate_builtin_typ: OCLImage3dRW"
+  | OCLSampler -> failwith "translate_builtin_typ: OCLSampler"
+  | OCLEvent -> failwith "translate_builtin_typ: OCLEvent"
+  | OCLQueue -> failwith "translate_builtin_typ: OCLQueue"
+  | OCLReserveID -> failwith "translate_builtin_typ: OCLReserveID"
+  | ObjCObject -> failwith "translate_builtin_typ: ObjCObject"
+  | ObjCTypeParam -> failwith "translate_builtin_typ: ObjCTypeParam"
+  | Attributed -> failwith "translate_builtin_typ: Attributed"
+  | OCLIntelSubgroupAVCMcePayload -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCMcePayload"
+  | OCLIntelSubgroupAVCImePayload -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCImePayload"
+  | OCLIntelSubgroupAVCRefPayload -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCRefPayload"
+  | OCLIntelSubgroupAVCSicPayload -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCSicPayload"
+  | OCLIntelSubgroupAVCMceResult -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCMceResult"
+  | OCLIntelSubgroupAVCImeResult -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCImeResult"
+  | OCLIntelSubgroupAVCRefResult -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCRefResult"
+  | OCLIntelSubgroupAVCSicResult -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCSicResult"
+  | OCLIntelSubgroupAVCImeResultSingleRefStreamout -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCImeResultSingleRefStreamout"
+  | OCLIntelSubgroupAVCImeResultDualRefStreamout -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCImeResultDualRefStreamout"
+  | OCLIntelSubgroupAVCImeSingleRefStreamin -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCImeSingleRefStreamin"
+  | OCLIntelSubgroupAVCImeDualRefStreamin -> failwith "translate_builtin_typ: OCLIntelSubgroupAVCImeDualRefStreamin"
+  | ExtVector -> failwith "translate_builtin_typ: ExtVector"
+  | Atomic -> failwith "translate_builtin_typ: Atomic"
+  | _ -> failwith "translate_builtin_typ: BTFTagAttributed"
 
 let rec translate_typ (typ: qual_type) = match typ.desc with
   | Pointer typ -> TBuf (translate_typ typ, false)
@@ -1277,15 +1381,21 @@ let add_lident_mapping (decl: decl) (filename: string) =
   match decl.desc with
   | Function fdecl ->
       let name = get_id_name fdecl.name in
-      let ts =
-        match fdecl.function_type.parameters with
-        | Some p ->
-            List.map (fun (p: parameter) -> translate_typ p.desc.qual_type) p.non_variadic
-        | None ->
-            []
+      let t =
+        try
+          let ts =
+            match fdecl.function_type.parameters with
+            | Some p ->
+                List.map (fun (p: parameter) -> translate_typ p.desc.qual_type) p.non_variadic
+            | None ->
+                []
+          in
+          let t = translate_typ fdecl.function_type.result in
+          Krml.Helpers.fold_arrow ts t
+        with _ ->
+          Format.printf "FIXME: could not represent the type of function declaration %s\n" name;
+          TAny
       in
-      let t = translate_typ fdecl.function_type.result in
-      let t = Krml.Helpers.fold_arrow ts t in
       let path = path, t in
       (* Krml.KPrint.bprintf "%s --> %s\n" name (String.concat "::" path); *)
       name_map := FileMap.update name
@@ -1295,7 +1405,14 @@ let add_lident_mapping (decl: decl) (filename: string) =
         !name_map
 
   | Var vdecl ->
-      let path = path, translate_typ vdecl.var_type in
+      let t =
+        try
+          translate_typ vdecl.var_type
+        with _ ->
+          Format.printf "FIXME: could not represent the type of global declaration %s\n" vdecl.var_name;
+          TAny
+      in
+      let path = path, t in
       name_map := FileMap.update vdecl.var_name
         (function | None -> Some path | Some _ ->
           Format.printf "Variable declaration %s appears twice in translation unit\n" vdecl.var_name;
