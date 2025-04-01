@@ -25,6 +25,9 @@ end)
 (* A map from function names to the string list used in their fully qualified
    name. It is filled at the beginning of the translation, when exploring the
    translation unit *)
+(* FIXME this map is shared across all top-level declarations (typedefs, functions) but this is not
+   right since they live in different namespaces in C. Also, we want the type of functions, but not
+   the type of typedefs. *)
 let name_map = ref FileMap.empty
 
 (* A map from structure names to their corresponding KaRaMeL `type_def` declaration,
@@ -391,7 +394,7 @@ let typ_from_clang (e: Clang.Ast.expr): typ =
    are different from C
  - are we trusting the type from clang when we shouldn't? (i.e., is it ok to call typ_from_clang) --
    this should generally be avoided, because it is not true that `(translate_expr e).typ =
-     typ_from_clang e`. *)
+   typ_from_clang e`. *)
 let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
   if is_null e then
     with_type (TBuf (TAny, false)) EBufNull
@@ -459,7 +462,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
               o,
               Krml.Ast.with_type o.typ (EApp (Helpers.mk_op K.Add w, [o; Helpers.one w]))
             )
-        | TBuf (t, _) as t_buf ->
+        | TBuf (_t, _) as t_buf ->
             (* We rewrite `name++` into `name := name + 1` *)
             with_type TUnit @@ EAssign (
               o,
@@ -615,7 +618,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
 
                In the meantime, we extract it from the sizeof call
             *)
-            let len, ty = match len.desc with
+            let len, _ty = match len.desc with
             (* We recognize the case `len = lhs * sizeof (_)` *)
               | BinaryOperator {lhs; kind = Mul; rhs = { desc = UnaryExpr {kind = SizeOf; argument}; _}} ->
                   (* TODO: adjust to usize *)
@@ -635,7 +638,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
         (* Format.printf "Trying to translate memset %a@." Clang.Expr.pp e; *)
         begin match args with
         | dst :: v :: len :: _ ->
-            let len, ty = match len.desc with
+            let len, _ty = match len.desc with
             (* We recognize the case `len = lhs * sizeof (_)` *)
               | BinaryOperator {lhs; kind = Mul; rhs = { desc = UnaryExpr {kind = SizeOf; argument}; _}} ->
                   (* TODO: adjust to usize *)
@@ -748,7 +751,7 @@ let translate_vardecl (env: env) (vdecl: var_decl_desc) : env * binder * Krml.As
           add_var env (vname, typ), Helpers.fresh_binder vname typ, Krml.Ast.with_type typ (EBufCreate (Krml.Common.Stack, e, size_e))
         else (
           assert (List.length l = size);
-          let ty = Helpers.assert_tbuf typ in
+          let _ty = Helpers.assert_tbuf typ in
           let es = List.map (translate_expr env) l in
           add_var env (vname, typ), Helpers.fresh_binder vname typ, Krml.Ast.with_type typ (EBufCreateL (Krml.Common.Stack, es))
         )
@@ -895,6 +898,8 @@ let translate_vardecl_malloc (env: env) (vdecl: var_decl_desc) (s: stmt_desc)
 
 
 
+(* Same as translate_expr: we try to avoid relying on Clang-provided type information as much as
+   possible *)
 let rec translate_stmt (env: env) (s: Clang.Ast.stmt_desc) : Krml.Ast.expr =
   match s with
   (* This is a null statement, not a null pointer. It corresponds to a no-op *)
@@ -902,34 +907,43 @@ let rec translate_stmt (env: env) (s: Clang.Ast.stmt_desc) : Krml.Ast.expr =
 
   | Compound l -> begin match l with
     | [] -> Helpers.eunit
+
     | [{desc = Decl [{desc = Var vdecl; _ }]; _}] ->
         let _, b, e = translate_vardecl env vdecl in
         with_type TUnit (ELet (b, e, Helpers.eunit))
+
     | [stmt] -> translate_stmt env stmt.desc
+
     | hd :: tl -> match hd.desc, (List.hd tl).desc with
       (* Special case when we have a variable declaration followed by a
          memset: this likely corresponds to an array initialization *)
       | Decl [{desc = Var vdecl; _}],
         Expr {desc = Call {callee; args}; _} when is_memset callee ->
           let env', b, e = translate_vardecl_with_memset env vdecl args in
-          ELet (b, e, translate_stmt env' ret_t (Compound (List.tl tl)))
+          let e2 = translate_stmt env' (Compound (List.tl tl)) in
+          with_type e2.typ (ELet (b, e, e2))
 
       (* Special case when we have a malloc followed by an initializer
          for the corresponding pointer: we rewrite this into a heap array
          initialization *)
       | Decl [{desc = Var vdecl; _}], stmt when is_malloc_vdecl vdecl && is_malloc_initializer vdecl stmt ->
           let env', b, e = translate_vardecl_malloc env vdecl stmt in
-          ELet (b, e, translate_stmt env' ret_t (Compound (List.tl tl)))
+          let e2 = translate_stmt env' (Compound (List.tl tl)) in
+          with_type e2.typ (ELet (b, e, e2))
 
       | Decl [{desc = Var vdecl; _ }], _ ->
           let env', b, e = translate_vardecl env vdecl in
-          ELet (b, e, translate_stmt env' ret_t (Compound tl))
+          let e2 = translate_stmt env' (Compound tl) in
+          with_type e2.typ (ELet (b, e, e2))
+
       | Decl [_], _ -> failwith "This decl is not a var declaration"
       | Decl _, _ -> failwith "multiple decls"
-      | stmt, _ -> ELet (
-        Helpers.sequence_binding (),
-        translate_stmt env TUnit stmt,
-        translate_stmt (add_var env ("_", TUnit)) ret_t (Compound tl))
+      | stmt, _ ->
+          let e2 = translate_stmt (add_var env ("_", TUnit)) (Compound tl) in
+          with_type e2.typ (ELet (
+            Helpers.sequence_binding (),
+            translate_stmt env stmt,
+            e2))
    end
 
   | For {init; condition_variable; cond; inc; body} ->
@@ -942,9 +956,9 @@ let rec translate_stmt (env: env) (s: Clang.Ast.stmt_desc) : Krml.Ast.expr =
             (* Cannot use type_of_expr cond here since C uses `int` but we want bool *)
             let cond = translate_expr env cond in
             (* TODO: adjust bool cond *)
-            let inc = translate_stmt env ret_t inc.desc in
-            let body = translate_stmt env ret_t body.desc in
-            EFor (b, init, cond, inc, body)
+            let inc = translate_stmt env inc.desc in
+            let body = translate_stmt env body.desc in
+            with_type TUnit (EFor (b, init, cond, inc, body))
           | _ -> failwith "loop variable must be declared in for loop initializer"
           end
       | _ -> failwith "translation of for loops requires initialize, condition, and increment"
@@ -956,39 +970,42 @@ let rec translate_stmt (env: env) (s: Clang.Ast.stmt_desc) : Krml.Ast.expr =
      comparisons *)
   | If {cond = {desc = BinaryOperator {lhs; kind = EQ; rhs}; _}; else_branch; _} when has_pointer_type lhs && is_null rhs ->
       begin match else_branch with
-      | None -> EUnit
-      | Some s -> translate_stmt' env TUnit s.desc
+      | None -> Helpers.eunit
+      | Some s -> translate_stmt env s.desc
       end
+
   | If {cond = {desc = BinaryOperator {lhs; kind = NE; rhs}; _}; then_branch; _} when has_pointer_type lhs && is_null rhs ->
-      translate_stmt' env TUnit then_branch.desc
+      translate_stmt env then_branch.desc
 
   | If {init; condition_variable; cond; then_branch; else_branch} ->
       (* These two fields should be specific to C++ *)
       assert (init = None);
       assert (condition_variable = None);
-      let cond = translate_expr env TBool cond in
-      let then_b = translate_stmt env TUnit then_branch.desc in
+      (* TODO adjust to bool *)
+      let cond = translate_expr env cond in
+      let then_b = translate_stmt env then_branch.desc in
       let else_b = match else_branch with
         | None -> Helpers.eunit
-        | Some el -> translate_stmt env TUnit el.desc
+        | Some el -> translate_stmt env el.desc
       in
-      EIfThenElse (cond, then_b, else_b)
+      with_type then_b.typ (EIfThenElse (cond, then_b, else_b))
 
   | Switch {init; condition_variable; cond; body} ->
       (* C++ constructs *)
       assert (init = None);
       assert (condition_variable = None);
 
-      let cond = translate_expr env (typ_of_expr cond) cond in
-      let branches = translate_branches env ret_t body.desc in
-      EMatch (Unchecked, cond, branches)
+      let cond = translate_expr env cond in
+      (* TODO most likely adjust *)
+      let branches = translate_branches env body.desc in
+      with_type (thd3 (List.hd branches)).typ (EMatch (Unchecked, cond, branches))
 
   | Case _ -> failwith "case not encapsulated in a switch"
   | Default _ -> failwith "default not encapsulated in a switch"
 
   | While { condition_variable = _; cond; body } ->
       let cond_ty = typ_of_expr cond in
-      let cond = translate_expr env cond_ty cond in
+      let cond = translate_expr env cond in
       let cond = match cond_ty with
         | TBool -> cond
         | TInt w ->
@@ -996,16 +1013,16 @@ let rec translate_stmt (env: env) (s: Clang.Ast.stmt_desc) : Krml.Ast.expr =
           Helpers.mk_neq cond (Helpers.zero w)
         | _ -> failwith "incorrect type for while condition"
       in
-      let body = translate_stmt env ret_t body.desc in
-      EWhile (cond, body)
+      let body = translate_stmt env body.desc in
+      with_type TUnit (EWhile (cond, body))
 
   | Do { body; cond } ->
     (* The do statements first executes the body before behaving as a while loop.
        We thus translate it as a sequence of the body and the corresponding while loop *)
-    let body = translate_stmt env ret_t body.desc in
+    let body = translate_stmt env body.desc in
     (* TODO: Likely need to translate int conditions to boolean expressions *)
     let cond_ty = typ_of_expr cond in
-    let cond = translate_expr env cond_ty cond in
+    let cond = translate_expr env cond in
     let cond = match cond_ty with
       | TBool -> cond
       | TInt w ->
@@ -1013,11 +1030,11 @@ let rec translate_stmt (env: env) (s: Clang.Ast.stmt_desc) : Krml.Ast.expr =
         Helpers.mk_neq cond (Helpers.zero w)
       | _ -> failwith "incorrect type for while condition"
     in
-    if is_trivial_false cond then body.node else
-      ESequence [
+    if is_trivial_false cond then body else
+      with_type TUnit (ESequence [
         body;
         Krml.Ast.with_type TUnit (EWhile (cond, body))
-      ]
+      ])
 
   | Label _ -> failwith "translate_stmt: label"
   | Goto _ -> failwith "translate_stmt: goto"
@@ -1027,13 +1044,14 @@ let rec translate_stmt (env: env) (s: Clang.Ast.stmt_desc) : Krml.Ast.expr =
   | Break -> failwith "translate_stmt: break"
   | Asm _ -> failwith "translate_stmt: asm"
 
-  | Return eo -> begin match eo with
+  | Return eo -> with_type TAny (match eo with
         | None -> EReturn Helpers.eunit
-        | Some e -> EReturn (translate_expr env (typ_of_expr e) e)
-    end
+        | Some e ->
+            (* Take expected return type; TODO adjust *)
+            EReturn (translate_expr env e))
 
   | Decl _ -> failwith "translate_stmt: decl"
-  | Expr e -> translate_expr' env ret_t e
+  | Expr e -> translate_expr env e
 
   | Try _ -> failwith "translate_stmt: try"
   | AttributedStmt _ -> failwith "translate_stmt: AttributedStmt"
@@ -1043,33 +1061,32 @@ let rec translate_stmt (env: env) (s: Clang.Ast.stmt_desc) : Krml.Ast.expr =
    structured pattern-matching.
    The original C branches must consist of a list of `case` statements, terminated by
    a `default` statement *)
-and translate_branches (env: env) (t: typ) (s: stmt_desc) : Krml.Ast.branches = match s with
+and translate_branches (env: env) (s: stmt_desc) : Krml.Ast.branches = match s with
   | Compound [{desc = Default body; _}] ->
-      let body = translate_stmt env t body.desc in
+      let body = translate_stmt env body.desc in
       (* The last case is a fallback, the pattern corresponds to a wildcard *)
       [([], Krml.Ast.with_type TAny PWild, body)]
   | Compound ({desc = Case {lhs; rhs; body}; _} :: tl) ->
       (* Unsupported GCC extension *)
       assert (rhs = None);
-      let pat_ty = typ_of_expr lhs in
-      let pat = translate_expr' env (typ_of_expr lhs) lhs in
-      let body = translate_stmt env t body.desc in
+      let pat = translate_expr env lhs in
+      let body = translate_stmt env body.desc in
       (* We only support pattern-matching on constants here.
          This allows to translate switches corresponding to pattern
          matching on a tagged union *)
-      begin match pat with
-      | EConstant n -> ([], Krml.Ast.with_type pat_ty (PConstant n), body)
+      begin match pat.node with
+      | EConstant n -> ([], Krml.Ast.with_type pat.typ (PConstant n), body)
       | _ -> failwith "Only constant patterns supported"
-      end :: translate_branches env t (Compound tl)
+      end :: translate_branches env (Compound tl)
   | _ -> failwith "Ill-formed switch branches: Expected a case or a default"
 
 
-let translate_param (p: parameter) : binder * string =
+let translate_param (p: parameter) : binder * (string * typ) =
   let p = p.desc in
   let typ = translate_typ p.qual_type in
   (* Not handling default expressions for function parameters *)
   assert (p.default = None);
-  Helpers.fresh_binder p.name typ, p.name
+  Helpers.fresh_binder p.name typ, (p.name, typ)
 
 let translate_fundecl (fdecl: function_decl) =
   let name = get_id_name fdecl.name in
@@ -1083,15 +1100,16 @@ let translate_fundecl (fdecl: function_decl) =
   in
   (* To adopt a DeBruijn representation, the list must be reversed to
    have the last binder as the first element of the environment *)
-  let env = {vars = List.rev vars} in
+  let env = {vars = List.rev vars; ret_t = ret_type } in
   match fdecl.body with
   (* If the function body is empty, this is likely a prototype. We
      do not extract it *)
   | None -> None
   | Some s ->
-    let body = translate_stmt env ret_type s.desc in
+    let body = translate_stmt env s.desc in
     let flags = if fdecl.inline_specified then [Krml.Common.Inline] else [] in
-    let decl = Krml.Ast.(DFunction (None, flags, 0, 0, ret_type, (FileMap.find name !name_map, name), args, body)) in
+    let lid = fst (FileMap.find name !name_map), name in
+    let decl = Krml.Ast.(DFunction (None, flags, 0, 0, ret_type, lid, args, body)) in
     (* Krml.KPrint.bprintf "Resulting decl %a\n" Krml.PrintAst.pdecl decl; *)
     Some decl
 
@@ -1150,7 +1168,7 @@ let translate_decl (decl: decl) =
           None
         else
           let _, _, e = translate_vardecl empty_env vdecl in
-          let lid = FileMap.find vdecl.var_name !name_map, vdecl.var_name in
+          let lid = fst (FileMap.find vdecl.var_name !name_map), vdecl.var_name in
           let typ = translate_typ vdecl.var_type in
           (* TODO: Flags *)
           let flags = [] in
@@ -1167,7 +1185,7 @@ let translate_decl (decl: decl) =
         None
 
     | TypedefDecl {name; underlying_type} ->
-        let lid = FileMap.find name !name_map, name in
+        let lid = fst (FileMap.find name !name_map), name in
         begin match underlying_type.desc with
         | BuiltinType t ->
             let ty = translate_builtin_typ t in
@@ -1224,8 +1242,10 @@ let translate_external_decl (decl: decl) = match decl.desc with
               ) muts args
         in
         let fn_type = Helpers.fold_arrow (List.map (fun x -> x.typ) args) ret_type in
+        (* TODO: translate_lid *)
+        let lid = fst (FileMap.find name !name_map), name in
 
-        let decl = Krml.Ast.(DExternal (None, [], 0, 0, (FileMap.find name !name_map, name), fn_type, vars)) in
+        let decl = Krml.Ast.(DExternal (None, [], 0, 0, lid, fn_type, fst (List.split vars))) in
         Some decl
       ) else None
   | _ -> None
@@ -1257,6 +1277,16 @@ let add_lident_mapping (decl: decl) (filename: string) =
   match decl.desc with
   | Function fdecl ->
       let name = get_id_name fdecl.name in
+      let ts =
+        match fdecl.function_type.parameters with
+        | Some p ->
+            List.map (fun (p: parameter) -> translate_typ p.desc.qual_type) p.non_variadic
+        | None ->
+            []
+      in
+      let t = translate_typ fdecl.function_type.result in
+      let t = Krml.Helpers.fold_arrow ts t in
+      let path = path, t in
       (* Krml.KPrint.bprintf "%s --> %s\n" name (String.concat "::" path); *)
       name_map := FileMap.update name
         (function | None -> Some path | Some _ ->
@@ -1265,6 +1295,7 @@ let add_lident_mapping (decl: decl) (filename: string) =
         !name_map
 
   | Var vdecl ->
+      let path = path, translate_typ vdecl.var_type in
       name_map := FileMap.update vdecl.var_name
         (function | None -> Some path | Some _ ->
           Format.printf "Variable declaration %s appears twice in translation unit\n" vdecl.var_name;
@@ -1272,6 +1303,8 @@ let add_lident_mapping (decl: decl) (filename: string) =
         !name_map
 
   | RecordDecl rdecl ->
+      (* FIXME dummy *)
+      let path = path, TAny in
       name_map := FileMap.update rdecl.name
         (function | None -> Some path | Some _ ->
           Format.printf "Record Type declaration %s appears twice in translation unit\n" rdecl.name;
@@ -1279,10 +1312,11 @@ let add_lident_mapping (decl: decl) (filename: string) =
         !name_map
 
   | TypedefDecl tdecl ->
+      (* FIXME dummy *)
       name_map := FileMap.update tdecl.name
-        (function | None -> Some path | Some _ ->
+        (function | None -> Some (path, TAny) | Some _ ->
           Format.printf "Typedef declaration %s appears twice in translation unit\n" tdecl.name;
-          Some path)
+          Some (path, TAny))
         !name_map;
       (* To normalize correctly, we might need to retrieve types beyond the file currently
          being translated. We thus construct this map here rather than during type declaration
