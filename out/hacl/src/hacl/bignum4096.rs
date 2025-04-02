@@ -981,61 +981,6 @@ pub fn Hacl_Bignum4096_mod_inv_prime_vartime_precomp(
   exp_vartime_precomp(n, mu, r2, a, 4096u32, &n2, res)
 }
 
-pub fn Hacl_Bignum4096_new_bn_from_bytes_be(len: u32, b: &[u8]) -> Box<[u64]>
-{
-  if len == 0u32 || len.wrapping_sub(1u32).wrapping_div(8u32).wrapping_add(1u32) > 536870911u32
-  { return [].into() };
-  let mut res: Box<[u64]> =
-      vec![0u64; len.wrapping_sub(1u32).wrapping_div(8u32).wrapping_add(1u32) as usize].into_boxed_slice(
-
-      );
-  let res1: (&mut [u64], &mut [u64]) = res.split_at_mut(0usize);
-  let res2: (&mut [u64], &mut [u64]) = res1.1.split_at_mut(0usize);
-  let bnLen: u32 = len.wrapping_sub(1u32).wrapping_div(8u32).wrapping_add(1u32);
-  let tmpLen: u32 = 8u32.wrapping_mul(bnLen);
-  let mut tmp: Box<[u8]> = vec![0u8; tmpLen as usize].into_boxed_slice();
-  ((&mut (&mut tmp)[tmpLen.wrapping_sub(len) as usize..])[0usize..len as usize]).copy_from_slice(
-    &b[0usize..len as usize]
-  );
-  for i in 0u32..bnLen
-  {
-    let u: u64 =
-        crate::lowstar_endianness::load64_be(
-          &(&tmp)[bnLen.wrapping_sub(i).wrapping_sub(1u32).wrapping_mul(8u32) as usize..]
-        );
-    let x: u64 = u;
-    let os: (&mut [u64], &mut [u64]) = res2.1.split_at_mut(0usize);
-    os.1[i as usize] = x
-  };
-  return (*res2.1).into()
-}
-
-pub fn Hacl_Bignum4096_new_bn_from_bytes_le(len: u32, b: &[u8]) -> Box<[u64]>
-{
-  if len == 0u32 || len.wrapping_sub(1u32).wrapping_div(8u32).wrapping_add(1u32) > 536870911u32
-  { return [].into() };
-  let mut res: Box<[u64]> =
-      vec![0u64; len.wrapping_sub(1u32).wrapping_div(8u32).wrapping_add(1u32) as usize].into_boxed_slice(
-
-      );
-  let res1: (&mut [u64], &mut [u64]) = res.split_at_mut(0usize);
-  let res2: (&mut [u64], &mut [u64]) = res1.1.split_at_mut(0usize);
-  let bnLen: u32 = len.wrapping_sub(1u32).wrapping_div(8u32).wrapping_add(1u32);
-  let tmpLen: u32 = 8u32.wrapping_mul(bnLen);
-  let mut tmp: Box<[u8]> = vec![0u8; tmpLen as usize].into_boxed_slice();
-  ((&mut tmp)[0usize..len as usize]).copy_from_slice(&b[0usize..len as usize]);
-  for i in 0u32..len.wrapping_sub(1u32).wrapping_div(8u32).wrapping_add(1u32)
-  {
-    let bj: (&[u8], &[u8]) = tmp.split_at(i.wrapping_mul(8u32) as usize);
-    let u: u64 = crate::lowstar_endianness::load64_le(bj.1);
-    let r1: u64 = u;
-    let x: u64 = r1;
-    let os: (&mut [u64], &mut [u64]) = res2.1.split_at_mut(0usize);
-    os.1[i as usize] = x
-  };
-  return (*res2.1).into()
-}
-
 pub fn Hacl_Bignum4096_bn_to_bytes_be(b: &[u64], res: &mut [u8])
 {
   let tmp: [u8; 512] = [0u8; 512usize];

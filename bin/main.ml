@@ -59,7 +59,7 @@ Supported options:|}
     let boxed_types, files = Scylla.ClangToAst.translate_compil_unit (Scylla.ClangToAst.read_file f) f in
     Krml.AstToMiniRust.LidSet.union acc boxed_types, files
   ) Krml.AstToMiniRust.LidSet.empty files in
-  let files = List.concat files in
+  let files = Krml.Builtin.lowstar_ignore :: List.concat files in
 
   if Krml.Options.debug "ClangToAst" then begin
     Format.printf "%!";
