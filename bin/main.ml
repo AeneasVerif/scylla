@@ -52,6 +52,9 @@ Supported options:|}
   if files = [] then
     fatal_error "%s" (Arg.usage_string spec usage);
 
+  Krml.Options.(warn_error := !warn_error ^ "-6");
+  Krml.Warn.parse_warn_error !Krml.Options.warn_error;
+
   let boxed_types, files = List.fold_left_map (fun acc (f: string) ->
     let boxed_types, files = Scylla.ClangToAst.translate_compil_unit (Scylla.ClangToAst.read_file f) f in
     Krml.AstToMiniRust.LidSet.union acc boxed_types, files
