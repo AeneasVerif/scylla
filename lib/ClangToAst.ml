@@ -58,15 +58,16 @@ let boxed_types = ref LidSet.empty
 (* ENVIRONMENTS *)
 
 type env = {
-  (* Variables in the context *)
-  vars: (string * typ) list;
+  (* Variables in the context, with their types, and a reference to tell whether they end up being
+     mutated as some point. *)
+  vars: (string * typ * bool ref) list;
   (* Expected return typ of the function *)
   ret_t: typ;
 }
 
 let empty_env = {vars = []; ret_t = TAny}
 
-let add_var env var = {env with vars = var :: env.vars }
+let add_var env (x, t) = {env with vars = (x, t, ref false) :: env.vars }
 let add_binders env binders = List.fold_left (fun env b ->
     let open Krml.Ast in
     add_var env (b.node.name, b.typ)
@@ -74,20 +75,21 @@ let add_binders env binders = List.fold_left (fun env b ->
 
 (* TODO: Handle fully qualified names/namespaces/different files. *)
 let find_var env name =
-  let exception Found of int * typ in
+  let exception Found of int * typ * bool ref in
   try
-    List.iteri (fun i (name', t) ->
+    List.iteri (fun i (name', t, mut) ->
       if name = name' then
-        raise (Found (i, t))
+        raise (Found (i, t, mut))
     ) env.vars;
     raise Not_found
   with
-  | Found (i, t) ->
-      with_type t (EBound i)
+  | Found (i, t, mut) ->
+      with_type t (EBound i), mut
   | Not_found ->
       try
         let path, t = FileMap.find name !name_map in
-        with_type t (EQualified (path, name))
+        (* FIXME handle mutable globals *)
+        with_type t (EQualified (path, name)), ref false
       with
       | Not_found ->
           Printf.eprintf "Could not find variable %s\n" name;
@@ -529,6 +531,11 @@ let adjust e t =
         fatal_error "Could not convert expression %a to have type %a" pexpr e ptyp t;
       e
 
+let mark_mut_if_variable env e =
+  match e.node with
+  | EBound i -> thd3 (List.nth env.vars i) := true
+  | _ -> ()
+
 (* Translate expression [e].
 
  When adding a case to this function, two questions arise:
@@ -571,6 +578,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
         (* This is a special case for loop increments. The current Karamel
            extraction pipeline only supports a specific case of loops *)
         let o = translate_expr env operand in
+        mark_mut_if_variable env o;
         begin match o.typ with
         | TInt w ->
             (* We rewrite `name++` into `name := name + 1` *)
@@ -592,6 +600,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
         (* This is a special case for loop increments. The current Karamel
            extraction pipeline only supports a specific case of loops *)
         let o = translate_expr env operand in
+        mark_mut_if_variable env o;
         let w = Helpers.assert_tint o.typ in
         (* We rewrite `name++` into `name := name + 1` *)
         with_type TUnit @@ EAssign (
@@ -602,7 +611,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
     | UnaryOperator {kind = Not; operand } ->
         (* Bitwise not: ~ syntax, operates on integers *)
         let o = translate_expr env operand in
-        with_type o.typ @@ EApp (Helpers.mk_op K.Not (Helpers.assert_tint o.typ), [o])
+        with_type o.typ @@ EApp (Helpers.mk_op K.BNot (Helpers.assert_tint o.typ), [o])
 
     | UnaryOperator {kind = LNot; operand } ->
         (* Logical not: The operand should be a boolean *)
@@ -628,7 +637,9 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
         with_type TUnit begin match lhs.node with
         (* Special-case rewriting for buffer assignments *)
         | EBufRead (base, index) -> EBufWrite (base, index, rhs)
-        | _ -> EAssign (lhs, rhs)
+        | _ ->
+            mark_mut_if_variable env lhs;
+            EAssign (lhs, rhs)
         end
 
     | BinaryOperator {lhs; kind; rhs} when is_assign_op kind ->
@@ -643,7 +654,9 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
         with_type TUnit begin match lhs.node with
         (* Special-case rewriting for buffer assignments *)
         | EBufRead (base, index) -> EBufWrite (base, index, rhs)
-        | _ -> EAssign (lhs, rhs)
+        | _ ->
+            mark_mut_if_variable env lhs;
+            EAssign (lhs, rhs)
         end
 
     | BinaryOperator {lhs; kind; rhs} ->
@@ -690,7 +703,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
         end
 
     | DeclRef {name; _} ->
-        let e = get_id_name name |> find_var env in
+        let e, _ = get_id_name name |> find_var env in
         (* Krml.KPrint.bprintf "non-normalized type: %a\n" ptyp e.typ; *)
         (* TODO: should this be done more generally? *)
         { e with typ = normalize_type e.typ }
@@ -887,7 +900,7 @@ let translate_vardecl (env: env) (vdecl: var_decl_desc) : env * binder * Krml.As
       end
 
   | Some {desc = DeclRef { name; _ }; _} ->
-      let var = get_id_name name |> find_var env in
+      let var, _ = get_id_name name |> find_var env in
       let e = match typ with
       (* If we have a statement of the shape `let x = y` where y is a pointer,
          this likely corresponds to taking a slice of y, starting at index 0.
@@ -1032,10 +1045,17 @@ let rec translate_stmt (env: env) (s: Clang.Ast.stmt_desc) : Krml.Ast.expr =
           let e2 = translate_stmt env' (Compound (List.tl tl)) in
           with_type e2.typ (ELet (b, e, e2))
 
+      (* Regular variable declaration case *)
       | Decl [{desc = Var vdecl; _ }], _ ->
           let env', b, e = translate_vardecl env vdecl in
           (* TODO: analysis that figures out what needs to be mut *)
           let e2 = translate_stmt env' (Compound tl) in
+          let b =
+            if !(thd3 (List.hd env'.vars)) then
+              Helpers.mark_mut b
+            else
+              b
+          in
           with_type e2.typ (ELet (b, e, e2))
 
       | Decl [_], _ -> failwith "This decl is not a var declaration"
