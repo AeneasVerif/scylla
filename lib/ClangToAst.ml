@@ -732,7 +732,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
         (* Format.printf "Trying to translate memset %a@." Clang.Expr.pp e; *)
         begin match args with
         | dst :: v :: len :: _ ->
-            let len, _ty = match len.desc with
+            let len, ty = match len.desc with
             (* We recognize the case `len = lhs * sizeof (_)` *)
               | BinaryOperator {lhs; kind = Mul; rhs = { desc = UnaryExpr {kind = SizeOf; argument}; _}} ->
                   let len = adjust (translate_expr env lhs) (TInt SizeT) in
@@ -741,7 +741,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
               | _ -> failwith "ill-formed memcpy"
             in
             let dst = translate_expr env dst in
-            let elt = translate_expr env v in
+            let elt = adjust (translate_expr env v) ty in
             with_type TUnit @@ EBufFill (dst, elt, len)
         | _ -> failwith "memset does not have the right number of arguments"
         end
@@ -852,12 +852,13 @@ let translate_vardecl (env: env) (vdecl: var_decl_desc) : env * binder * Krml.As
         if List.length l = 1 then
           (* One element initializer, possibly repeated *)
           let e = translate_expr env (List.hd l) in
+          let e = adjust e (Helpers.assert_tbuf_or_tarray typ) in
           (* TODO: Arrays are not on stack if at top-level *)
           add_var env (vname, typ), Helpers.fresh_binder vname typ, Krml.Ast.with_type typ (EBufCreate (Krml.Common.Stack, e, size_e))
         else (
           assert (List.length l = size);
-          let _ty = Helpers.assert_tbuf typ in
-          let es = List.map (translate_expr env) l in
+          let ty = Helpers.assert_tbuf typ in
+          let es = List.map (fun e -> adjust (translate_expr env e) ty) l in
           add_var env (vname, typ), Helpers.fresh_binder vname typ, Krml.Ast.with_type typ (EBufCreateL (Krml.Common.Stack, es))
         )
 
@@ -941,6 +942,7 @@ let translate_vardecl_with_memset (env: env) (vdecl: var_decl_desc) (args: expr 
         | _ -> len.node = size.node
       then
         let len = adjust len (TInt SizeT) in
+        let v = adjust v (Helpers.assert_tbuf typ) in
         add_var env (vname, typ),
         Helpers.fresh_binder vname typ,
         Krml.Ast.with_type typ (EBufCreate (Krml.Common.Stack, v, len))
@@ -949,8 +951,7 @@ let translate_vardecl_with_memset (env: env) (vdecl: var_decl_desc) (args: expr 
 
   | _ -> failwith "memset does not have the right number of arguments"
 
-  (* Translation of a variable declaration through malloc, followed by an initialization through [s] *)
-
+(* Translation of a variable declaration through malloc, followed by an initialization through [s] *)
 let translate_vardecl_malloc (env: env) (vdecl: var_decl_desc) (s: stmt_desc)
   : env * binder * Krml.Ast.expr =
   let vname = vdecl.var_name in
@@ -991,6 +992,8 @@ let translate_vardecl_malloc (env: env) (vdecl: var_decl_desc) (s: stmt_desc)
       end
   | _ -> failwith "ill-formed malloc initializer"
   in
+
+  let init_val = adjust init_val (Helpers.assert_tbuf typ) in
 
   add_var env (vname, typ), Helpers.fresh_binder vname typ, Krml.Ast.with_type typ (EBufCreate (Krml.Common.Heap, init_val, Helpers.oneu32))
 
