@@ -718,7 +718,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
 
     | DeclRef {name; _} ->
         let e = get_id_name name |> find_var env in
-        Krml.KPrint.bprintf "non-normalized type: %a\n" ptyp e.typ;
+        (* Krml.KPrint.bprintf "non-normalized type: %a\n" ptyp e.typ; *)
         (* TODO: should this be done more generally? *)
         { e with typ = normalize_type e.typ }
 
@@ -1055,6 +1055,7 @@ let rec translate_stmt (env: env) (s: Clang.Ast.stmt_desc) : Krml.Ast.expr =
 
       | Decl [{desc = Var vdecl; _ }], _ ->
           let env', b, e = translate_vardecl env vdecl in
+          (* TODO: analysis that figures out what needs to be mut *)
           let e2 = translate_stmt env' (Compound tl) in
           with_type e2.typ (ELet (b, e, e2))
 
@@ -1400,7 +1401,7 @@ let decl_is_opaque (decl: decl) =
   !is_opaque
 
 let add_lident_mapping (decl: decl) (filename: string) =
-  Format.printf "add_lident_mapping %s\n%a\n@." (name_of_decl decl) Clang.Decl.pp decl;
+  (* Format.printf "add_lident_mapping %s\n%a\n@." (name_of_decl decl) Clang.Decl.pp decl; *)
   let path = [ Filename.(remove_extension (basename filename)) ] in
   match decl.desc with
   | Function fdecl ->
