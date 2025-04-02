@@ -67,6 +67,10 @@ type env = {
 let empty_env = {vars = []; ret_t = TAny}
 
 let add_var env var = {env with vars = var :: env.vars }
+let add_binders env binders = List.fold_left (fun env b ->
+    let open Krml.Ast in
+    add_var env (b.node.name, b.typ)
+  ) env binders
 
 (* TODO: Handle fully qualified names/namespaces/different files. *)
 let find_var env name =
@@ -1175,26 +1179,29 @@ and translate_branches (env: env) (s: stmt_desc) : Krml.Ast.branches = match s w
   | _ -> failwith "Ill-formed switch branches: Expected a case or a default"
 
 
-let translate_param (p: parameter) : binder * (string * typ) =
+let translate_param (p: parameter) : binder =
   let p = p.desc in
   let typ = translate_typ p.qual_type in
   (* Not handling default expressions for function parameters *)
   assert (p.default = None);
-  Helpers.fresh_binder p.name typ, (p.name, typ)
+  Helpers.fresh_binder p.name typ
+
+let translate_params (fdecl: function_decl) =
+  match fdecl.function_type.parameters with
+      | None -> []
+      | Some params ->
+          (* Not handling variadic parameters *)
+          assert (not (params.variadic));
+          List.map translate_param params.non_variadic
 
 let translate_fundecl (fdecl: function_decl) =
   let name = get_id_name fdecl.name in
   let ret_type = translate_typ fdecl.function_type.result in
-  let args, vars = match fdecl.function_type.parameters with
-    | None -> [], []
-    | Some params ->
-        (* Not handling variadic parameters *)
-        assert (not (params.variadic));
-        List.map translate_param params.non_variadic |> List.split
-  in
+  let binders = translate_params fdecl in
   (* To adopt a DeBruijn representation, the list must be reversed to
    have the last binder as the first element of the environment *)
-  let env = {vars = List.rev vars; ret_t = ret_type } in
+  let env = add_binders empty_env binders in
+  let env = { env with ret_t = ret_type } in
   match fdecl.body with
   (* If the function body is empty, this is likely a prototype. We
      do not extract it *)
@@ -1203,7 +1210,7 @@ let translate_fundecl (fdecl: function_decl) =
     let body = translate_stmt env s.desc in
     let flags = if fdecl.inline_specified then [Krml.Common.Inline] else [] in
     let lid = fst (FileMap.find name !name_map), name in
-    let decl = Krml.Ast.(DFunction (None, flags, 0, 0, ret_type, lid, args, body)) in
+    let decl = Krml.Ast.(DFunction (None, flags, 0, 0, ret_type, lid, binders, body)) in
     (* Krml.KPrint.bprintf "Resulting decl %a\n" Krml.PrintAst.pdecl decl; *)
     Some decl
 
@@ -1300,6 +1307,30 @@ let translate_decl (decl: decl) =
     Format.printf "Declaration %a not supported@." Clang.Decl.pp decl;
     raise e
 
+(* Computes the argument and return types of a function potentially marked as [[scylla_opaque]],
+   taking into account attributes to adjust const/non-const pointers. *)
+let compute_external_type (fdecl: function_decl): binder list * typ =
+  let ret_type = translate_typ fdecl.function_type.result in
+  let binders = translate_params fdecl in
+  let args_mut = Attributes.retrieve_mutability fdecl.attributes in
+  let binders = match args_mut with
+    | None ->
+        (* No mutability was specified, but we are in an opaque definition:
+           All arguments must be considered as read-only *)
+        List.map (fun arg -> match arg.typ with
+          | TBuf (t, _) -> {arg with typ = TBuf (t, true)}
+          | _ -> arg
+        ) binders
+    | Some muts -> List.map2 (fun mut arg -> match arg.typ, mut with
+        (* In Ast, the flag set to true represents a constant, immutable array.
+           The mutability flag is the converse, so we need to take the negation *)
+        | TBuf (t, _), b -> {arg with typ = TBuf (t, not b)}
+        (* For all other types, we do not modify the mutability *)
+        | _ -> arg
+        ) muts binders
+  in
+  binders, ret_type
+
 (* We are traversing an external module. We filter it to only preserve
    declarations annotated with the [opaque_attr] attribute, which
    we translate as external.
@@ -1310,36 +1341,12 @@ let translate_external_decl (decl: decl) = match decl.desc with
       (* let name = get_id_name fdecl.name in *)
       if Attributes.has_opaque_attr fdecl.attributes then (
         let name = get_id_name fdecl.name in
-        let ret_type = translate_typ fdecl.function_type.result in
-        let args, vars = match fdecl.function_type.parameters with
-          | None -> [], []
-          | Some params ->
-              (* Not handling variadic parameters *)
-              assert (not (params.variadic));
-              List.map translate_param params.non_variadic |> List.split
-        in
-        let args_mut = Attributes.retrieve_mutability fdecl.attributes in
-        let args = match args_mut with
-          | None ->
-              (* No mutability was specified, but we are in an opaque definition:
-                 All arguments must be considered as read-only *)
-              List.map (fun arg -> match arg.typ with
-                | TBuf (t, _) -> {arg with typ = TBuf (t, true)}
-                | _ -> arg
-              ) args
-          | Some muts -> List.map2 (fun mut arg -> match arg.typ, mut with
-              (* In Ast, the flag set to true represents a constant, immutable array.
-                 The mutability flag is the converse, so we need to take the negation *)
-              | TBuf (t, _), b -> {arg with typ = TBuf (t, not b)}
-              (* For all other types, we do not modify the mutability *)
-              | _ -> arg
-              ) muts args
-        in
-        let fn_type = Helpers.fold_arrow (List.map (fun x -> x.typ) args) ret_type in
+        let binders, ret_type = compute_external_type fdecl in
+        let fn_type = Helpers.fold_arrow (List.map (fun x -> x.typ) binders) ret_type in
         (* TODO: translate_lid *)
         let lid = fst (FileMap.find name !name_map), name in
 
-        let decl = Krml.Ast.(DExternal (None, [], 0, 0, lid, fn_type, fst (List.split vars))) in
+        let decl = Krml.Ast.(DExternal (None, [], 0, 0, lid, fn_type, List.map (fun x -> Krml.Ast.(x.node.name)) binders)) in
         Some decl
       ) else None
   | _ -> None
@@ -1373,15 +1380,8 @@ let add_lident_mapping (decl: decl) (filename: string) =
       let name = get_id_name fdecl.name in
       let t =
         try
-          let ts =
-            match fdecl.function_type.parameters with
-            | Some p ->
-                List.map (fun (p: parameter) -> translate_typ p.desc.qual_type) p.non_variadic
-            | None ->
-                []
-          in
-          let t = translate_typ fdecl.function_type.result in
-          Krml.Helpers.fold_arrow ts t
+          let binders, ret_type = compute_external_type fdecl in
+          Helpers.fold_arrow (List.map (fun x -> x.typ) binders) ret_type
         with _ ->
           Format.printf "FIXME: could not represent the type of function declaration %s\n" name;
           TAny

@@ -84,7 +84,7 @@ pub fn quarter_round(st: &mut [u32], a: u32, b: u32, c: u32, d: u32)
   k[12usize] = (k[12usize]).wrapping_add(ctr_u32)
 }
 
-pub fn chacha20_init(ctx: &mut [u32], k: &mut [u8], n: &mut [u8], ctr: u32)
+pub fn chacha20_init(ctx: &mut [u32], k: &[u8], n: &[u8], ctr: u32)
 {
   for i in 0u32..4u32
   {
@@ -95,7 +95,7 @@ pub fn chacha20_init(ctx: &mut [u32], k: &mut [u8], n: &mut [u8], ctr: u32)
   let uu____0: (&mut [u32], &mut [u32]) = ctx.split_at_mut(4usize);
   for i in 0u32..8u32
   {
-    let bj: (&mut [u8], &mut [u8]) = k.split_at_mut(i.wrapping_mul(4u32) as usize);
+    let bj: (&[u8], &[u8]) = k.split_at(i.wrapping_mul(4u32) as usize);
     let u: u32 = crate::lowstar_endianness::load32_le(bj.1);
     let r: u32 = u;
     let x: u32 = r;
@@ -106,7 +106,7 @@ pub fn chacha20_init(ctx: &mut [u32], k: &mut [u8], n: &mut [u8], ctr: u32)
   let uu____1: (&mut [u32], &mut [u32]) = ctx.split_at_mut(13usize);
   for i in 0u32..3u32
   {
-    let bj: (&mut [u8], &mut [u8]) = n.split_at_mut(i.wrapping_mul(4u32) as usize);
+    let bj: (&[u8], &[u8]) = n.split_at(i.wrapping_mul(4u32) as usize);
     let u: u32 = crate::lowstar_endianness::load32_le(bj.1);
     let r: u32 = u;
     let x: u32 = r;
@@ -115,14 +115,14 @@ pub fn chacha20_init(ctx: &mut [u32], k: &mut [u8], n: &mut [u8], ctr: u32)
   }
 }
 
-pub fn chacha20_encrypt_block(ctx: &[u32], out: &mut [u8], incr: u32, text: &mut [u8])
+pub fn chacha20_encrypt_block(ctx: &[u32], out: &mut [u8], incr: u32, text: &[u8])
 {
   let mut k: [u32; 16] = [0u32; 16usize];
   chacha20_core(&mut k, ctx, incr);
   let mut bl: [u32; 16] = [0u32; 16usize];
   for i in 0u32..16u32
   {
-    let bj: (&mut [u8], &mut [u8]) = text.split_at_mut(i.wrapping_mul(4u32) as usize);
+    let bj: (&[u8], &[u8]) = text.split_at(i.wrapping_mul(4u32) as usize);
     let u: u32 = crate::lowstar_endianness::load32_le(bj.1);
     let r: u32 = u;
     let x: u32 = r;
@@ -156,11 +156,11 @@ pub fn chacha20_encrypt_block(ctx: &[u32], out: &mut [u8], incr: u32, text: &mut
   ((&mut plain)[0usize..len as usize]).copy_from_slice(&text[0usize..len as usize]);
   let mut plain_copy: [u8; 64] = [0u8; 64usize];
   ((&mut plain_copy)[0usize..64usize]).copy_from_slice(&(&plain)[0usize..64usize]);
-  chacha20_encrypt_block(ctx, &mut plain, incr, &mut plain_copy);
+  chacha20_encrypt_block(ctx, &mut plain, incr, &plain_copy);
   (out[0usize..len as usize]).copy_from_slice(&(&plain)[0usize..len as usize])
 }
 
-pub fn chacha20_update(ctx: &[u32], len: u32, out: &mut [u8], text: &mut [u8])
+pub fn chacha20_update(ctx: &[u32], len: u32, out: &mut [u8], text: &[u8])
 {
   let rem: u32 = len.wrapping_rem(64u32);
   let nb: u32 = len.wrapping_div(64u32);
@@ -171,7 +171,7 @@ pub fn chacha20_update(ctx: &[u32], len: u32, out: &mut [u8], text: &mut [u8])
       ctx,
       &mut out[i.wrapping_mul(64u32) as usize..],
       i,
-      &mut text[i.wrapping_mul(64u32) as usize..]
+      &text[i.wrapping_mul(64u32) as usize..]
     )
   };
   if rem1 > 0u32
@@ -186,14 +186,7 @@ pub fn chacha20_update(ctx: &[u32], len: u32, out: &mut [u8], text: &mut [u8])
   }
 }
 
-pub fn chacha20_encrypt(
-  len: u32,
-  out: &mut [u8],
-  text: &mut [u8],
-  key: &mut [u8],
-  n: &mut [u8],
-  ctr: u32
-)
+pub fn chacha20_encrypt(len: u32, out: &mut [u8], text: &[u8], key: &[u8], n: &[u8], ctr: u32)
 {
   let mut ctx: [u32; 16] = [0u32; 16usize];
   chacha20_init(&mut ctx, key, n, ctr);
@@ -203,9 +196,9 @@ pub fn chacha20_encrypt(
 pub fn chacha20_decrypt(
   len: u32,
   out: &mut [u8],
-  cipher: &mut [u8],
-  key: &mut [u8],
-  n: &mut [u8],
+  cipher: &[u8],
+  key: &[u8],
+  n: &[u8],
   ctr: u32
 )
 {
