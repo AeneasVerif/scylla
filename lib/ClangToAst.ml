@@ -7,11 +7,7 @@ open Clang.Ast
 module K = Krml.Constant
 module Helpers = Krml.Helpers
 
-let fatal_error fmt =
-  Printf.kbprintf (fun b ->
-    Buffer.output_buffer stderr b;
-    exit 255
-  ) (Buffer.create 256) fmt
+let fatal_error = Krml.Warn.fatal_error
 
 module FileMap = Map.Make(String)
 module StructMap = Map.Make(String)
@@ -262,7 +258,7 @@ let translate_builtin_typ (t: Clang.Ast.builtin_type) =
   | _ -> failwith "translate_builtin_typ: BTFTagAttributed"
 
 let assert_tint_or_tbool t =
-  match t with TInt w -> w | TBool -> Bool | t -> fatal_error "Not an int/bool: %a" ptyp t
+  match t with TInt w -> w | TBool -> Bool | t -> Krml.Warn.fatal_error "Not an int/bool: %a" ptyp t
 
 let rec translate_typ (typ: qual_type) = match typ.desc with
   | Pointer typ -> TBuf (translate_typ typ, false)
@@ -502,7 +498,7 @@ let translate_binop (kind: Clang.Ast.binary_operator_kind) : K.op = match kind w
      constants (i.e., synthesized as UInt64 bottom-up), but which need to be SizeT
    - enum tags, which are integers in C, but in krml need to be converted to constants. *)
 let adjust e t =
-  match e.node, t with
+  match e.node, normalize_type t with
   (* Conversions to integers: we rewrite constants on the fly, or emit a cast. *)
   | EConstant (_, c), TInt w ->
       with_type t (EConstant (w, c))
@@ -615,7 +611,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
     | UnaryOperator {kind = Not; operand } ->
         (* Bitwise not: ~ syntax, operates on integers *)
         let o = translate_expr env operand in
-        with_type o.typ @@ EApp (Helpers.mk_op K.BNot (Helpers.assert_tint o.typ), [o])
+        with_type o.typ @@ EApp (Helpers.mk_op K.BNot (Helpers.assert_tint (normalize_type o.typ)), [o])
 
     | UnaryOperator {kind = LNot; operand } ->
         (* Logical not: The operand should be a boolean *)
@@ -652,7 +648,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
         let rhs = translate_expr env rhs in
         (* TODO: looks like this is not catching the case of pointer arithmetic -- can this be
            redirected to the case below? *)
-        let w = Helpers.assert_tint rhs.typ in
+        let w = Helpers.assert_tint (normalize_type rhs.typ) in
         (* Rewrite the rhs into the compound expression, using the underlying operator *)
         let rhs = Krml.Ast.with_type lhs.typ (EApp (assign_to_bop w kind, [lhs; rhs])) in
         with_type TUnit begin match lhs.node with
@@ -668,16 +664,18 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
         let rhs = translate_expr env rhs in
         let kind = translate_binop kind in
 
+        let lhs_typ = normalize_type lhs.typ in
+
         let apply_op kind lhs rhs =
-          let w = assert_tint_or_tbool lhs.typ in
+          let w = assert_tint_or_tbool lhs_typ in
           let op = Helpers.mk_op kind w in
           with_type (fst (Helpers.flatten_arrow op.typ)) (EApp (op, [lhs; rhs]))
         in
 
         (* In case of pointer arithmetic, we need to perform a rewriting into EBufSub/Diff *)
-        begin match lhs.typ, kind with
+        begin match lhs_typ, kind with
         | TBuf _, Add ->
-            with_type lhs.typ begin match lhs.node with
+            with_type lhs_typ begin match lhs.node with
             (* Successive pointer arithmetic operations are likely due to operator precedence, e.g.,
                ptr + n - m parsed as (ptr + n) - m, when ptr + (n - m) might be intended.
                We recognize these cases, and normalize them to perform pointer arithmetic only once
@@ -692,7 +690,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
                 EBufSub (lhs, rhs)
             end
         | TBuf _, Sub ->
-            with_type lhs.typ begin match lhs.node with
+            with_type lhs_typ begin match lhs.node with
             | EBufSub (lhs', rhs') ->
                 (* (lhs' + rhs') - rhs --> lhs' + (rhs' - rhs) *)
                 EBufSub (lhs', apply_op Sub rhs' rhs)
@@ -795,7 +793,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
         let base = translate_expr env base in
         let index = adjust (translate_expr env index) (TInt SizeT) in
         (* Is this only called on rvalues? Otherwise, might need EBufWrite *)
-        with_type (Helpers.assert_tbuf_or_tarray base.typ) (EBufRead (base, index))
+        with_type (Helpers.assert_tbuf_or_tarray (normalize_type base.typ)) (EBufRead (base, index))
 
     | ConditionalOperator _ -> failwith "translate_expr: conditional operator"
     | Paren _ -> failwith "translate_expr: paren"
