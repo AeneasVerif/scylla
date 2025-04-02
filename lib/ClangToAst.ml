@@ -558,40 +558,13 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
     | BoolLiteral _ -> failwith "translate_expr: bool literal"
     | NullPtrLiteral -> failwith "translate_expr: null ptr literal"
 
-    | CompoundLiteral {qual_type; init = {desc = InitList l; _}} when is_constantarray qual_type ->
-        (* TODO: understand why this is repeated between here and translate_vardecl -- share! *)
-        (* Also probably needs local downward propagation of the expected type (from the variable
-           declaration), to adjust proper casting of the integer types, followed by a call to
-           adjust. *)
-        let size, size_e = extract_constarray_size qual_type in
-        if List.length l = 1 then
-          (* One element initializer, possibly repeated *)
-          let e = translate_expr env (List.hd l) in
-          (* TODO: Arrays are not on stack if at top-level *)
-          with_type (TBuf (e.typ, false)) (EBufCreate (Krml.Common.Stack, e, size_e))
-        else (
-          assert (List.length l = size);
-          let es = List.map (translate_expr env) l in
-          with_type (TBuf ((List.hd es).typ, false)) (EBufCreateL (Krml.Common.Stack, es))
-        )
+    | CompoundLiteral {qual_type; init = {desc = InitList _l; _}} when is_constantarray qual_type ->
+        failwith "FIXME: reinstante this case and understand why it was needed"
 
     (* We handled above the case of array initialization, this should
        be a struct initialization *)
     | CompoundLiteral {init = {desc = InitList l; _}; _} ->
-        let translate_field_expr (e : expr) = match e.desc with
-          | DesignatedInit { designators; init }  ->
-              begin match designators with
-              | [FieldDesignator name] ->
-                  (* FIXME -- adjust type against expected field type, obtained via a lookup in
-                     struct_map *)
-                  let e = translate_expr env init in
-                  Some name, e
-              | [_] -> failwith "expected a field designator"
-              | _ -> failwith "assigning to several fields during struct initialization is not supported"
-              end
-        | _ -> failwith "a designated initializer was expected when initializing a struct"
-        in
-       with_type (typ_from_clang e) (EFlat (List.map translate_field_expr l))
+       with_type (typ_from_clang e) (EFlat (List.map (translate_field_expr env) l))
 
 
     | UnaryOperator {kind = PostInc | PreInc; operand } ->
@@ -844,6 +817,20 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
       Format.eprintf "Trying to translate expression %a@." Clang.Expr.pp e;
       failwith "translate_expr: unsupported expression"
 
+and translate_field_expr env (e : expr) =
+  match e.desc with
+  | DesignatedInit { designators; init }  ->
+      begin match designators with
+      | [FieldDesignator name] ->
+          (* FIXME -- adjust type against expected field type, obtained via a lookup in
+             struct_map *)
+          let e = translate_expr env init in
+          Some name, e
+      | [_] -> failwith "expected a field designator"
+      | _ -> failwith "assigning to several fields during struct initialization is not supported"
+      end
+  | _ -> failwith "a designated initializer was expected when initializing a struct"
+
 (* Create a default value associated to a given type [typ] *)
 let create_default_value typ = match typ with
   | _ -> Krml.Ast.with_type typ EAny
@@ -860,7 +847,6 @@ let translate_vardecl (env: env) (vdecl: var_decl_desc) : env * binder * Krml.As
   (* Intializing a constant array with a list of elements.
      For instance, uint32[2] = { 0 };
   *)
-  (* TODO understand why this case is needed *)
   | Some {desc = InitList l; _} when is_constantarray vdecl.var_type ->
         let size, size_e = extract_constarray_size vdecl.var_type in
         if List.length l = 1 then
@@ -877,20 +863,10 @@ let translate_vardecl (env: env) (vdecl: var_decl_desc) : env * binder * Krml.As
 
   (* Initializing a struct value.
      TODO: We should check that the declaration type indeed corresponds to a struct type *)
-  (* TODO understand why this case is needed *)
   | Some {desc = InitList l; _} ->
-      let translate_field_expr (e : expr) = match e.desc with
-        | DesignatedInit { designators; init }  ->
-            begin match designators with
-            | [FieldDesignator name] ->
-                let e = translate_expr env init in
-                (Some name, e)
-            | [_] -> failwith "expected a field designator"
-            | _ -> failwith "assigning to several fields during struct initialization is not supported"
-            end
-      | _ -> failwith "a designated initializer was expected when initializing a struct"
-      in
-      add_var env (vname, typ), Helpers.fresh_binder vname typ, Krml.Ast.with_type typ (EFlat (List.map translate_field_expr l))
+      add_var env (vname, typ),
+      Helpers.fresh_binder vname typ,
+      Krml.Ast.with_type typ (EFlat (List.map (translate_field_expr env) l))
 
 
   | Some {desc = Call {callee; args}; _}
