@@ -295,12 +295,12 @@ let rec translate_typ (typ: qual_type) = match typ.desc with
       begin try
         TQualified (ElaboratedMap.find (name, `Struct) !elaborated_map)
       with Not_found ->
-        Format.eprintf "Trying to translate type %a\n" Clang.Type.pp typ;
+        Format.eprintf "Trying to translate type %a\n@." Clang.Type.pp typ;
         failwith "translate_typ: unsupported type"
       end
 
   | _ ->
-      Format.eprintf "Trying to translate type %a\n" Clang.Type.pp typ;
+      Format.eprintf "Trying to translate type %a\n@." Clang.Type.pp typ;
       failwith "translate_typ: unsupported type"
 
 (* Takes a Clangml expression [e], and retrieves the corresponding karamel Ast type *)
@@ -414,7 +414,7 @@ module ClangHelpers = struct
   let extract_constarray_size (ty: qual_type) = match ty.desc with
     | ConstantArray {size; _} -> size, Helpers.mk_uint32 size
     | _ ->
-        Format.eprintf "Expected ConstantArray, got type %a\n" Clang.Type.pp ty;
+        Format.eprintf "Expected ConstantArray, got type %a\n@." Clang.Type.pp ty;
         failwith "Type is not a ConstantArray"
 
   let is_constantarray (ty: qual_type) = match ty.desc with
@@ -715,6 +715,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
 
     | DeclRef {name; _} ->
         let e = get_id_name name |> find_var env in
+        Krml.KPrint.bprintf "non-normalized type: %a\n" ptyp e.typ;
         (* TODO: should this be done more generally? *)
         { e with typ = normalize_type e.typ }
 
@@ -961,11 +962,12 @@ let translate_vardecl_with_memset (env: env) (vdecl: var_decl_desc) (args: expr 
         Helpers.fresh_binder vname typ,
         Krml.Ast.with_type typ (EBufCreate (Krml.Common.Stack, v, len))
       else
-        failwith "length of memset does not match declared length of array"
+        fatal_error "length of memset does not match declared length of array"
 
   | _ -> failwith "memset does not have the right number of arguments"
 
   (* Translation of a variable declaration through malloc, followed by an initialization through [s] *)
+
 let translate_vardecl_malloc (env: env) (vdecl: var_decl_desc) (s: stmt_desc)
   : env * binder * Krml.Ast.expr =
   let vname = vdecl.var_name in
@@ -1256,7 +1258,7 @@ let elaborate_typ (typ: qual_type) = match typ.desc with
    TODO: Proper handling of  decls *)
 let translate_decl (decl: decl) =
   let exception Unsupported in
-  (* Format.printf "visiting decl %s\n" (name_of_decl decl); *)
+  (* Format.printf "visiting decl %s\n%a\n@." (name_of_decl decl) Clang.Decl.pp decl; *)
   try
     match decl.desc with
     | Function fdecl ->
@@ -1372,8 +1374,26 @@ let add_to_list x data m =
   let add = function None -> Some [data] | Some l -> Some (data :: l) in
   FileMap.update x add m
 
+(* This attempts to read the attributes since typedef attributes are not exposed in the
+   ClangMl high-level AST. This is painful. *)
+let decl_is_opaque (decl: decl) =
+  let is_opaque = ref false in
+  begin match decl.decoration with
+  | Cursor cx ->
+      Clang__.Clang__utils.iter_decl_attributes (fun cx ->
+        match Clang.ext_attr_get_kind cx with
+        | Annotate when Clang.ext_attrs_get_annotation cx = Attributes.opaque_attr ->
+            is_opaque := true;
+        | _ ->
+            ()
+      ) cx
+  | Custom _ ->
+      failwith "no cursor"
+  end;
+  !is_opaque
+
 let add_lident_mapping (decl: decl) (filename: string) =
-  (* Format.printf "add_lident_mapping: %s\n" (name_of_decl decl); *)
+  Format.printf "add_lident_mapping %s\n%a\n@." (name_of_decl decl) Clang.Decl.pp decl;
   let path = [ Filename.(remove_extension (basename filename)) ] in
   match decl.desc with
   | Function fdecl ->
@@ -1383,14 +1403,14 @@ let add_lident_mapping (decl: decl) (filename: string) =
           let binders, ret_type = compute_external_type fdecl in
           Helpers.fold_arrow (List.map (fun x -> x.typ) binders) ret_type
         with _ ->
-          Format.printf "FIXME: could not represent the type of function declaration %s\n" name;
+          Format.printf "FIXME: could not represent the type of function declaration %s\n@." name;
           TAny
       in
       let path = path, t in
       (* Krml.KPrint.bprintf "%s --> %s\n" name (String.concat "::" path); *)
       name_map := FileMap.update name
         (function | None -> Some path | Some _ ->
-          Format.printf "Declaration %s appears twice in translation unit, found again in %s\n" name filename;
+          Format.printf "Declaration %s appears twice in translation unit, found again in %s\n@." name filename;
           Some path)
         !name_map
 
@@ -1399,13 +1419,13 @@ let add_lident_mapping (decl: decl) (filename: string) =
         try
           translate_typ vdecl.var_type
         with _ ->
-          Format.printf "FIXME: could not represent the type of global declaration %s\n" vdecl.var_name;
+          Format.printf "FIXME: could not represent the type of global declaration %s\n@." vdecl.var_name;
           TAny
       in
       let path = path, t in
       name_map := FileMap.update vdecl.var_name
         (function | None -> Some path | Some _ ->
-          Format.printf "Variable declaration %s appears twice in translation unit\n" vdecl.var_name;
+          Format.printf "Variable declaration %s appears twice in translation unit\n@." vdecl.var_name;
           Some path)
         !name_map
 
@@ -1414,7 +1434,7 @@ let add_lident_mapping (decl: decl) (filename: string) =
       let path = path, TAny in
       name_map := FileMap.update rdecl.name
         (function | None -> Some path | Some _ ->
-          Format.printf "Record Type declaration %s appears twice in translation unit\n" rdecl.name;
+          Format.printf "Record Type declaration %s appears twice in translation unit\n@." rdecl.name;
           Some path)
         !name_map
 
@@ -1422,7 +1442,7 @@ let add_lident_mapping (decl: decl) (filename: string) =
       (* FIXME dummy *)
       name_map := FileMap.update tdecl.name
         (function | None -> Some (path, TAny) | Some _ ->
-          Format.printf "Typedef declaration %s appears twice in translation unit\n" tdecl.name;
+          Format.printf "Typedef declaration %s appears twice in translation unit\n@." tdecl.name;
           Some (path, TAny))
         !name_map;
       (* To normalize correctly, we might need to retrieve types beyond the file currently
@@ -1435,6 +1455,7 @@ let add_lident_mapping (decl: decl) (filename: string) =
       let lid = path, tdecl.name in
       begin match tdecl.underlying_type.desc with
       | BuiltinType _ | Typedef _ | Pointer _ as t ->
+          if not (decl_is_opaque decl) then begin
             (* Krml.KPrint.bprintf "adding %a in the abbreviation map\n" Krml.PrintAst.Ops.plid lid; *)
             abbrev_map := LidMap.update lid (function
               | None -> Some t
@@ -1448,7 +1469,8 @@ let add_lident_mapping (decl: decl) (filename: string) =
                      frontend allow this to happen?). *)
                   Some t
               | _ -> Printf.eprintf "A type alias already exists for type %s\n" tdecl.name; failwith "redefining a type alias")
-            !abbrev_map;
+            !abbrev_map
+          end
 
       | Elaborated { keyword = Struct; named_type = { desc = Record {name; _}; _}; _ } ->
           (* When writing `typedef Struct S { ... } T;` in C, we see a RecordDecl (`struct S { ... };`)
@@ -1462,33 +1484,33 @@ let add_lident_mapping (decl: decl) (filename: string) =
       (* | Elaborated { keyword = Enum; _} -> failwith "elaborated enums not supported" *)
       (* | Elaborated _ -> failwith "elaborated types that are not enums or structs are not supported" *)
 
-      | Elaborated _ -> Format.printf "TypedefDecl: skipping a Elaborated\n"
+      | Elaborated _ -> Format.printf "TypedefDecl: skipping a Elaborated\n@."
 
-      | LValueReference _ -> Format.printf "TypedefDecl: skipping a LValueReference\n"
-      | RValueReference _ -> Format.printf "TypedefDecl: skipping a RValueReference\n"
-      | ConstantArray _ -> Format.printf "TypedefDecl: skipping a ConstantArray\n"
-      | Vector _ -> Format.printf "TypedefDecl: skipping a Vector\n"
-      | IncompleteArray _ -> Format.printf "TypedefDecl: skipping a IncompleteArray\n"
-      | VariableArray _ -> Format.printf "TypedefDecl: skipping a VariableArray\n"
-      | Enum _ -> Format.printf "TypedefDecl: skipping a Enum\n"
-      | FunctionType _ -> Format.printf "TypedefDecl: skipping a FunctionType\n"
-      | Record _ -> Format.printf "TypedefDecl: skipping a Record\n"
-      | Complex _ -> Format.printf "TypedefDecl: skipping a Complex\n"
-      | Attributed _ -> Format.printf "TypedefDecl: skipping a Attributed\n"
-      | ParenType _ -> Format.printf "TypedefDecl: skipping a ParenType\n"
-      | TemplateTypeParm _ -> Format.printf "TypedefDecl: skipping a TemplateTypeParm\n"
-      | SubstTemplateTypeParm _ -> Format.printf "TypedefDecl: skipping a SubstTemplateTypeParm\n"
-      | TemplateSpecialization _ -> Format.printf "TypedefDecl: skipping a TemplateSpecialization\n"
-      | Auto -> Format.printf "TypedefDecl: skipping a Auto\n"
-      | PackExpansion _ -> Format.printf "TypedefDecl: skipping a PackExpansion\n"
-      | MemberPointer _ -> Format.printf "TypedefDecl: skipping a MemberPointer\n"
-      | Decltype _ -> Format.printf "TypedefDecl: skipping a Decltype\n"
-      | InjectedClassName _ -> Format.printf "TypedefDecl: skipping a InjectedClassName\n"
-      | Using _ -> Format.printf "TypedefDecl: skipping a Using\n"
-      | Atomic _ -> Format.printf "TypedefDecl: skipping a Atomic\n"
-      | TypeOf _ -> Format.printf "TypedefDecl: skipping a TypeOf\n"
-      | UnexposedType _ -> Format.printf "TypedefDecl: skipping a UnexposedType\n"
-      | InvalidType -> Format.printf "TypedefDecl: skipping a InvalidType\n"
+      | LValueReference _ -> Format.printf "TypedefDecl: skipping a LValueReference\n@."
+      | RValueReference _ -> Format.printf "TypedefDecl: skipping a RValueReference\n@."
+      | ConstantArray _ -> Format.printf "TypedefDecl: skipping a ConstantArray\n@."
+      | Vector _ -> Format.printf "TypedefDecl: skipping a Vector\n@."
+      | IncompleteArray _ -> Format.printf "TypedefDecl: skipping a IncompleteArray\n@."
+      | VariableArray _ -> Format.printf "TypedefDecl: skipping a VariableArray\n@."
+      | Enum _ -> Format.printf "TypedefDecl: skipping a Enum\n@."
+      | FunctionType _ -> Format.printf "TypedefDecl: skipping a FunctionType\n@."
+      | Record _ -> Format.printf "TypedefDecl: skipping a Record\n@."
+      | Complex _ -> Format.printf "TypedefDecl: skipping a Complex\n@."
+      | Attributed _ -> Format.printf "TypedefDecl: skipping a Attributed\n@."
+      | ParenType _ -> Format.printf "TypedefDecl: skipping a ParenType\n@."
+      | TemplateTypeParm _ -> Format.printf "TypedefDecl: skipping a TemplateTypeParm\n@."
+      | SubstTemplateTypeParm _ -> Format.printf "TypedefDecl: skipping a SubstTemplateTypeParm\n@."
+      | TemplateSpecialization _ -> Format.printf "TypedefDecl: skipping a TemplateSpecialization\n@."
+      | Auto -> Format.printf "TypedefDecl: skipping a Auto\n@."
+      | PackExpansion _ -> Format.printf "TypedefDecl: skipping a PackExpansion\n@."
+      | MemberPointer _ -> Format.printf "TypedefDecl: skipping a MemberPointer\n@."
+      | Decltype _ -> Format.printf "TypedefDecl: skipping a Decltype\n@."
+      | InjectedClassName _ -> Format.printf "TypedefDecl: skipping a InjectedClassName\n@."
+      | Using _ -> Format.printf "TypedefDecl: skipping a Using\n@."
+      | Atomic _ -> Format.printf "TypedefDecl: skipping a Atomic\n@."
+      | TypeOf _ -> Format.printf "TypedefDecl: skipping a TypeOf\n@."
+      | UnexposedType _ -> Format.printf "TypedefDecl: skipping a UnexposedType\n@."
+      | InvalidType -> Format.printf "TypedefDecl: skipping a InvalidType\n@."
       end
 
   (* TODO: Do we need to support this mapping for more decls *)
@@ -1533,8 +1555,8 @@ let translate_compil_unit (ast: translation_unit) (wanted_c_file: string) =
   !boxed_types, files
 
 let read_file (filename: string) : translation_unit =
-  Format.printf "Clang version is %s\n" (Clang.get_clang_version());
+  Format.printf "Clang version is %s\n@." (Clang.get_clang_version());
   let command_line_args = !Scylla__Options.ccopts @
     List.map Clang.Command_line.include_directory (Clang.default_include_directories ()) in
-  Format.printf "Arguments passed to clang are: %s\n" (String.concat " " command_line_args);
+  Format.printf "Arguments passed to clang are: %s\n@." (String.concat " " command_line_args);
   parse_file ~command_line_args filename

@@ -73,7 +73,9 @@ typedef const char *Prims_string;
 #  include <emmintrin.h>
 typedef __m128i FStar_UInt128_uint128;
 #elif !defined(KRML_VERIFIED_UINT128) && defined(HAS_INT128)
-typedef unsigned __int128 FStar_UInt128_uint128;
+__attribute__((annotate("scylla_opaque")))
+typedef
+unsigned __int128 FStar_UInt128_uint128;
 #else
 typedef struct FStar_UInt128_uint128_s {
   uint64_t low;
