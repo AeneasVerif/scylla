@@ -524,6 +524,10 @@ let adjust e t =
       else
         e
 
+  (* Conversions via expected return type of the function (return NULL) *)
+  | EBufNull, TBuf _ ->
+      with_type t e.node
+
   (* TODO: tag indices *)
 
   | _ ->
@@ -1154,8 +1158,7 @@ let rec translate_stmt (env: env) (s: Clang.Ast.stmt_desc) : Krml.Ast.expr =
   | Return eo -> with_type TAny (match eo with
         | None -> EReturn Helpers.eunit
         | Some e ->
-            (* Take expected return type; TODO adjust *)
-            EReturn (translate_expr env e))
+            EReturn (adjust (translate_expr env e) env.ret_t))
 
   | Decl _ -> failwith "translate_stmt: decl"
   | Expr e -> translate_expr env e
