@@ -259,6 +259,9 @@ let translate_builtin_typ (t: Clang.Ast.builtin_type) =
   | Atomic -> failwith "translate_builtin_typ: Atomic"
   | _ -> failwith "translate_builtin_typ: BTFTagAttributed"
 
+let assert_tint_or_tbool t =
+  match t with TInt w -> w | TBool -> Bool | t -> fatal_error "Not an int/bool: %a" ptyp t
+
 let rec translate_typ (typ: qual_type) = match typ.desc with
   | Pointer typ -> TBuf (translate_typ typ, false)
 
@@ -676,7 +679,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
         let kind = translate_binop kind in
 
         let apply_op kind lhs rhs =
-          let w = Helpers.assert_tint lhs.typ in
+          let w = assert_tint_or_tbool lhs.typ in
           let op = Helpers.mk_op kind w in
           with_type (fst (Helpers.flatten_arrow op.typ)) (EApp (op, [lhs; rhs]))
         in
@@ -955,14 +958,18 @@ let translate_vardecl_with_memset (env: env) (vdecl: var_decl_desc) (args: expr 
       | _ -> failwith "memset length is not of the shape `N * sizeof(ty)`"
       in
       let v = translate_expr env v in
-      let len = adjust (translate_expr env len) (TInt SizeT) in
+      let len = translate_expr env len in
       (* Types might have been inferred differently, we only compare the expressions *)
-      if len.node = size.node then
+      if match len.node, size.node with
+        | EConstant (_, c1), EConstant (_, c2) -> c1 = c2
+        | _ -> len.node = size.node
+      then
+        let len = adjust len (TInt SizeT) in
         add_var env (vname, typ),
         Helpers.fresh_binder vname typ,
         Krml.Ast.with_type typ (EBufCreate (Krml.Common.Stack, v, len))
       else
-        fatal_error "length of memset does not match declared length of array"
+        fatal_error "length of memset %a does not match declared length of array %a" pexpr len pexpr size
 
   | _ -> failwith "memset does not have the right number of arguments"
 
