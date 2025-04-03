@@ -667,6 +667,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
         let lhs_typ = normalize_type lhs.typ in
 
         let apply_op kind lhs rhs =
+          let lhs_typ = normalize_type lhs.typ in
           let w = assert_tint_or_tbool lhs_typ in
           let op = Helpers.mk_op kind w in
           with_type (fst (Helpers.flatten_arrow op.typ)) (EApp (op, [lhs; rhs]))
@@ -684,6 +685,11 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
                 (* (lhs' + rhs') + rhs --> lhs' + (rhs' + rhs) *)
                 EBufSub (lhs', apply_op Add rhs' rhs)
             | EBufDiff (lhs', rhs') ->
+                (* JP: I doubt this happens, and if it does, I doubt the code below is correct:
+                  EBufSub returns a t* but EBufDiff returns a ptrdiff_t. Also C does not allow
+                  comparing two pointers from different objects... puzzled. To be debugged if the
+                  assert below triggers. *)
+                if true then failwith "is this really happening???";
                 (* (lhs' - rhs') + rhs --> lhs' + (rhs - rhs') *)
                 EBufSub (lhs', apply_op Sub rhs rhs')
             | _ ->
