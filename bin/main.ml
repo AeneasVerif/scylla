@@ -61,6 +61,9 @@ Supported options:|}
   ) Krml.AstToMiniRust.LidSet.empty files in
   let files = Krml.Builtin.lowstar_ignore :: List.concat files in
 
+  (* Makes debugging the checker messages horrible, otherwise *)
+  let files = Krml.Simplify.let_to_sequence#visit_files () files in
+
   if Krml.Options.debug "ClangToAst" then begin
     Format.printf "%!";
     Format.eprintf "%!";

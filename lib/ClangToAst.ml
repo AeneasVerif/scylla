@@ -304,9 +304,6 @@ let rec translate_typ (typ: qual_type) = match typ.desc with
       Format.eprintf "Trying to translate type %a\n@." Clang.Type.pp typ;
       failwith "translate_typ: unsupported type"
 
-(* Takes a Clangml expression [e], and retrieves the corresponding karamel Ast type *)
-let typ_of_expr (e: expr) : typ = Clang.Type.of_node e |> translate_typ
-
 let rec normalize_type t =
   match t with
   | TQualified lid ->
@@ -322,7 +319,14 @@ let rec normalize_type t =
       | Pointer t -> TBuf (normalize_type (translate_typ t), false)
       | _ -> failwith "impossible"
       end
+  | TBuf (t, c) -> TBuf (normalize_type t, c)
   | _ -> t
+
+let translate_typ t = normalize_type (translate_typ t)
+let translate_typ_name t = normalize_type (translate_typ_name t)
+
+(* Takes a Clangml expression [e], and retrieves the corresponding karamel Ast type *)
+let typ_of_expr (e: expr) : typ = Clang.Type.of_node e |> translate_typ
 
 (* Indicate that we synthesize the type of an expression based on the information provided by
    Clang. We aim to do this only in a few select cases:
@@ -331,7 +335,7 @@ let rec normalize_type t =
    - function types (so, arguments and return types).
    Every other type should be able to be deduced from the context. *)
 let typ_from_clang (e: Clang.Ast.expr): typ =
-  normalize_type (typ_of_expr e)
+  typ_of_expr e
 
 
 (* HELPERS *)
@@ -498,7 +502,7 @@ let translate_binop (kind: Clang.Ast.binary_operator_kind) : K.op = match kind w
      constants (i.e., synthesized as UInt64 bottom-up), but which need to be SizeT
    - enum tags, which are integers in C, but in krml need to be converted to constants. *)
 let adjust e t =
-  match e.node, normalize_type t with
+  match e.node, t with
   (* Conversions to integers: we rewrite constants on the fly, or emit a cast. *)
   | EConstant (_, c), TInt w ->
       with_type t (EConstant (w, c))
@@ -611,7 +615,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
     | UnaryOperator {kind = Not; operand } ->
         (* Bitwise not: ~ syntax, operates on integers *)
         let o = translate_expr env operand in
-        with_type o.typ @@ EApp (Helpers.mk_op K.BNot (Helpers.assert_tint (normalize_type o.typ)), [o])
+        with_type o.typ @@ EApp (Helpers.mk_op K.BNot (Helpers.assert_tint o.typ), [o])
 
     | UnaryOperator {kind = LNot; operand } ->
         (* Logical not: The operand should be a boolean *)
@@ -648,7 +652,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
         let rhs = translate_expr env rhs in
         (* TODO: looks like this is not catching the case of pointer arithmetic -- can this be
            redirected to the case below? *)
-        let w = Helpers.assert_tint (normalize_type rhs.typ) in
+        let w = Helpers.assert_tint rhs.typ in
         (* Rewrite the rhs into the compound expression, using the underlying operator *)
         let rhs = Krml.Ast.with_type lhs.typ (EApp (assign_to_bop w kind, [lhs; rhs])) in
         with_type TUnit begin match lhs.node with
@@ -664,13 +668,15 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
         let rhs = translate_expr env rhs in
         let kind = translate_binop kind in
 
-        let lhs_typ = normalize_type lhs.typ in
+        let lhs_typ = lhs.typ in
 
         let apply_op kind lhs rhs =
-          let lhs_typ = normalize_type lhs.typ in
+          let lhs_typ = lhs.typ in
           let w = assert_tint_or_tbool lhs_typ in
           let op = Helpers.mk_op kind w in
-          with_type (fst (Helpers.flatten_arrow op.typ)) (EApp (op, [lhs; rhs]))
+          let t_ret, t_args = Helpers.flatten_arrow op.typ in
+          let rhs = adjust rhs (List.nth t_args 1) in
+          with_type t_ret (EApp (op, [lhs; rhs]))
         in
 
         (* In case of pointer arithmetic, we need to perform a rewriting into EBufSub/Diff *)
@@ -714,7 +720,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
         let e, _ = get_id_name name |> find_var env in
         (* Krml.KPrint.bprintf "non-normalized type: %a\n" ptyp e.typ; *)
         (* TODO: should this be done more generally? *)
-        { e with typ = normalize_type e.typ }
+        e
 
     | Call {callee; args} when is_scylla_reset callee ->
         begin match args with
@@ -799,7 +805,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
         let base = translate_expr env base in
         let index = adjust (translate_expr env index) (TInt SizeT) in
         (* Is this only called on rvalues? Otherwise, might need EBufWrite *)
-        with_type (Helpers.assert_tbuf_or_tarray (normalize_type base.typ)) (EBufRead (base, index))
+        with_type (Helpers.assert_tbuf_or_tarray base.typ) (EBufRead (base, index))
 
     | ConditionalOperator _ -> failwith "translate_expr: conditional operator"
     | Paren _ -> failwith "translate_expr: paren"
@@ -827,7 +833,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
           with_type (typ_from_clang e) (EField (deref_base, f))
 
     | UnaryExpr {kind = SizeOf; argument = ArgumentType t; _ } ->
-        begin match normalize_type (translate_typ t) with
+        begin match translate_typ t with
         | TInt w -> (Helpers.mk_sizet (Krml.Constant.bytes_of_width w))
         | _ ->
             Format.printf "Trying to translate unary expr %a@." Clang.Expr.pp e;
@@ -1320,7 +1326,7 @@ let translate_decl (decl: decl) =
     | _ ->
         raise Unsupported
   with e ->
-    Format.printf "Declaration %a not supported@." Clang.Decl.pp decl;
+    Format.printf "Declaration %s not supported\n%a@." (name_of_decl decl) Clang.Decl.pp decl;
     raise e
 
 (* Computes the argument and return types of a function potentially marked as [[scylla_opaque]],
