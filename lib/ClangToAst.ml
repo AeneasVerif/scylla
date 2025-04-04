@@ -511,22 +511,27 @@ let translate_binop (kind: Clang.Ast.binary_operator_kind) : K.op = match kind w
      constants (i.e., synthesized as UInt64 bottom-up), but which need to be SizeT
    - enum tags, which are integers in C, but in krml need to be converted to constants. *)
 let adjust e t =
-  match e.node, t with
+  match e.node, e.typ, t with
   (* Conversions to integers: we rewrite constants on the fly, or emit a cast. *)
-  | EConstant (_, c), TInt w ->
+  | EConstant (_, c), _, TInt w ->
       with_type t (EConstant (w, c))
-  | _, TInt _ ->
+  | _, _, TInt _ ->
       if e.typ <> t then
         with_type t (ECast (e, t))
       else
         e
 
   (* Conversions to booleans: we rewrite constants on the fly, or emit `e != 0` *)
-  | EConstant (_, "0"), TBool ->
+  | EConstant (_, "0"), _, TBool ->
       with_type TBool (EBool false)
-  | EConstant (_, "1"), TBool ->
+  | EConstant (_, "1"), _, TBool ->
       with_type TBool (EBool true)
-  | _, TBool ->
+
+  (* Pointer is not null *)
+  | _, TBuf _, TBool ->
+      Helpers.mk_neq e (with_type e.typ EBufNull)
+
+  | _, _, TBool ->
       if e.typ <> t then
         let w = Helpers.assert_tint e.typ in
         Helpers.mk_neq e (Helpers.zero w)
@@ -534,7 +539,7 @@ let adjust e t =
         e
 
   (* Conversions via expected return type of the function (return NULL) *)
-  | EBufNull, TBuf _ ->
+  | EBufNull, _, TBuf _ ->
       with_type t e.node
 
   (* TODO: tag indices *)
