@@ -661,9 +661,9 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
         let rhs = translate_expr env rhs in
         (* TODO: looks like this is not catching the case of pointer arithmetic -- can this be
            redirected to the case below? *)
-        let w = Helpers.assert_tint rhs.typ in
+        let w = Helpers.assert_tint lhs.typ in
         (* Rewrite the rhs into the compound expression, using the underlying operator *)
-        let rhs = Krml.Ast.with_type lhs.typ (EApp (assign_to_bop w kind, [lhs; rhs])) in
+        let rhs = Krml.Ast.with_type lhs.typ (EApp (assign_to_bop w kind, [lhs; adjust rhs lhs.typ])) in
         with_type TUnit begin match lhs.node with
         (* Special-case rewriting for buffer assignments *)
         | EBufRead (base, index) -> EBufWrite (base, index, rhs)
@@ -845,12 +845,10 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
 
         if not arrow then
           (* base.f *)
-          (* FIXME deduce this properly *)
           with_type field_t (EField (base, f))
         else
           (* base->f *)
           let deref_base = Helpers.(with_type (assert_tbuf base.typ) (EBufRead (base, Helpers.zero_usize))) in
-          (* FIXME deduce this properly *)
           with_type field_t (EField (deref_base, f))
 
     | UnaryExpr {kind = SizeOf; argument = ArgumentType t; _ } ->
