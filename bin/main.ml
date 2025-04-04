@@ -24,6 +24,7 @@ Supported options:|}
       "--debug", Arg.String debug, " debug options, to be passed to krml";
       "--output", Arg.Set_string Krml.Options.tmpdir, " output directory in which to write files";
       "--ccopts", Arg.String ccopts, " options to be passed to clang, separated by commas";
+      "--errors_as_warnings", Arg.Clear Scylla.Options.fatal_errors, " unsupported declarations are a fatal error";
     ]
   in
   let spec = Arg.align spec in
@@ -52,11 +53,28 @@ Supported options:|}
   if files = [] then
     fatal_error "%s" (Arg.usage_string spec usage);
 
+  Krml.Options.(warn_error := !warn_error ^ "-6");
+  Krml.Warn.parse_warn_error !Krml.Options.warn_error;
+
   let boxed_types, files = List.fold_left_map (fun acc (f: string) ->
     let boxed_types, files = Scylla.ClangToAst.translate_compil_unit (Scylla.ClangToAst.read_file f) f in
     Krml.AstToMiniRust.LidSet.union acc boxed_types, files
   ) Krml.AstToMiniRust.LidSet.empty files in
-  let files = List.concat files in
+  let files = Krml.Builtin.lowstar_ignore :: List.concat files in
+
+  (* Makes debugging the checker messages horrible, otherwise *)
+  let files = Krml.Simplify.let_to_sequence#visit_files () files in
+
+  if Krml.Options.debug "ClangToAst" then begin
+    Format.printf "%!";
+    Format.eprintf "%!";
+    Krml.(Print.print (PPrint.(PrintAst.print_files files ^^ hardline)))
+  end;
+
+  let had_errors, files = Krml.Checker.check_everything ~warn:true files in
+  if had_errors then
+    fatal_error "%s:%d: input Ast is ill-typed, aborting" __FILE__ __LINE__;
+
   let files = Krml.Bundles.topological_sort files in
   let files = Krml.Simplify.sequence_to_let#visit_files () files in
   let files = Krml.AstToMiniRust.translate_files_with_boxed_types files boxed_types in

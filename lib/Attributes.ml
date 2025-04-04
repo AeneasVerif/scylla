@@ -60,3 +60,20 @@ let retrieve_mutability (attrs: attribute list) = List.fold_left (fun acc x ->
     | Some _, Some _ -> failwith "Mutability of opaque function is specified twice"
 ) None attrs
 
+(* This attempts to read the attributes since typedef attributes are not exposed in the
+   ClangMl high-level AST. This is painful. *)
+let decl_is_opaque (decl: decl) =
+  let is_opaque = ref false in
+  begin match decl.decoration with
+  | Cursor cx ->
+      Clang__.Clang__utils.iter_decl_attributes (fun cx ->
+        match Clang.ext_attr_get_kind cx with
+        | Annotate when Clang.ext_attrs_get_annotation cx = opaque_attr ->
+            is_opaque := true;
+        | _ ->
+            ()
+      ) cx
+  | Custom _ ->
+      failwith "no cursor"
+  end;
+  !is_opaque

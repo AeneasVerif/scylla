@@ -1,6 +1,6 @@
 # We try to figure out the best include paths, compiler options, etc. from the build system.
 
-SCYLLA_OPTS = --ccopts -DKRML_UNROLL_MAX=0,-I,test/include,-I,test/
+SCYLLA_OPTS = --ccopts -DKRML_UNROLL_MAX=0,-I,test/include,-I,test/ --errors_as_warnings
 
 # On OSX, querying xcrun appears to provide the sysroot.
 ifeq ($(shell uname -s),Darwin)

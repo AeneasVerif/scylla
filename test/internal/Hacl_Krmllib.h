@@ -43,8 +43,10 @@ static KRML_NOINLINE uint32_t FStar_UInt32_eq_mask(uint32_t a, uint32_t b);
 __attribute__((annotate("scylla_opaque")))
 static KRML_NOINLINE uint32_t FStar_UInt32_gte_mask(uint32_t a, uint32_t b);
 
+__attribute__((annotate("scylla_opaque")))
 static KRML_NOINLINE uint8_t FStar_UInt8_eq_mask(uint8_t a, uint8_t b);
 
+__attribute__((annotate("scylla_opaque")))
 static KRML_NOINLINE uint16_t FStar_UInt16_eq_mask(uint16_t a, uint16_t b);
 
 __attribute__((annotate("scylla_opaque")))
@@ -62,8 +64,11 @@ FStar_UInt128_shift_left(FStar_UInt128_uint128 a, uint32_t s);
 __attribute__((annotate("scylla_opaque")))
 static inline FStar_UInt128_uint128 FStar_UInt128_mul_wide(uint64_t x, uint64_t y);
 
+__attribute__((annotate("scylla_opaque")))
+__attribute__((annotate("scylla_mutability(mut, _)")))
 static inline void store128_be(uint8_t *x0, FStar_UInt128_uint128 x1);
 
+__attribute__((annotate("scylla_opaque")))
 static inline FStar_UInt128_uint128 load128_be(uint8_t *x0);
 
 #if defined(__cplusplus)
