@@ -832,15 +832,24 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
         | _ -> failwith "member node: only field accesses supported"
         in
 
+        let field_t =
+          let lid = Helpers.assert_tlid (if arrow then Helpers.assert_tbuf base.typ else base.typ) in
+          match LidMap.find lid !type_def_map with
+          | Flat fields ->
+              fst (List.assoc (Some f) fields)
+          | _ ->
+              failwith "impossible"
+        in
+
         if not arrow then
           (* base.f *)
           (* FIXME deduce this properly *)
-          with_type (typ_from_clang e) (EField (base, f))
+          with_type field_t (EField (base, f))
         else
           (* base->f *)
           let deref_base = Helpers.(with_type (assert_tbuf base.typ) (EBufRead (base, Helpers.zero_usize))) in
           (* FIXME deduce this properly *)
-          with_type (typ_from_clang e) (EField (deref_base, f))
+          with_type field_t (EField (deref_base, f))
 
     | UnaryExpr {kind = SizeOf; argument = ArgumentType t; _ } ->
         begin match translate_typ t with
