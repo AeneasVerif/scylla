@@ -323,7 +323,7 @@ let rec normalize_type t =
       | exception Not_found ->
           (* Krml.KPrint.bprintf "Not in the abbrev map: %a\n" Krml.PrintAst.Ops.plid lid; *)
           t
-      | Abbrev t ->
+      | lazy (Abbrev t) ->
           normalize_type t
       | _ ->
           t
@@ -835,7 +835,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
         let field_t =
           let lid = Helpers.assert_tlid (if arrow then Helpers.assert_tbuf base.typ else base.typ) in
           match LidMap.find_opt lid !type_def_map with
-          | Some (Flat fields) ->
+          | Some (lazy (Flat fields)) ->
               fst (List.assoc (Some f) fields)
           | Some _ ->
               fatal_error "Taking a field of %a which is not a struct" plid lid
@@ -1280,93 +1280,66 @@ let name_of_decl (decl: decl): string =
   | Var desc -> desc.var_name
   | _ -> "unknown"
 
-(* Returning an option is only a hack to make progress.
-   TODO: Proper handling of  decls *)
-let translate_decl (decl: decl) =
+exception Unsupported
 
-  (* When writing `typedef struct S { ... } T;` in C, we actually see two declarations:
-    - first, one for the `struct S { ... }` part (case RecordDecl)
-    - second, one for the the `typedef struct S T;` part (case TypedefDecl).
-    When visiting the first case, we generate the krml `type_decl` body, and store it in `struct_map`.
-    When visiting the second case, we retrieve the `type_decl` and construct a `DType` node.
-
-    This function performs the second task. *)
-  let elaborate_typ (typ: qual_type) = match typ.desc with
-    | Elaborated { keyword = Struct; named_type = { desc = Record {name; _}; _}; _ } ->
-        let name = get_id_name name in
-        StructMap.find name !struct_map
-    (* TODO: Similar workflow as structs *)
-    | Elaborated { keyword = Enum; _} -> failwith "elaborated enums not supported"
-    | Elaborated _ -> failwith "elaborated types that are not enums or structs are not supported"
-    | _ -> failwith "The underlying type of a typedef is not an elaborated type"
-  in
-
-  let exception Unsupported in
-  (* Format.printf "visiting decl %s\n%a\n@." (name_of_decl decl) Clang.Decl.pp decl; *)
+let decl_error_handler (decl: decl) default f =
   try
-    match decl.desc with
-    | Function fdecl ->
-      (* TODO: How to handle libc? *)
-      (* TODO: Support multiple files *)
-      translate_fundecl fdecl
-    | Var vdecl ->
-        if vdecl.var_init = None then
-          (* Prototype, e.g. extern int x; *)
-          None
-        else
-          let _, _, e = translate_vardecl empty_env vdecl in
-          let lid = fst (FileMap.find vdecl.var_name !name_map), vdecl.var_name in
-          let typ = translate_typ vdecl.var_type in
-          (* TODO: Flags *)
-          let flags = [] in
-          (* TODO: What is the int for? *)
-          Some (DGlobal (flags, lid, 0, typ, e))
-
-    | RecordDecl {name; fields; attributes; _} ->
-        let is_box = Attributes.has_box_attr attributes in
-        let fields = List.map translate_field fields in
-        struct_map := StructMap.update name (function
-          | None -> Some (Flat fields, is_box)
-          | Some _ -> Printf.eprintf "A type declaration already exists for struct %s\n" name; failwith "redefining a structure type")
-        !struct_map;
-        None
-
-    | TypedefDecl {name; underlying_type} ->
-        if Attributes.decl_is_opaque decl then
-          None
-        else
-          let lid = fst (FileMap.find name !name_map), name in
-          let def =
-            match underlying_type.desc with
-            | Pointer t ->
-                let ty = translate_typ t in
-                Abbrev (TBuf (ty, t.const))
-            | BuiltinType t ->
-                let ty = translate_builtin_typ t in
-                Abbrev ty
-            | Typedef {name; _} ->
-                let name = get_id_name name in
-                let ty = translate_typ_name name in
-                Abbrev ty
-            | _ ->
-                let ty, is_box = elaborate_typ underlying_type in
-                if is_box then boxed_types := LidSet.add lid !boxed_types;
-                ty
-          in
-          type_def_map := LidMap.add lid def !type_def_map;
-          Some (DType (lid, [], 0, 0, def))
-
-    | _ ->
-        raise Unsupported
+    f ()
   with e ->
+    Format.eprintf "%!@.";
+    Format.printf "%!@.";
     Format.printf "Declaration %s not supported\n%a@." (name_of_decl decl) Clang.Decl.pp decl;
     if !ScyllaOptions.fatal_errors then
       raise e
     else begin
       Format.eprintf "Error: %s\n@." (Printexc.to_string e);
       Printexc.print_backtrace stderr;
-      None
+      default
     end
+
+(* Returning an option is only a hack to make progress.
+   TODO: Proper handling of  decls *)
+let translate_decl (decl: decl) =
+
+  (* Format.printf "visiting decl %s\n%a\n@." (name_of_decl decl) Clang.Decl.pp decl; *)
+  decl_error_handler decl None @@ fun () ->
+  match decl.desc with
+  | Function fdecl ->
+    (* TODO: How to handle libc? *)
+    (* TODO: Support multiple files *)
+    translate_fundecl fdecl
+
+  | Var vdecl ->
+      if vdecl.var_init = None then
+        (* Prototype, e.g. extern int x; *)
+        None
+      else
+        let _, _, e = translate_vardecl empty_env vdecl in
+        let lid = fst (FileMap.find vdecl.var_name !name_map), vdecl.var_name in
+        let typ = translate_typ vdecl.var_type in
+        (* TODO: Flags *)
+        let flags = [] in
+        (* TODO: What is the int for? JP: number of type parameters in the case of polymorphic
+           constants. *)
+        Some (DGlobal (flags, lid, 0, typ, e))
+
+  | RecordDecl _ ->
+      (* Already processed in prepopulate_decl *)
+      None
+
+  | TypedefDecl {name; _} ->
+      (* Already processed in prepopulate_decl -- just synthesize something if this is pertinent
+         to the current compilation unit?. *)
+      let lid = fst (FileMap.find name !name_map), name in
+      begin match LidMap.find_opt lid !type_def_map with
+      | Some def ->
+          Some (DType (lid, [], 0, 0, Lazy.force def))
+      | None ->
+          None
+      end
+
+  | _ ->
+      raise Unsupported
 
 (* Computes the argument and return types of a function potentially marked as [[scylla_opaque]],
    taking into account attributes to adjust const/non-const pointers. *)
@@ -1413,7 +1386,7 @@ let translate_external_decl (decl: decl) = match decl.desc with
   | _ -> None
 
 let translate_file wanted_c_file file =
-  Format.printf "Hitting file %s (wanting: %s)\n@." (fst file) wanted_c_file;
+  (* Format.printf "Hitting file %s (wanting: %s)\n@." (fst file) wanted_c_file; *)
   let (name, decls) = file in
   (* We extract both the .c and the .h together. However, we will not
      extract function prototypes without a body, avoiding duplicated definitions *)
@@ -1434,7 +1407,14 @@ let add_to_list x data m =
   let add = function None -> Some [data] | Some l -> Some (data :: l) in
   FileMap.update x add m
 
-let add_lident_mapping (decl: decl) (filename: string) =
+(* C guarantees very little in terms of ordering of declarations. To make our translation
+   successful, we run a first pass that pre-allocates names and types of functions, and records type
+   definitions so that we can have enough type information accessible to generate a well-typed krml
+   AST. This phase does not produce any declarations -- it merely fills some maps. *)
+let prepopulate_decl (decl: decl) (filename: string) =
+
+  decl_error_handler decl () @@ fun () ->
+
   (* Format.printf "add_lident_mapping %s\n%a\n@." (name_of_decl decl) Clang.Decl.pp decl; *)
   let path = [ Filename.(remove_extension (basename filename)) ] in
   match decl.desc with
@@ -1471,12 +1451,31 @@ let add_lident_mapping (decl: decl) (filename: string) =
           Some path)
         !name_map
 
-  | RecordDecl rdecl ->
-      (* FIXME dummy *)
+  | RecordDecl {name; fields; attributes; _} ->
+      (* When writing `typedef struct S { ... } T;` in C, we actually see two declarations:
+        - first, one for the `struct S { ... }` part (case RecordDecl)
+        - second, one for the the `typedef struct S T;` part (case TypedefDecl).
+        When visiting the first case, we generate the krml `type_decl` body, and store it in `struct_map`.
+        When visiting the second case, we retrieve the `type_decl` and construct a `DType` node.
+
+        This performs the first task. *)
+      struct_map := StructMap.update name (function
+        | None ->
+            Some (lazy begin
+              let is_box = Attributes.has_box_attr attributes in
+              let fields = List.map translate_field fields in
+              Flat fields, is_box
+            end)
+        | Some _ ->
+            Printf.eprintf "A type declaration already exists for struct %s\n" name;
+            failwith "redefining a structure type")
+      !struct_map;
+
+      (* Record the name. FIXME: should be in a separate map since types have no type. *)
       let path = path, TAny in
-      name_map := FileMap.update rdecl.name
+      name_map := FileMap.update name
         (function | None -> Some path | Some _ ->
-          Format.printf "Record Type declaration %s appears twice in translation unit\n@." rdecl.name;
+          Format.printf "Record Type declaration %s appears twice in translation unit\n@." name;
           Some path)
         !name_map
 
@@ -1487,24 +1486,58 @@ let add_lident_mapping (decl: decl) (filename: string) =
           Format.printf "Typedef declaration %s appears twice in translation unit\n@." tdecl.name;
           Some (path, TAny))
         !name_map;
-      (* To normalize correctly, we might need to retrieve types beyond the file currently
-         being translated. We thus construct this map here rather than during type declaration
-         translation.
 
-         We substitute type abbreviations on the fly, via normalize_type. This allows us to match
-         synthesized type against expected type accurately during the translation, which in turn
-         allows us to insert casts in suitable places. *)
-      let lid = path, tdecl.name in
-      begin match tdecl.underlying_type.desc with
-      | Elaborated { keyword = Struct; named_type = { desc = Record {name; _}; _}; _ } ->
-          (* When writing `typedef Struct S { ... } T;` in C, we see a RecordDecl (`struct S { ... };`)
-             *and* a TypedefDecl (`typedef struct S T;`). This is the latter. We record a mapping
-             `struct S` ~~> `T` in our map, so that occurrence of the type `struct S` in the Clang
-             AST become nominal types `T` in the krml Ast. *)
-          Krml.KPrint.bprintf "struct %s maps to %a\n" (get_id_name name) Krml.PrintAst.Ops.plid lid;
-          elaborated_map := ElaboratedMap.add (name, `Struct) lid !elaborated_map
-      | _ -> ()
-      end
+      if Attributes.decl_is_opaque decl then
+        ()
+
+      else
+        (* To normalize correctly, we might need to retrieve types beyond the file currently
+           being translated. We thus construct this map here rather than during type declaration
+           translation.
+
+           We substitute type abbreviations on the fly, via normalize_type. This allows us to match
+           synthesized type against expected type accurately during the translation, which in turn
+           allows us to insert casts in suitable places. *)
+        let lid = path, tdecl.name in
+        let def =
+          match tdecl.underlying_type.desc with
+          | Elaborated { keyword = Struct; named_type = { desc = Record {name; _}; _}; _ } ->
+              elaborated_map := ElaboratedMap.add (name, `Struct) lid !elaborated_map;
+
+              Some (lazy (
+                (* When writing `typedef Struct S { ... } T;` in C, we see a RecordDecl (`struct S { ... };`)
+                   *and* a TypedefDecl (`typedef struct S T;`). This is the latter. We record a mapping
+                   `struct S` ~~> `T` in our map, so that occurrence of the type `struct S` in the Clang
+                   AST become nominal types `T` in the krml Ast. *)
+                let ty, is_box = Lazy.force (StructMap.find (get_id_name name) !struct_map) in
+                if is_box then boxed_types := LidSet.add lid !boxed_types;
+                ty
+              ))
+
+          | Pointer t ->
+              Some (lazy (
+                let ty = translate_typ t in
+                Abbrev (TBuf (ty, t.const))
+              ))
+
+          | BuiltinType t ->
+              Some (lazy (
+                let ty = translate_builtin_typ t in
+                Abbrev ty
+              ))
+
+          | Typedef {name; _} ->
+              Some (lazy (
+                let name = get_id_name name in
+                let ty = translate_typ_name name in
+                Abbrev ty
+              ))
+
+          | _ ->
+              (* Unsupported *)
+              None
+        in
+        Option.iter (fun def -> type_def_map := LidMap.add lid def !type_def_map) def
 
   (* TODO: Do we need to support this mapping for more decls *)
   | _ ->
@@ -1520,7 +1553,7 @@ let split_into_files (lib_dirs: string list) (ast: translation_unit) =
     if List.exists (fun x -> String.starts_with ~prefix:x loc.filename) lib_dirs then (
       acc
     ) else (
-      add_lident_mapping decl loc.filename;
+      prepopulate_decl decl loc.filename;
       (* We merge .h and .c files here. Duplicated declarations (e.g., prototypes in the
          .h file, and definitions in the .c file) will be filtered during the translation
          of declaration *)
