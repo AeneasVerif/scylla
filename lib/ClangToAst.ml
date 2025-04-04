@@ -34,18 +34,28 @@ let name_map = ref FileMap.empty
  translation -- we always eliminate elaborated types in favor of lids. *)
 let elaborated_map = ref ElaboratedMap.empty
 
-(* A map from type alias names to their underlying implementation.
-   It is needed to retrieve the type of, e.g., constants when the expected type is an alias to an
-   integer type -- also allows not generating code that relies on type abbreviations being in scope
-   in order to type-check -- every synthesized type goes through `normalize_type` which inlines
-   abbreviations away. *)
-let abbrev_map = ref LidMap.empty
-
 (* A map storing types that are annotated with `scylla_box`, indicating
    that internal pointers should be translated to Boxes instead of borrows *)
 let boxed_types = ref LidSet.empty
 
+(* A map from type names to their underlying implementation (abbreviation, struct, etc.).
+   It is needed to retrieve the type of, e.g., constants when the expected type is an alias to an
+   integer type -- also allows not generating code that relies on type abbreviations being in scope
+   in order to type-check -- every synthesized type goes through `normalize_type` which inlines
+   abbreviations away. Finally, it also allows resolving proper type information for field
+   operations. *)
 let type_def_map = ref LidMap.empty
+
+(* A map from structure names to their corresponding KaRaMeL `type_def` declaration,
+   as well as whether the struct type is annotated with the `scylla_box` attribute.
+   Struct declarations are typically done through a typedef indirection in C, e.g.,
+   `typedef struct name_s { ... } name;`
+   This map is used to deconstruct the indirection in Rust, and directly define
+   a struct type `name`.
+
+   This is intentionally global so that it can be used across multiple runs.
+*)
+let struct_map = ref StructMap.empty
 
 
 (* ENVIRONMENTS *)
@@ -309,17 +319,14 @@ let rec translate_typ (typ: qual_type) = match typ.desc with
 let rec normalize_type t =
   match t with
   | TQualified lid ->
-      begin match LidMap.find lid !abbrev_map with
+      begin match LidMap.find lid !type_def_map with
       | exception Not_found ->
           (* Krml.KPrint.bprintf "Not in the abbrev map: %a\n" Krml.PrintAst.Ops.plid lid; *)
           t
-      | BuiltinType t -> translate_builtin_typ t
-      | Typedef { name; _ } ->
-          get_id_name name |> translate_typ_name
-        (* We might have a chain of aliases, we recurse on the resulting type *)
-        |> normalize_type
-      | Pointer t -> TBuf (normalize_type (translate_typ t), false)
-      | _ -> failwith "impossible"
+      | Abbrev t ->
+          normalize_type t
+      | _ ->
+          t
       end
   | TBuf (t, c) -> TBuf (normalize_type t, c)
   | _ -> t
@@ -1262,17 +1269,27 @@ let name_of_decl (decl: decl): string =
   | Var desc -> desc.var_name
   | _ -> "unknown"
 
+(* This attempts to read the attributes since typedef attributes are not exposed in the
+   ClangMl high-level AST. This is painful. *)
+let decl_is_opaque (decl: decl) =
+  let is_opaque = ref false in
+  begin match decl.decoration with
+  | Cursor cx ->
+      Clang__.Clang__utils.iter_decl_attributes (fun cx ->
+        match Clang.ext_attr_get_kind cx with
+        | Annotate when Clang.ext_attrs_get_annotation cx = Attributes.opaque_attr ->
+            is_opaque := true;
+        | _ ->
+            ()
+      ) cx
+  | Custom _ ->
+      failwith "no cursor"
+  end;
+  !is_opaque
+
 (* Returning an option is only a hack to make progress.
    TODO: Proper handling of  decls *)
 let translate_decl (decl: decl) =
-  (* A map from structure names to their corresponding KaRaMeL `type_def` declaration,
-     as well as whether the struct type is annotated with the `scylla_box` attribute.
-     Struct declarations are typically done through a typedef indirection in C, e.g.,
-     `typedef struct name_s { ... } name;`
-     This map is used to deconstruct the indirection in Rust, and directly define
-     a struct type `name`
-  *)
-  let struct_map = ref StructMap.empty in
 
   (* When writing `typedef struct S { ... } T;` in C, we actually see two declarations:
     - first, one for the `struct S { ... }` part (case RecordDecl)
@@ -1322,26 +1339,29 @@ let translate_decl (decl: decl) =
         None
 
     | TypedefDecl {name; underlying_type} ->
-        let lid = fst (FileMap.find name !name_map), name in
-        let def =
-          match underlying_type.desc with
-          | Pointer t ->
-              let ty = translate_typ t in
-              Abbrev (TBuf (ty, t.const))
-          | BuiltinType t ->
-              let ty = translate_builtin_typ t in
-              Abbrev ty
-          | Typedef {name; _} ->
-              let name = get_id_name name in
-              let ty = translate_typ_name name in
-              Abbrev ty
-          | _ ->
-              let ty, is_box = elaborate_typ underlying_type in
-              if is_box then boxed_types := LidSet.add lid !boxed_types;
-              ty
-        in
-        type_def_map := LidMap.add lid def !type_def_map;
-        Some (DType (lid, [], 0, 0, def))
+        if decl_is_opaque decl then
+          None
+        else
+          let lid = fst (FileMap.find name !name_map), name in
+          let def =
+            match underlying_type.desc with
+            | Pointer t ->
+                let ty = translate_typ t in
+                Abbrev (TBuf (ty, t.const))
+            | BuiltinType t ->
+                let ty = translate_builtin_typ t in
+                Abbrev ty
+            | Typedef {name; _} ->
+                let name = get_id_name name in
+                let ty = translate_typ_name name in
+                Abbrev ty
+            | _ ->
+                let ty, is_box = elaborate_typ underlying_type in
+                if is_box then boxed_types := LidSet.add lid !boxed_types;
+                ty
+          in
+          type_def_map := LidMap.add lid def !type_def_map;
+          Some (DType (lid, [], 0, 0, def))
 
     | _ ->
         raise Unsupported
@@ -1421,24 +1441,6 @@ let add_to_list x data m =
   let add = function None -> Some [data] | Some l -> Some (data :: l) in
   FileMap.update x add m
 
-(* This attempts to read the attributes since typedef attributes are not exposed in the
-   ClangMl high-level AST. This is painful. *)
-let decl_is_opaque (decl: decl) =
-  let is_opaque = ref false in
-  begin match decl.decoration with
-  | Cursor cx ->
-      Clang__.Clang__utils.iter_decl_attributes (fun cx ->
-        match Clang.ext_attr_get_kind cx with
-        | Annotate when Clang.ext_attrs_get_annotation cx = Attributes.opaque_attr ->
-            is_opaque := true;
-        | _ ->
-            ()
-      ) cx
-  | Custom _ ->
-      failwith "no cursor"
-  end;
-  !is_opaque
-
 let add_lident_mapping (decl: decl) (filename: string) =
   (* Format.printf "add_lident_mapping %s\n%a\n@." (name_of_decl decl) Clang.Decl.pp decl; *)
   let path = [ Filename.(remove_extension (basename filename)) ] in
@@ -1501,25 +1503,6 @@ let add_lident_mapping (decl: decl) (filename: string) =
          allows us to insert casts in suitable places. *)
       let lid = path, tdecl.name in
       begin match tdecl.underlying_type.desc with
-      | BuiltinType _ | Typedef _ | Pointer _ as t ->
-          if not (decl_is_opaque decl) then begin
-            (* Krml.KPrint.bprintf "adding %a in the abbreviation map\n" Krml.PrintAst.Ops.plid lid; *)
-            (* FIXME why are we doing this on clang types and not relying on type_desc_map? *)
-            abbrev_map := LidMap.update lid (function
-              | None -> Some t
-              | Some t' when true || t = t' ->
-                  (* Invalid_argument("compare: abstract value")
-                     Values of type `type_desc` are probably not intended to be compared directly. I
-                     cannot find in the Clang API where the would be an equality predicate for
-                     `type_desc`s -- FIXME.
-
-                     With the `true ||` above, we override any previous typedef (but will the
-                     frontend allow this to happen?). *)
-                  Some t
-              | _ -> Printf.eprintf "A type alias already exists for type %s\n" tdecl.name; failwith "redefining a type alias")
-            !abbrev_map
-          end
-
       | Elaborated { keyword = Struct; named_type = { desc = Record {name; _}; _}; _ } ->
           (* When writing `typedef Struct S { ... } T;` in C, we see a RecordDecl (`struct S { ... };`)
              *and* a TypedefDecl (`typedef struct S T;`). This is the latter. We record a mapping
@@ -1527,38 +1510,7 @@ let add_lident_mapping (decl: decl) (filename: string) =
              AST become nominal types `T` in the krml Ast. *)
           Krml.KPrint.bprintf "struct %s maps to %a\n" (get_id_name name) Krml.PrintAst.Ops.plid lid;
           elaborated_map := ElaboratedMap.add (name, `Struct) lid !elaborated_map
-
-      (* (1* TODO: Similar workflow as structs *1) *)
-      (* | Elaborated { keyword = Enum; _} -> failwith "elaborated enums not supported" *)
-      (* | Elaborated _ -> failwith "elaborated types that are not enums or structs are not supported" *)
-
-      | Elaborated _ -> Format.printf "TypedefDecl: skipping a Elaborated\n@."
-
-      | LValueReference _ -> Format.printf "TypedefDecl: skipping a LValueReference\n@."
-      | RValueReference _ -> Format.printf "TypedefDecl: skipping a RValueReference\n@."
-      | ConstantArray _ -> Format.printf "TypedefDecl: skipping a ConstantArray\n@."
-      | Vector _ -> Format.printf "TypedefDecl: skipping a Vector\n@."
-      | IncompleteArray _ -> Format.printf "TypedefDecl: skipping a IncompleteArray\n@."
-      | VariableArray _ -> Format.printf "TypedefDecl: skipping a VariableArray\n@."
-      | Enum _ -> Format.printf "TypedefDecl: skipping a Enum\n@."
-      | FunctionType _ -> Format.printf "TypedefDecl: skipping a FunctionType\n@."
-      | Record _ -> Format.printf "TypedefDecl: skipping a Record\n@."
-      | Complex _ -> Format.printf "TypedefDecl: skipping a Complex\n@."
-      | Attributed _ -> Format.printf "TypedefDecl: skipping a Attributed\n@."
-      | ParenType _ -> Format.printf "TypedefDecl: skipping a ParenType\n@."
-      | TemplateTypeParm _ -> Format.printf "TypedefDecl: skipping a TemplateTypeParm\n@."
-      | SubstTemplateTypeParm _ -> Format.printf "TypedefDecl: skipping a SubstTemplateTypeParm\n@."
-      | TemplateSpecialization _ -> Format.printf "TypedefDecl: skipping a TemplateSpecialization\n@."
-      | Auto -> Format.printf "TypedefDecl: skipping a Auto\n@."
-      | PackExpansion _ -> Format.printf "TypedefDecl: skipping a PackExpansion\n@."
-      | MemberPointer _ -> Format.printf "TypedefDecl: skipping a MemberPointer\n@."
-      | Decltype _ -> Format.printf "TypedefDecl: skipping a Decltype\n@."
-      | InjectedClassName _ -> Format.printf "TypedefDecl: skipping a InjectedClassName\n@."
-      | Using _ -> Format.printf "TypedefDecl: skipping a Using\n@."
-      | Atomic _ -> Format.printf "TypedefDecl: skipping a Atomic\n@."
-      | TypeOf _ -> Format.printf "TypedefDecl: skipping a TypeOf\n@."
-      | UnexposedType _ -> Format.printf "TypedefDecl: skipping a UnexposedType\n@."
-      | InvalidType -> Format.printf "TypedefDecl: skipping a InvalidType\n@."
+      | _ -> ()
       end
 
   (* TODO: Do we need to support this mapping for more decls *)
