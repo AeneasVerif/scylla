@@ -834,11 +834,13 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
 
         let field_t =
           let lid = Helpers.assert_tlid (if arrow then Helpers.assert_tbuf base.typ else base.typ) in
-          match LidMap.find lid !type_def_map with
-          | Flat fields ->
+          match LidMap.find_opt lid !type_def_map with
+          | Some (Flat fields) ->
               fst (List.assoc (Some f) fields)
-          | _ ->
-              failwith "impossible"
+          | Some _ ->
+              fatal_error "Taking a field of %a which is not a struct" plid lid
+          | None ->
+              fatal_error "Taking a field of %a which is not in the map" plid lid
         in
 
         if not arrow then
@@ -1278,24 +1280,6 @@ let name_of_decl (decl: decl): string =
   | Var desc -> desc.var_name
   | _ -> "unknown"
 
-(* This attempts to read the attributes since typedef attributes are not exposed in the
-   ClangMl high-level AST. This is painful. *)
-let decl_is_opaque (decl: decl) =
-  let is_opaque = ref false in
-  begin match decl.decoration with
-  | Cursor cx ->
-      Clang__.Clang__utils.iter_decl_attributes (fun cx ->
-        match Clang.ext_attr_get_kind cx with
-        | Annotate when Clang.ext_attrs_get_annotation cx = Attributes.opaque_attr ->
-            is_opaque := true;
-        | _ ->
-            ()
-      ) cx
-  | Custom _ ->
-      failwith "no cursor"
-  end;
-  !is_opaque
-
 (* Returning an option is only a hack to make progress.
    TODO: Proper handling of  decls *)
 let translate_decl (decl: decl) =
@@ -1348,7 +1332,7 @@ let translate_decl (decl: decl) =
         None
 
     | TypedefDecl {name; underlying_type} ->
-        if decl_is_opaque decl then
+        if Attributes.decl_is_opaque decl then
           None
         else
           let lid = fst (FileMap.find name !name_map), name in
