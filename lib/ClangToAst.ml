@@ -1295,6 +1295,39 @@ let decl_error_handler (decl: decl) default f =
       default
     end
 
+(* Computes the argument and return types of a function potentially marked as [[scylla_opaque]],
+   taking into account attributes to adjust const/non-const pointers. *)
+let compute_external_type (fdecl: function_decl): binder list * typ =
+  let ret_type = translate_typ fdecl.function_type.result in
+  let binders = translate_params fdecl in
+  let args_mut = Attributes.retrieve_mutability fdecl.attributes in
+  let binders = match args_mut with
+    | None ->
+        (* No mutability was specified, but we are in an opaque definition:
+           All arguments must be considered as read-only *)
+        List.map (fun arg -> match arg.typ with
+          | TBuf (t, _) -> {arg with typ = TBuf (t, true)}
+          | _ -> arg
+        ) binders
+    | Some muts -> List.map2 (fun mut arg -> match arg.typ, mut with
+        (* In Ast, the flag set to true represents a constant, immutable array.
+           The mutability flag is the converse, so we need to take the negation *)
+        | TBuf (t, _), b -> {arg with typ = TBuf (t, not b)}
+        (* For all other types, we do not modify the mutability *)
+        | _ -> arg
+        ) muts binders
+  in
+  binders, ret_type
+
+let translate_external_fundecl (fdecl: function_decl) =
+  let name = get_id_name fdecl.name in
+  let binders, ret_type = compute_external_type fdecl in
+  let fn_type = Helpers.fold_arrow (List.map (fun x -> x.typ) binders) ret_type in
+  (* TODO: translate_lid *)
+  let lid = fst (FileMap.find name !name_map), name in
+
+  Krml.Ast.(DExternal (None, [], 0, 0, lid, fn_type, List.map (fun x -> Krml.Ast.(x.node.name)) binders))
+
 (* Returning an option is only a hack to make progress.
    TODO: Proper handling of  decls *)
 let translate_decl (decl: decl) =
@@ -1305,7 +1338,10 @@ let translate_decl (decl: decl) =
   | Function fdecl ->
     (* TODO: How to handle libc? *)
     (* TODO: Support multiple files *)
-    translate_fundecl fdecl
+    if Attributes.has_opaque_attr fdecl.attributes then
+      Some (translate_external_fundecl fdecl)
+    else
+      translate_fundecl fdecl
 
   | Var vdecl ->
       if vdecl.var_init = None then
@@ -1339,30 +1375,6 @@ let translate_decl (decl: decl) =
   | _ ->
       raise Unsupported
 
-(* Computes the argument and return types of a function potentially marked as [[scylla_opaque]],
-   taking into account attributes to adjust const/non-const pointers. *)
-let compute_external_type (fdecl: function_decl): binder list * typ =
-  let ret_type = translate_typ fdecl.function_type.result in
-  let binders = translate_params fdecl in
-  let args_mut = Attributes.retrieve_mutability fdecl.attributes in
-  let binders = match args_mut with
-    | None ->
-        (* No mutability was specified, but we are in an opaque definition:
-           All arguments must be considered as read-only *)
-        List.map (fun arg -> match arg.typ with
-          | TBuf (t, _) -> {arg with typ = TBuf (t, true)}
-          | _ -> arg
-        ) binders
-    | Some muts -> List.map2 (fun mut arg -> match arg.typ, mut with
-        (* In Ast, the flag set to true represents a constant, immutable array.
-           The mutability flag is the converse, so we need to take the negation *)
-        | TBuf (t, _), b -> {arg with typ = TBuf (t, not b)}
-        (* For all other types, we do not modify the mutability *)
-        | _ -> arg
-        ) muts binders
-  in
-  binders, ret_type
-
 (* We are traversing an external module. We filter it to only preserve
    declarations annotated with the [opaque_attr] attribute, which
    we translate as external.
@@ -1371,16 +1383,10 @@ let compute_external_type (fdecl: function_decl): binder list * typ =
 let translate_external_decl (decl: decl) = match decl.desc with
   | Function fdecl ->
       (* let name = get_id_name fdecl.name in *)
-      if Attributes.has_opaque_attr fdecl.attributes then (
-        let name = get_id_name fdecl.name in
-        let binders, ret_type = compute_external_type fdecl in
-        let fn_type = Helpers.fold_arrow (List.map (fun x -> x.typ) binders) ret_type in
-        (* TODO: translate_lid *)
-        let lid = fst (FileMap.find name !name_map), name in
-
-        let decl = Krml.Ast.(DExternal (None, [], 0, 0, lid, fn_type, List.map (fun x -> Krml.Ast.(x.node.name)) binders)) in
-        Some decl
-      ) else None
+      if Attributes.has_opaque_attr fdecl.attributes then
+        Some (translate_external_fundecl fdecl)
+      else
+        None
   | _ -> None
 
 let translate_file wanted_c_file file =
