@@ -24,6 +24,7 @@ Supported options:|}
       "--debug", Arg.String debug, " debug options, to be passed to krml";
       "--output", Arg.Set_string Krml.Options.tmpdir, " output directory in which to write files";
       "--ccopts", Arg.String ccopts, " options to be passed to clang, separated by commas";
+      "--errors_as_warnings", Arg.Clear Scylla.Options.fatal_errors, " unsupported declarations are a fatal error";
     ]
   in
   let spec = Arg.align spec in

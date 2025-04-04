@@ -1,6 +1,8 @@
 (* Copyright (c) INRIA and Microsoft Corporation. All rights reserved. *)
 (* Licensed under the Apache 2.0 and MIT Licenses. *)
 
+module ScyllaOptions = Options
+
 open Krml.Ast
 open Krml.PrintAst.Ops
 open Clang.Ast
@@ -28,27 +30,22 @@ end)
    the type of typedefs. *)
 let name_map = ref FileMap.empty
 
-(* A map from structure names to their corresponding KaRaMeL `type_def` declaration,
-   as well as whether the struct type is annotated with the `scylla_box` attribute.
-   Struct declarations are typically done through a typedef indirection in C, e.g.,
-   `typedef struct name_s { ... } name;`
-   This map is used to deconstruct the indirection in Rust, and directly define
-   a struct type `name`
-*)
-let struct_map = ref StructMap.empty
-
 (* A map from an elaborated type reference (e.g. `struct S`) to the lid it has been assigned in the
  translation -- we always eliminate elaborated types in favor of lids. *)
 let elaborated_map = ref ElaboratedMap.empty
 
 (* A map from type alias names to their underlying implementation.
-   It is needed to retrieve the type of, e.g., constants
-   when the expected type is an alias to an integer type *)
+   It is needed to retrieve the type of, e.g., constants when the expected type is an alias to an
+   integer type -- also allows not generating code that relies on type abbreviations being in scope
+   in order to type-check -- every synthesized type goes through `normalize_type` which inlines
+   abbreviations away. *)
 let abbrev_map = ref LidMap.empty
 
 (* A map storing types that are annotated with `scylla_box`, indicating
    that internal pointers should be translated to Boxes instead of borrows *)
 let boxed_types = ref LidSet.empty
+
+let type_def_map = ref LidMap.empty
 
 
 (* ENVIRONMENTS *)
@@ -141,10 +138,15 @@ let translate_builtin_typ (t: Clang.Ast.builtin_type) =
 
   | Int -> TInt Int32
 
-  | Short
-  | Long
-  | LongLong
-  | Int128 -> failwith "translate_builtin_typ: signed int"
+  | Short -> failwith "translate_builtin_tyo: short"
+  | Long ->
+      begin match DataModel.size_long with
+      | 4 -> TInt Int32
+      | 8 -> TInt Int64
+      | _ -> failwith "impossible"
+      end
+  | LongLong -> TInt Int64
+  | Int128 -> failwith "translate_builtin_typ: signed int 128"
   | Bool -> TBool
 
   | Pointer -> failwith "translate_builtin_typ: pointer"
@@ -152,10 +154,10 @@ let translate_builtin_typ (t: Clang.Ast.builtin_type) =
   | Invalid -> failwith "translate_builtin_typ: Invalid"
   | Unexposed -> failwith "translate_builtin_typ: Unexposed"
   | Char_U -> failwith "translate_builtin_typ: Char_U"
-  | UChar -> failwith "translate_builtin_typ: UChar"
+  | UChar -> TInt UInt8
   | Char16 -> failwith "translate_builtin_typ: Char16"
   | Char32 -> failwith "translate_builtin_typ: Char32"
-  | Char_S -> failwith "translate_builtin_typ: Char_S"
+  | Char_S -> TInt Int8
   | SChar -> failwith "translate_builtin_typ: SChar"
   | WChar -> failwith "translate_builtin_typ: WChar"
   | Float -> failwith "translate_builtin_typ: Float"
@@ -671,6 +673,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
         let lhs_typ = lhs.typ in
 
         let apply_op kind lhs rhs =
+          (* FIXME: this needs to follow the C integer promotion rules. *)
           let lhs_typ = lhs.typ in
           let w = assert_tint_or_tbool lhs_typ in
           let op = Helpers.mk_op kind w in
@@ -1243,9 +1246,10 @@ let translate_field (decl: decl) =
       (* Sanity-checks for unsupported features *)
       assert (bitwidth = None);
       assert (init = None);
-      assert (attributes = []);
-      (* TODO: What is the boolean used for in krml fields_t_opt type? *)
-      (Some name, (translate_typ qual_type, false))
+      (* TODO: what do we want to do if there attributes, like alignment? *)
+      assert (attributes = [] || true);
+      (* TODO: do not mark all fields as mutable by default? *)
+      (Some name, (translate_typ qual_type, true))
   | _ -> failwith "Struct declarations should only contain fields"
 
 let name_of_decl (decl: decl): string =
@@ -1258,25 +1262,35 @@ let name_of_decl (decl: decl): string =
   | Var desc -> desc.var_name
   | _ -> "unknown"
 
-(* When writing `typedef struct S { ... } T;` in C, we actually see two declarations:
-  - first, one for the `struct S { ... }` part (case RecordDecl)
-  - second, one for the the `typedef struct S T;` part (case TypedefDecl).
-  When visiting the first case, we generate the krml `type_decl` body, and store it in `struct_map`.
-  When visiting the second case, we retrieve the `type_decl` and construct a `DType` node.
-
-  This function performs the second task. *)
-let elaborate_typ (typ: qual_type) = match typ.desc with
-  | Elaborated { keyword = Struct; named_type = { desc = Record {name; _}; _}; _ } ->
-      let name = get_id_name name in
-      StructMap.find name !struct_map
-  (* TODO: Similar workflow as structs *)
-  | Elaborated { keyword = Enum; _} -> failwith "elaborated enums not supported"
-  | Elaborated _ -> failwith "elaborated types that are not enums or structs are not supported"
-  | _ -> failwith "The underlying type of a typedef is not an elaborated type"
-
 (* Returning an option is only a hack to make progress.
    TODO: Proper handling of  decls *)
 let translate_decl (decl: decl) =
+  (* A map from structure names to their corresponding KaRaMeL `type_def` declaration,
+     as well as whether the struct type is annotated with the `scylla_box` attribute.
+     Struct declarations are typically done through a typedef indirection in C, e.g.,
+     `typedef struct name_s { ... } name;`
+     This map is used to deconstruct the indirection in Rust, and directly define
+     a struct type `name`
+  *)
+  let struct_map = ref StructMap.empty in
+
+  (* When writing `typedef struct S { ... } T;` in C, we actually see two declarations:
+    - first, one for the `struct S { ... }` part (case RecordDecl)
+    - second, one for the the `typedef struct S T;` part (case TypedefDecl).
+    When visiting the first case, we generate the krml `type_decl` body, and store it in `struct_map`.
+    When visiting the second case, we retrieve the `type_decl` and construct a `DType` node.
+
+    This function performs the second task. *)
+  let elaborate_typ (typ: qual_type) = match typ.desc with
+    | Elaborated { keyword = Struct; named_type = { desc = Record {name; _}; _}; _ } ->
+        let name = get_id_name name in
+        StructMap.find name !struct_map
+    (* TODO: Similar workflow as structs *)
+    | Elaborated { keyword = Enum; _} -> failwith "elaborated enums not supported"
+    | Elaborated _ -> failwith "elaborated types that are not enums or structs are not supported"
+    | _ -> failwith "The underlying type of a typedef is not an elaborated type"
+  in
+
   let exception Unsupported in
   (* Format.printf "visiting decl %s\n%a\n@." (name_of_decl decl) Clang.Decl.pp decl; *)
   try
@@ -1309,25 +1323,37 @@ let translate_decl (decl: decl) =
 
     | TypedefDecl {name; underlying_type} ->
         let lid = fst (FileMap.find name !name_map), name in
-        begin match underlying_type.desc with
-        | BuiltinType t ->
-            let ty = translate_builtin_typ t in
-            Some (DType (lid, [], 0, 0, Abbrev ty))
-        | Typedef {name; _} ->
-            let name = get_id_name name in
-            let ty = translate_typ_name name in
-            Some (DType (lid, [], 0, 0, Abbrev ty))
-        | _ ->
-            let ty, is_box = elaborate_typ underlying_type in
-            if is_box then boxed_types := LidSet.add lid !boxed_types;
-            Some (DType (lid, [], 0, 0, ty))
-        end
+        let def =
+          match underlying_type.desc with
+          | Pointer t ->
+              let ty = translate_typ t in
+              Abbrev (TBuf (ty, t.const))
+          | BuiltinType t ->
+              let ty = translate_builtin_typ t in
+              Abbrev ty
+          | Typedef {name; _} ->
+              let name = get_id_name name in
+              let ty = translate_typ_name name in
+              Abbrev ty
+          | _ ->
+              let ty, is_box = elaborate_typ underlying_type in
+              if is_box then boxed_types := LidSet.add lid !boxed_types;
+              ty
+        in
+        type_def_map := LidMap.add lid def !type_def_map;
+        Some (DType (lid, [], 0, 0, def))
 
     | _ ->
         raise Unsupported
   with e ->
     Format.printf "Declaration %s not supported\n%a@." (name_of_decl decl) Clang.Decl.pp decl;
-    raise e
+    if !ScyllaOptions.fatal_errors then
+      raise e
+    else begin
+      Format.eprintf "Error: %s\n@." (Printexc.to_string e);
+      Printexc.print_backtrace stderr;
+      None
+    end
 
 (* Computes the argument and return types of a function potentially marked as [[scylla_opaque]],
    taking into account attributes to adjust const/non-const pointers. *)
@@ -1374,6 +1400,7 @@ let translate_external_decl (decl: decl) = match decl.desc with
   | _ -> None
 
 let translate_file wanted_c_file file =
+  Format.printf "Hitting file %s (wanting: %s)\n@." (fst file) wanted_c_file;
   let (name, decls) = file in
   (* We extract both the .c and the .h together. However, we will not
      extract function prototypes without a body, avoiding duplicated definitions *)
@@ -1477,6 +1504,7 @@ let add_lident_mapping (decl: decl) (filename: string) =
       | BuiltinType _ | Typedef _ | Pointer _ as t ->
           if not (decl_is_opaque decl) then begin
             (* Krml.KPrint.bprintf "adding %a in the abbreviation map\n" Krml.PrintAst.Ops.plid lid; *)
+            (* FIXME why are we doing this on clang types and not relying on type_desc_map? *)
             abbrev_map := LidMap.update lid (function
               | None -> Some t
               | Some t' when true || t = t' ->
