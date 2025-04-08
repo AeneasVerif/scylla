@@ -76,6 +76,10 @@ let add_binders env binders = List.fold_left (fun env b ->
     add_var env (b.node.name, b.typ)
   ) env binders
 
+let decay = function
+  | TArray (t, _) -> TBuf (t, false)
+  | t -> t
+
 (* TODO: Handle fully qualified names/namespaces/different files. *)
 let find_var env name =
   let exception Found of int * typ * bool ref in
@@ -87,12 +91,12 @@ let find_var env name =
     raise Not_found
   with
   | Found (i, t, mut) ->
-      with_type t (EBound i), mut
+      with_type (decay t) (EBound i), mut
   | Not_found ->
       try
         let path, t = FileMap.find name !name_map in
         (* FIXME handle mutable globals *)
-        with_type t (EQualified (path, name)), ref false
+        with_type (decay t) (EQualified (path, name)), ref false
       with
       | Not_found ->
           Printf.eprintf "Could not find variable %s\n" name;
