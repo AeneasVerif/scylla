@@ -131,7 +131,7 @@ pub fn chacha20_encrypt_block(ctx: &[u32], out: &mut [u8], incr: u32, text: &[u8
   };
   for i in 0u32..16u32
   {
-    let x: u32 = (&bl)[i as usize] ^ (&k)[i as usize];
+    let x: u32 = bl[i as usize] ^ k[i as usize];
     let os: (&mut [u32], &mut [u32]) = bl.split_at_mut(0usize);
     os.1[i as usize] = x
   };
@@ -139,7 +139,7 @@ pub fn chacha20_encrypt_block(ctx: &[u32], out: &mut [u8], incr: u32, text: &[u8
   {
     crate::lowstar_endianness::store32_le(
       &mut out[i.wrapping_mul(4u32) as usize..],
-      (&bl)[i as usize]
+      bl[i as usize]
     )
   }
 }
@@ -153,11 +153,11 @@ pub fn chacha20_encrypt_block(ctx: &[u32], out: &mut [u8], incr: u32, text: &[u8
 )
 {
   let mut plain: [u8; 64] = [0u8; 64usize];
-  ((&mut plain)[0usize..len as usize]).copy_from_slice(&text[0usize..len as usize]);
+  (plain[0usize..len as usize]).copy_from_slice(&text[0usize..len as usize]);
   let mut plain_copy: [u8; 64] = [0u8; 64usize];
-  ((&mut plain_copy)[0usize..64usize]).copy_from_slice(&(&plain)[0usize..64usize]);
+  (plain_copy[0usize..64usize]).copy_from_slice(&plain[0usize..64usize]);
   chacha20_encrypt_block(ctx, &mut plain, incr, &plain_copy);
-  (out[0usize..len as usize]).copy_from_slice(&(&plain)[0usize..len as usize])
+  (out[0usize..len as usize]).copy_from_slice(&plain[0usize..len as usize])
 }
 
 pub fn chacha20_update(ctx: &[u32], len: u32, out: &mut [u8], text: &[u8])
