@@ -269,9 +269,6 @@ let translate_builtin_typ (t: Clang.Ast.builtin_type) =
   | Atomic -> failwith "translate_builtin_typ: Atomic"
   | _ -> failwith "translate_builtin_typ: BTFTagAttributed"
 
-let assert_tint_or_tbool t =
-  match t with TInt w -> w | TBool -> Bool | t -> Krml.Warn.fatal_error "Not an int/bool: %a" ptyp t
-
 let rec translate_typ (typ: qual_type) = match typ.desc with
   | Pointer typ -> TBuf (translate_typ typ, false)
 
@@ -447,23 +444,20 @@ open ClangHelpers
 
 (* EXPRESSIONS *)
 
-let assign_to_bop w (kind: Clang.Ast.binary_operator_kind) : Krml.Ast.expr =
-  let op = match kind with
-  (* TODO: Might need to disambiguate for pointer arithmetic *)
-  | AddAssign -> K.Add
-  | MulAssign -> Mult
+let assign_to_bop (kind: Clang.Ast.binary_operator_kind) : Clang.Ast.binary_operator_kind =
+  match kind with
+  | AddAssign -> Add
+  | MulAssign -> Mul
   | DivAssign -> Div
-  | RemAssign -> Mod
+  | RemAssign -> Rem
   | SubAssign -> Sub
-  | ShlAssign -> BShiftL
-  | ShrAssign -> BShiftR
-  | AndAssign -> BAnd
-  (* TODO: Disambiguate *)
-  | XorAssign -> BXor
-  | OrAssign -> BOr
+  | ShlAssign -> Shl
+  | ShrAssign -> Shr
+  | AndAssign -> And
+  (* TODO: Disambiguate. JP: how so? *)
+  | XorAssign -> Xor
+  | OrAssign -> Or
   | _ -> failwith "not an assign op"
-  in
-  Helpers.mk_op op w
 
 let translate_binop (kind: Clang.Ast.binary_operator_kind) : K.op = match kind with
   | PtrMemD | PtrMemI -> failwith "translate_binop: ptr mem"
@@ -511,22 +505,27 @@ let translate_binop (kind: Clang.Ast.binary_operator_kind) : K.op = match kind w
      constants (i.e., synthesized as UInt64 bottom-up), but which need to be SizeT
    - enum tags, which are integers in C, but in krml need to be converted to constants. *)
 let adjust e t =
-  match e.node, t with
+  match e.node, e.typ, t with
   (* Conversions to integers: we rewrite constants on the fly, or emit a cast. *)
-  | EConstant (_, c), TInt w ->
+  | EConstant (_, c), _, TInt w ->
       with_type t (EConstant (w, c))
-  | _, TInt _ ->
+  | _, _, TInt _ ->
       if e.typ <> t then
         with_type t (ECast (e, t))
       else
         e
 
   (* Conversions to booleans: we rewrite constants on the fly, or emit `e != 0` *)
-  | EConstant (_, "0"), TBool ->
+  | EConstant (_, "0"), _, TBool ->
       with_type TBool (EBool false)
-  | EConstant (_, "1"), TBool ->
+  | EConstant (_, "1"), _, TBool ->
       with_type TBool (EBool true)
-  | _, TBool ->
+
+  (* Pointer is not null *)
+  | _, TBuf _, TBool ->
+      Helpers.mk_neq e (with_type e.typ EBufNull)
+
+  | _, _, TBool ->
       if e.typ <> t then
         let w = Helpers.assert_tint e.typ in
         Helpers.mk_neq e (Helpers.zero w)
@@ -534,7 +533,7 @@ let adjust e t =
         e
 
   (* Conversions via expected return type of the function (return NULL) *)
-  | EBufNull, TBuf _ ->
+  | EBufNull, _, TBuf _ ->
       with_type t e.node
 
   (* TODO: tag indices *)
@@ -548,6 +547,58 @@ let mark_mut_if_variable env e =
   match e.node with
   | EBound i -> thd3 (List.nth env.vars i) := true
   | _ -> ()
+  
+(* Deal with various discrepancies between C (arithmetic operations work for pointers, too) vs. krml
+   AST (arithmetic operations are distinguished) *)
+let mk_binop lhs kind rhs =
+  let lhs_typ = lhs.typ in
+
+  let apply_op kind lhs rhs =
+    let kind = translate_binop kind in
+    (* FIXME: this needs to follow the C integer promotion rules. *)
+    let lhs_typ = lhs.typ in
+    let w = Helpers.assert_tint_or_tbool lhs_typ in
+    let op = Helpers.mk_op kind w in
+    let t_ret, t_args = Helpers.flatten_arrow op.typ in
+    let rhs = adjust rhs (List.nth t_args 1) in
+    with_type t_ret (EApp (op, [lhs; rhs]))
+  in
+
+  (* In case of pointer arithmetic, we need to perform a rewriting into EBufSub/Diff *)
+  match lhs_typ, kind with
+  | TBuf _, Clang.Add ->
+      with_type lhs_typ begin match lhs.node with
+      (* Successive pointer arithmetic operations are likely due to operator precedence, e.g.,
+         ptr + n - m parsed as (ptr + n) - m, when ptr + (n - m) might be intended.
+         We recognize these cases, and normalize them to perform pointer arithmetic only once
+      *)
+      | EBufSub (lhs', rhs') ->
+          (* (lhs' + rhs') + rhs --> lhs' + (rhs' + rhs) *)
+          EBufSub (lhs', apply_op Add rhs' rhs)
+      | EBufDiff (lhs', rhs') ->
+          (* JP: I doubt this happens, and if it does, I doubt the code below is correct:
+            EBufSub returns a t* but EBufDiff returns a ptrdiff_t. Also C does not allow
+            comparing two pointers from different objects... puzzled. To be debugged if the
+            assert below triggers. *)
+          if true then failwith "is this really happening???";
+          (* (lhs' - rhs') + rhs --> lhs' + (rhs - rhs') *)
+          EBufSub (lhs', apply_op Sub rhs rhs')
+      | _ ->
+          EBufSub (lhs, rhs)
+      end
+  | TBuf _, Sub ->
+      with_type lhs_typ begin match lhs.node with
+      | EBufSub (lhs', rhs') ->
+          (* (lhs' + rhs') - rhs --> lhs' + (rhs' - rhs) *)
+          EBufSub (lhs', apply_op Sub rhs' rhs)
+      | EBufDiff (lhs', rhs') ->
+          (* (lhs' - rhs') - rhs --> lhs' - (rhs' + rhs) *)
+          EBufDiff (lhs', apply_op Add rhs' rhs)
+      | _ ->
+          EBufDiff (lhs, rhs)
+      end
+  | _ ->
+      apply_op kind lhs rhs
 
 (* Translate expression [e].
 
@@ -594,6 +645,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
         mark_mut_if_variable env o;
         begin match o.typ with
         | TInt w ->
+            mark_mut_if_variable env o;
             (* We rewrite `name++` into `name := name + 1` *)
             with_type TUnit @@ EAssign (
               o,
@@ -601,6 +653,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
             )
         | TBuf (_t, _) as t_buf ->
             (* We rewrite `name++` into `name := name + 1` *)
+            mark_mut_if_variable env o;
             with_type TUnit @@ EAssign (
               o,
               Krml.Ast.with_type t_buf (EBufSub (o, Helpers.one SizeT))
@@ -656,17 +709,24 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
         end
 
     | BinaryOperator {lhs; kind; rhs} when is_assign_op kind ->
+        (* FIXME this is not correct if the lhs is not a value -- consider, for instance:
+          int x;
+          int *f() { return &x; }
+          int main() {
+            ( *(f()))++;
+            return x;
+          }
+        *)
         (* Interpreting operations as homogenous *)
         let lhs = translate_expr env lhs in
         let rhs = translate_expr env rhs in
-        (* TODO: looks like this is not catching the case of pointer arithmetic -- can this be
-           redirected to the case below? *)
-        let w = Helpers.assert_tint lhs.typ in
-        (* Rewrite the rhs into the compound expression, using the underlying operator *)
-        let rhs = Krml.Ast.with_type lhs.typ (EApp (assign_to_bop w kind, [lhs; adjust rhs lhs.typ])) in
+        let kind = assign_to_bop kind in
+        let rhs = mk_binop lhs kind rhs in
+
         with_type TUnit begin match lhs.node with
         (* Special-case rewriting for buffer assignments *)
-        | EBufRead (base, index) -> EBufWrite (base, index, rhs)
+        | EBufRead (base, index) ->
+            EBufWrite (base, index, rhs)
         | _ ->
             mark_mut_if_variable env lhs;
             EAssign (lhs, rhs)
@@ -675,56 +735,7 @@ let rec translate_expr (env: env) (e: Clang.Ast.expr) : Krml.Ast.expr =
     | BinaryOperator {lhs; kind; rhs} ->
         let lhs = translate_expr env lhs in
         let rhs = translate_expr env rhs in
-        let kind = translate_binop kind in
-
-        let lhs_typ = lhs.typ in
-
-        let apply_op kind lhs rhs =
-          (* FIXME: this needs to follow the C integer promotion rules. *)
-          let lhs_typ = lhs.typ in
-          let w = assert_tint_or_tbool lhs_typ in
-          let op = Helpers.mk_op kind w in
-          let t_ret, t_args = Helpers.flatten_arrow op.typ in
-          let rhs = adjust rhs (List.nth t_args 1) in
-          with_type t_ret (EApp (op, [lhs; rhs]))
-        in
-
-        (* In case of pointer arithmetic, we need to perform a rewriting into EBufSub/Diff *)
-        begin match lhs_typ, kind with
-        | TBuf _, Add ->
-            with_type lhs_typ begin match lhs.node with
-            (* Successive pointer arithmetic operations are likely due to operator precedence, e.g.,
-               ptr + n - m parsed as (ptr + n) - m, when ptr + (n - m) might be intended.
-               We recognize these cases, and normalize them to perform pointer arithmetic only once
-            *)
-            | EBufSub (lhs', rhs') ->
-                (* (lhs' + rhs') + rhs --> lhs' + (rhs' + rhs) *)
-                EBufSub (lhs', apply_op Add rhs' rhs)
-            | EBufDiff (lhs', rhs') ->
-                (* JP: I doubt this happens, and if it does, I doubt the code below is correct:
-                  EBufSub returns a t* but EBufDiff returns a ptrdiff_t. Also C does not allow
-                  comparing two pointers from different objects... puzzled. To be debugged if the
-                  assert below triggers. *)
-                if true then failwith "is this really happening???";
-                (* (lhs' - rhs') + rhs --> lhs' + (rhs - rhs') *)
-                EBufSub (lhs', apply_op Sub rhs rhs')
-            | _ ->
-                EBufSub (lhs, rhs)
-            end
-        | TBuf _, Sub ->
-            with_type lhs_typ begin match lhs.node with
-            | EBufSub (lhs', rhs') ->
-                (* (lhs' + rhs') - rhs --> lhs' + (rhs' - rhs) *)
-                EBufSub (lhs', apply_op Sub rhs' rhs)
-            | EBufDiff (lhs', rhs') ->
-                (* (lhs' - rhs') - rhs --> lhs' - (rhs' + rhs) *)
-                EBufDiff (lhs', apply_op Add rhs' rhs)
-            | _ ->
-                EBufDiff (lhs, rhs)
-            end
-        | _ ->
-            apply_op kind lhs rhs
-        end
+        mk_binop lhs kind rhs
 
     | DeclRef {name; _} ->
         let e, _ = get_id_name name |> find_var env in
@@ -1251,6 +1262,7 @@ let translate_fundecl (fdecl: function_decl) =
     let body = translate_stmt env s.desc in
     let flags = if fdecl.inline_specified then [Krml.Common.Inline] else [] in
     let lid = fst (FileMap.find name !name_map), name in
+    let binders = List.map2 (fun b (_, _, m) -> { b with node = { b.node with mut = !m }}) binders (List.rev env.vars) in
     let decl = Krml.Ast.(DFunction (None, flags, 0, 0, ret_type, lid, binders, body)) in
     (* Krml.KPrint.bprintf "Resulting decl %a\n" Krml.PrintAst.pdecl decl; *)
     Some decl

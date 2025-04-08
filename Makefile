@@ -44,3 +44,6 @@ test-bignum:
 test-%: test/%.c $(wildcard test/include/*) scylla
 	./scylla $(SCYLLA_OPTS) $< --output out/hacl/src/
 
+.PHONY: nix-magic
+nix-magic:
+	nix flake update --extra-experimental-features nix-command --extra-experimental-features flakes
