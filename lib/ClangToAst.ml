@@ -636,7 +636,7 @@ let rec translate_expr (env : env) (e : Clang.Ast.expr) : Krml.Ast.expr =
     (* We handled above the case of array initialization, this should
        be a struct initialization *)
     | CompoundLiteral { init = { desc = InitList l; _ }; _ } ->
-        with_type (typ_from_clang e) (EFlat (List.map (translate_field_expr env) l))
+        translate_fields env (typ_from_clang e) l
     | UnaryOperator { kind = PostInc | PreInc; operand } ->
         (* This is a special case for loop increments. The current Karamel
            extraction pipeline only supports a specific case of loops *)
@@ -863,7 +863,7 @@ let rec translate_expr (env : env) (e : Clang.Ast.expr) : Krml.Ast.expr =
         Format.eprintf "Trying to translate expression %a@." Clang.Expr.pp e;
         failwith "translate_expr: unsupported expression"
 
-and translate_field_expr env (e : expr) =
+and translate_field_expr env (e : expr) field_name =
   match e.desc with
   | DesignatedInit { designators; init } -> begin
       match designators with
@@ -871,11 +871,23 @@ and translate_field_expr env (e : expr) =
           (* FIXME -- adjust type against expected field type, obtained via a lookup in
              struct_map *)
           let e = translate_expr env init in
+          if name <> field_name then
+            failwith "TODO: out-of-order fields in a designated initializer";
           Some name, e
       | [ _ ] -> failwith "expected a field designator"
       | _ -> failwith "assigning to several fields during struct initialization is not supported"
     end
-  | _ -> failwith "a designated initializer was expected when initializing a struct"
+  | _ ->
+      Some field_name, translate_expr env e
+
+and translate_fields env t es =
+  let field_names = match LidMap.find (Helpers.assert_tlid t) !type_def_map with
+    | lazy (Flat fields) -> List.map (fun x -> Option.get (fst x)) fields
+    | _ -> failwith "impossible"
+  in
+  if List.length field_names <> List.length es then
+    fatal_error "TODO: partial initializers (%d vs %d)" (List.length field_names) (List.length es);
+  Krml.Ast.with_type t (EFlat (List.map2 (translate_field_expr env) es field_names))
 
 (* Create a default value associated to a given type [typ] *)
 let create_default_value typ =
@@ -913,9 +925,7 @@ let translate_vardecl (env : env) (vdecl : var_decl_desc) : env * binder * Krml.
   (* Initializing a struct value.
      TODO: We should check that the declaration type indeed corresponds to a struct type *)
   | Some { desc = InitList l; _ } ->
-      ( add_var env (vname, typ),
-        Helpers.fresh_binder vname typ,
-        Krml.Ast.with_type typ (EFlat (List.map (translate_field_expr env) l)) )
+      add_var env (vname, typ), Helpers.fresh_binder vname typ, translate_fields env typ l
   | Some { desc = Call { callee; args }; _ }
   (* There commonly is a cast around calloc to the type of the variable. We omit it when translating it to Rust,
      as the allocation will be typed *)
@@ -1290,7 +1300,8 @@ let decl_error_handler (decl : decl) default f =
   with e ->
     Format.eprintf "%!@.";
     Format.printf "%!@.";
-    Format.printf "Declaration %s not supported\n%a@." (name_of_decl decl) Clang.Decl.pp decl;
+    (* Format.printf "Declaration %s not supported\n%a@." (name_of_decl decl) Clang.Decl.pp decl; *)
+    Format.printf "Declaration %s not supported\n@." (name_of_decl decl);
     if !ScyllaOptions.fatal_errors then
       raise e
     else begin
@@ -1476,20 +1487,25 @@ let prepopulate_decl (decl : decl) (filename : string) =
         When visiting the second case, we retrieve the `type_decl` and construct a `DType` node.
 
         This performs the first task. *)
+      let def = lazy begin
+        let is_box = Attributes.has_box_attr attributes in
+        let fields = List.map translate_field fields in
+        Flat fields, is_box
+      end in
       struct_map :=
         StructMap.update name
           (function
             | None ->
-                Some
-                  (lazy
-                    begin
-                      let is_box = Attributes.has_box_attr attributes in
-                      let fields = List.map translate_field fields in
-                      Flat fields, is_box
-                    end)
-            | Some _ ->
-                Printf.eprintf "A type declaration already exists for struct %s\n" name;
-                failwith "redefining a structure type")
+                Some def
+            | Some (lazy old_def) ->
+                let old_n = match old_def with Flat old_fields, _ -> List.length old_fields | _ -> failwith "impossible" in
+                if old_n = 0 then
+                  Some def
+                else begin
+                  Printf.eprintf "A type declaration already exists for struct %s\n" name;
+                  failwith "redefining a structure type"
+                end
+          )
           !struct_map;
 
       (* Record the name. FIXME: should be in a separate map since types have no type. *)
