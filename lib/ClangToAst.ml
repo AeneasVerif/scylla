@@ -549,7 +549,7 @@ let mark_mut_if_variable env e =
   match e.node with
   | EBound i -> thd3 (List.nth env.vars i) := true
   | _ -> ()
-  
+
 (* Deal with various discrepancies between C (arithmetic operations work for pointers, too) vs. krml
    AST (arithmetic operations are distinguished) *)
 let mk_binop lhs kind rhs =
