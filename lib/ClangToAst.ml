@@ -91,12 +91,12 @@ let find_var env name =
     raise Not_found
   with
   | Found (i, t, mut) ->
-      with_type (decay t) (EBound i), mut
+      with_type t (EBound i), mut
   | Not_found ->
       try
         let path, t = FileMap.find name !name_map in
         (* FIXME handle mutable globals *)
-        with_type (decay t) (EQualified (path, name)), ref false
+        with_type t (EQualified (path, name)), ref false
       with
       | Not_found ->
           Printf.eprintf "Could not find variable %s\n" name;
@@ -896,7 +896,7 @@ let create_default_value typ = match typ with
 
 let translate_vardecl (env: env) (vdecl: var_decl_desc) : env * binder * Krml.Ast.expr =
   let vname = vdecl.var_name in
-  let typ = translate_typ vdecl.var_type in
+  let typ = decay (translate_typ vdecl.var_type) in
   match vdecl.var_init with
   | None ->
         (* If there is no associated definition, we attempt to craft
@@ -1055,8 +1055,6 @@ let translate_vardecl_malloc (env: env) (vdecl: var_decl_desc) (s: stmt_desc)
   let init_val = adjust init_val (Helpers.assert_tbuf typ) in
 
   add_var env (vname, typ), Helpers.fresh_binder vname typ, Krml.Ast.with_type typ (EBufCreate (Krml.Common.Heap, init_val, Helpers.oneu32))
-
-
 
 (* Same as translate_expr: we try to avoid relying on Clang-provided type information as much as
    possible *)
