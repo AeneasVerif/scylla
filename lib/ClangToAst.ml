@@ -572,9 +572,9 @@ let mk_binop lhs kind rhs =
         begin
           match lhs.node with
           (* Successive pointer arithmetic operations are likely due to operator precedence, e.g.,
-         ptr + n - m parsed as (ptr + n) - m, when ptr + (n - m) might be intended.
-         We recognize these cases, and normalize them to perform pointer arithmetic only once
-      *)
+             ptr + n - m parsed as (ptr + n) - m, when ptr + (n - m) might be intended.
+             We recognize these cases, and normalize them to perform pointer arithmetic only once
+          *)
           | EBufSub (lhs', rhs') ->
               (* (lhs' + rhs') + rhs --> lhs' + (rhs' + rhs) *)
               EBufSub (lhs', apply_op Add rhs' rhs)
