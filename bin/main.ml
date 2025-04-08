@@ -66,9 +66,11 @@ Supported options:|}
   let files = Krml.Simplify.let_to_sequence#visit_files () files in
 
   if Krml.Options.debug "ClangToAst" then begin
-    Format.printf "%!";
-    Format.eprintf "%!";
-    Krml.(Print.print (PPrint.(PrintAst.print_files files ^^ hardline)))
+    Format.printf "@.%!";
+    Format.eprintf "@.%!";
+    Krml.(Print.print (PPrint.(PrintAst.print_files files ^^ hardline)));
+    Format.printf "@.%!";
+    Format.eprintf "@.%!"
   end;
 
   let had_errors, files = Krml.Checker.check_everything ~warn:true files in

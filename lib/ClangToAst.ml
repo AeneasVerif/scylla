@@ -277,7 +277,7 @@ let rec translate_typ (typ: qual_type) = match typ.desc with
 
   (* ConstantArray is a constant-size array. If we refine the AstToMiniRust analysis,
     we could extract array length information here *)
-  | ConstantArray { element; _} -> TBuf (translate_typ element, false)
+  | ConstantArray { element; size; _} -> TArray (translate_typ element, (SizeT, string_of_int size))
 
   | Enum _ -> failwith "translate_typ: enum"
 
@@ -331,9 +331,6 @@ let rec normalize_type t =
 let translate_typ t = normalize_type (translate_typ t)
 let translate_typ_name t = normalize_type (translate_typ_name t)
 
-(* Takes a Clangml expression [e], and retrieves the corresponding karamel Ast type *)
-let typ_of_expr (e: expr) : typ = Clang.Type.of_node e |> translate_typ
-
 (* Indicate that we synthesize the type of an expression based on the information provided by
    Clang. We aim to do this only in a few select cases:
    - integer constants
@@ -341,7 +338,7 @@ let typ_of_expr (e: expr) : typ = Clang.Type.of_node e |> translate_typ
    - function types (so, arguments and return types).
    Every other type should be able to be deduced from the context. *)
 let typ_from_clang (e: Clang.Ast.expr): typ =
-  typ_of_expr e
+  Clang.Type.of_node e |> translate_typ
 
 
 (* HELPERS *)
@@ -388,7 +385,7 @@ module ClangHelpers = struct
     | _ -> false
 
   (* Check whether expression [e] is a pointer *)
-  let has_pointer_type (e: expr) = match typ_of_expr e with
+  let has_pointer_type (e: expr) = match typ_from_clang e with
     | TBuf _ | TArray _ -> true
     | _ -> false
 
@@ -566,7 +563,7 @@ let mk_binop lhs kind rhs =
 
   (* In case of pointer arithmetic, we need to perform a rewriting into EBufSub/Diff *)
   match lhs_typ, kind with
-  | TBuf _, Clang.Add ->
+  | (TBuf _ | TArray _), Clang.Add ->
       with_type lhs_typ begin match lhs.node with
       (* Successive pointer arithmetic operations are likely due to operator precedence, e.g.,
          ptr + n - m parsed as (ptr + n) - m, when ptr + (n - m) might be intended.
@@ -586,7 +583,7 @@ let mk_binop lhs kind rhs =
       | _ ->
           EBufSub (lhs, rhs)
       end
-  | TBuf _, Sub ->
+  | (TBuf _ | TArray _), Sub ->
       with_type lhs_typ begin match lhs.node with
       | EBufSub (lhs', rhs') ->
           (* (lhs' + rhs') - rhs --> lhs' + (rhs' - rhs) *)
@@ -914,7 +911,7 @@ let translate_vardecl (env: env) (vdecl: var_decl_desc) : env * binder * Krml.As
           add_var env (vname, typ), Helpers.fresh_binder vname typ, Krml.Ast.with_type typ (EBufCreate (Krml.Common.Stack, e, size_e))
         else (
           assert (List.length l = size);
-          let ty = Helpers.assert_tbuf typ in
+          let ty = Helpers.assert_tbuf_or_tarray typ in
           let es = List.map (fun e -> adjust (translate_expr env e) ty) l in
           add_var env (vname, typ), Helpers.fresh_binder vname typ, Krml.Ast.with_type typ (EBufCreateL (Krml.Common.Stack, es))
         )
