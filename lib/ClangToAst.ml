@@ -76,10 +76,6 @@ let add_binders env binders = List.fold_left (fun env b ->
     add_var env (b.node.name, b.typ)
   ) env binders
 
-let decay = function
-  | TArray (t, _) -> TBuf (t, false)
-  | t -> t
-
 (* TODO: Handle fully qualified names/namespaces/different files. *)
 let find_var env name =
   let exception Found of int * typ * bool ref in
@@ -896,7 +892,7 @@ let create_default_value typ = match typ with
 
 let translate_vardecl (env: env) (vdecl: var_decl_desc) : env * binder * Krml.Ast.expr =
   let vname = vdecl.var_name in
-  let typ = decay (translate_typ vdecl.var_type) in
+  let typ = translate_typ vdecl.var_type in
   match vdecl.var_init with
   | None ->
         (* If there is no associated definition, we attempt to craft
