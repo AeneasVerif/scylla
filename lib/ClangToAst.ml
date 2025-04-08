@@ -330,6 +330,7 @@ let rec normalize_type t =
           t
       end
   | TBuf (t, c) -> TBuf (normalize_type t, c)
+  | TArray (t, c) -> TArray (normalize_type t, c)
   | _ -> t
 
 let translate_typ t = normalize_type (translate_typ t)
