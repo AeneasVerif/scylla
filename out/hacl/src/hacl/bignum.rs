@@ -1572,9 +1572,7 @@ pub fn Hacl_Bignum_Exponentiation_bn_mod_exp_vartime_precomp_u32(
     let bits_c: u32 = crate::hacl::bignum_base::Hacl_Bignum_Lib_bn_get_bits_u32(bLen, b, i, 4u32);
     let bits_l32: u32 = bits_c;
     let a_bits_l: (&[u32], &[u32]) = table.split_at(bits_l32.wrapping_mul(len) as usize);
-    ((&mut resM)[0usize..len as usize]).copy_from_slice(
-      &(a_bits_l.1 as &[u32])[0usize..len as usize]
-    )
+    ((&mut resM)[0usize..len as usize]).copy_from_slice(&a_bits_l.1[0usize..len as usize])
   }
   else
   {
@@ -1602,9 +1600,7 @@ pub fn Hacl_Bignum_Exponentiation_bn_mod_exp_vartime_precomp_u32(
     crate::lowstar::ignore::ignore::<&[u32]>(&table);
     let bits_l32: u32 = bits_l;
     let a_bits_l: (&[u32], &[u32]) = table.split_at(bits_l32.wrapping_mul(len) as usize);
-    ((&mut tmp0)[0usize..len as usize]).copy_from_slice(
-      &(a_bits_l.1 as &[u32])[0usize..len as usize]
-    );
+    ((&mut tmp0)[0usize..len as usize]).copy_from_slice(&a_bits_l.1[0usize..len as usize]);
     let mut aM_copy: Box<[u32]> = vec![0u32; len as usize].into_boxed_slice();
     ((&mut aM_copy)[0usize..len as usize]).copy_from_slice(&(&resM)[0usize..len as usize]);
     let ctx_n: (&[u32], &[u32]) = ctx.split_at(0usize);
@@ -1725,7 +1721,7 @@ pub fn Hacl_Bignum_Exponentiation_bn_mod_exp_consttime_precomp_u32(
     let i0: u32 = bBits.wrapping_div(4u32).wrapping_mul(4u32);
     let bits_c: u32 = crate::hacl::bignum_base::Hacl_Bignum_Lib_bn_get_bits_u32(bLen, b, i0, 4u32);
     ((&mut resM)[0usize..len as usize]).copy_from_slice(
-      &(&(&table)[0u32.wrapping_mul(len) as usize..] as &[u32])[0usize..len as usize]
+      &(&(&table)[0u32.wrapping_mul(len) as usize..])[0usize..len as usize]
     );
     for i1 in 0u32..15u32
     {
@@ -1765,7 +1761,7 @@ pub fn Hacl_Bignum_Exponentiation_bn_mod_exp_consttime_precomp_u32(
     let bits_l: u32 = crate::hacl::bignum_base::Hacl_Bignum_Lib_bn_get_bits_u32(bLen, b, k, 4u32);
     crate::lowstar::ignore::ignore::<&[u32]>(&table);
     ((&mut tmp0)[0usize..len as usize]).copy_from_slice(
-      &(&(&table)[0u32.wrapping_mul(len) as usize..] as &[u32])[0usize..len as usize]
+      &(&(&table)[0u32.wrapping_mul(len) as usize..])[0usize..len as usize]
     );
     for i1 in 0u32..15u32
     {
@@ -1980,9 +1976,7 @@ pub fn Hacl_Bignum_Exponentiation_bn_mod_exp_vartime_precomp_u64(
     let bits_c: u64 = crate::hacl::bignum_base::Hacl_Bignum_Lib_bn_get_bits_u64(bLen, b, i, 4u32);
     let bits_l32: u32 = bits_c as u32;
     let a_bits_l: (&[u64], &[u64]) = table.split_at(bits_l32.wrapping_mul(len) as usize);
-    ((&mut resM)[0usize..len as usize]).copy_from_slice(
-      &(a_bits_l.1 as &[u64])[0usize..len as usize]
-    )
+    ((&mut resM)[0usize..len as usize]).copy_from_slice(&a_bits_l.1[0usize..len as usize])
   }
   else
   {
@@ -2010,9 +2004,7 @@ pub fn Hacl_Bignum_Exponentiation_bn_mod_exp_vartime_precomp_u64(
     crate::lowstar::ignore::ignore::<&[u64]>(&table);
     let bits_l32: u32 = bits_l as u32;
     let a_bits_l: (&[u64], &[u64]) = table.split_at(bits_l32.wrapping_mul(len) as usize);
-    ((&mut tmp0)[0usize..len as usize]).copy_from_slice(
-      &(a_bits_l.1 as &[u64])[0usize..len as usize]
-    );
+    ((&mut tmp0)[0usize..len as usize]).copy_from_slice(&a_bits_l.1[0usize..len as usize]);
     let mut aM_copy: Box<[u64]> = vec![0u64; len as usize].into_boxed_slice();
     ((&mut aM_copy)[0usize..len as usize]).copy_from_slice(&(&resM)[0usize..len as usize]);
     let ctx_n: (&[u64], &[u64]) = ctx.split_at(0usize);
@@ -2133,7 +2125,7 @@ pub fn Hacl_Bignum_Exponentiation_bn_mod_exp_consttime_precomp_u64(
     let i0: u32 = bBits.wrapping_div(4u32).wrapping_mul(4u32);
     let bits_c: u64 = crate::hacl::bignum_base::Hacl_Bignum_Lib_bn_get_bits_u64(bLen, b, i0, 4u32);
     ((&mut resM)[0usize..len as usize]).copy_from_slice(
-      &(&(&table)[0u32.wrapping_mul(len) as usize..] as &[u64])[0usize..len as usize]
+      &(&(&table)[0u32.wrapping_mul(len) as usize..])[0usize..len as usize]
     );
     for i1 in 0u32..15u32
     {
@@ -2173,7 +2165,7 @@ pub fn Hacl_Bignum_Exponentiation_bn_mod_exp_consttime_precomp_u64(
     let bits_l: u64 = crate::hacl::bignum_base::Hacl_Bignum_Lib_bn_get_bits_u64(bLen, b, k, 4u32);
     crate::lowstar::ignore::ignore::<&[u64]>(&table);
     ((&mut tmp0)[0usize..len as usize]).copy_from_slice(
-      &(&(&table)[0u32.wrapping_mul(len) as usize..] as &[u64])[0usize..len as usize]
+      &(&(&table)[0u32.wrapping_mul(len) as usize..])[0usize..len as usize]
     );
     for i1 in 0u32..15u32
     {
