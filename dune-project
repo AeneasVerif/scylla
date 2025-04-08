@@ -1,4 +1,4 @@
-(lang dune 3.7)
+(lang dune 3.13)
 
 (name scylla)
 
@@ -7,9 +7,9 @@
 (source
  (github AeneasVerif/scylla))
 
-(authors "Aymeric Fromherz")
+(authors "Aymeric Fromherz" "Jonathan Protzenko")
 
-(maintainers "Aymeric Fromherz")
+(maintainers "Aymeric Fromherz" "Jonathan Protzenko")
 
 (license Apache-2.0)
 
@@ -23,4 +23,4 @@
  )
 )
 
-(using menhir 2.1)
+(using menhir 3.0)

@@ -3,6 +3,7 @@
 SCYLLA_OPTS = --ccopts -DKRML_UNROLL_MAX=0,-I,test/include,-I,test/ --errors_as_warnings
 
 # On OSX, querying xcrun appears to provide the sysroot.
+# FIXME: no, you want the sysroot from the clang version that clangml was compiled with
 ifeq ($(shell uname -s),Darwin)
   ISYSROOT=$(shell xcrun --show-sdk-path)
   ifneq ($(ISYSROOT),)
@@ -12,7 +13,7 @@ endif
 
 
 .PHONY: all
-all: build
+all: build format-check
 
 lib/DataModel.ml: misc/data_model.exe
 	$< > $@
@@ -47,3 +48,11 @@ test-%: test/%.c $(wildcard test/include/*) scylla
 .PHONY: nix-magic
 nix-magic:
 	nix flake update --extra-experimental-features nix-command --extra-experimental-features flakes
+
+.PHONY: format-check
+format-check:
+	@if ! dune build @fmt >/dev/null 2>&1; then \echo "\033[0;31m⚠️⚠️⚠️ SUGGESTED: $(MAKE) format-apply\033[0;m"; fi
+
+.PHONY: format-apply
+format-apply:
+	dune fmt >/dev/null || true
