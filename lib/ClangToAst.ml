@@ -12,9 +12,6 @@ let fatal_error = Krml.Warn.fatal_error
 
 module StringMap = Map.Make(String)
 
-(* JP: Map is an applicative functor, so these just define module aliases *)
-module FileMap = StringMap
-module StructMap = StringMap
 module LidMap = Krml.AstToMiniRust.LidMap
 module LidSet = Krml.AstToMiniRust.LidSet
 
@@ -28,11 +25,11 @@ end)
 
 (* A map from function names to the string list used in their fully qualified
    name. It is filled at the beginning of the translation, when exploring the
-   translation unit *)
-(* FIXME this map is shared across all top-level declarations (typedefs, functions) but this is not
-   right since they live in different namespaces in C. Also, we want the type of functions, but not
-   the type of typedefs. *)
-let name_map = ref FileMap.empty
+   translation unit. (TODO: should this simply be an lid?) *)
+let name_map: string list StringMap.t ref = ref StringMap.empty
+
+(* This domain of this map is functions and global variables. *)
+let global_type_map: typ StringMap.t ref = ref StringMap.empty
 
 (* A map from an elaborated type reference (e.g. `struct S`) to the lid it has been assigned in the
  translation -- we always eliminate elaborated types in favor of lids. *)
@@ -84,7 +81,8 @@ let find_var env name =
   | Found (i, t, mut) -> with_type t (EBound i), mut
   | Not_found -> (
       try
-        let path, t = FileMap.find name !name_map in
+        let path = StringMap.find name !name_map in
+        let t = StringMap.find name !global_type_map in
         (* FIXME handle mutable globals *)
         with_type t (EQualified (path, name)), ref false
       with Not_found ->
@@ -105,9 +103,11 @@ let get_id_name (dname : declaration_name) =
   | UsingDirectiveName -> failwith "using directive"
 
 let lid_of_name name =
-  match FileMap.find_opt name !name_map with
-  | Some (path, _t) -> Some (path, name)
-  | None -> None
+  match StringMap.find_opt name !name_map with
+  | Some path -> Some (path, name)
+  | None ->
+      if true then fatal_error "No entry for %s\n" name;
+      None
 
 let translate_typ_name = function
   | "size_t" -> Helpers.usize
@@ -271,7 +271,7 @@ let translate_builtin_typ (t : Clang.Ast.builtin_type) =
 
 let rec translate_typ (typ : qual_type) =
   match typ.desc with
-  | Pointer typ -> TBuf (translate_typ typ, false)
+  | Pointer typ -> TBuf (translate_typ typ, typ.const)
   | LValueReference _ -> failwith "translate_typ: lvalue reference"
   | RValueReference _ -> failwith "translate_typ: rvalue reference"
   (* ConstantArray is a constant-size array. If we refine the AstToMiniRust analysis,
@@ -316,10 +316,15 @@ let rec normalize_type t =
     end
   | TBuf (t, c) -> TBuf (normalize_type t, c)
   | TArray (t, c) -> TArray (normalize_type t, c)
+  | TArrow (t1, t2) -> TArrow (normalize_type t1, normalize_type t2)
   | _ -> t
 
 let translate_typ t = normalize_type (translate_typ t)
 let translate_typ_name t = normalize_type (translate_typ_name t)
+let find_var env name =
+  match find_var env name with
+  | { node = EQualified _; _ } as e, mut -> { e with typ = normalize_type e.typ }, mut
+  | e -> e
 
 (* Indicate that we synthesize the type of an expression based on the information provided by
    Clang. We aim to do this only in a few select cases:
@@ -723,8 +728,7 @@ let rec translate_expr (env : env) (e : Clang.Ast.expr) : Krml.Ast.expr =
         mk_binop lhs kind rhs
     | DeclRef { name; _ } ->
         let e, _ = get_id_name name |> find_var env in
-        (* Krml.KPrint.bprintf "non-normalized type: %a\n" ptyp e.typ; *)
-        (* TODO: should this be done more generally? *)
+        (* Krml.KPrint.bprintf "%a: %a\n" pexpr e ptyp e.typ; *)
         e
     | Call { callee; args } when is_scylla_reset callee -> begin
         match args with
@@ -796,8 +800,7 @@ let rec translate_expr (env : env) (e : Clang.Ast.expr) : Krml.Ast.expr =
     | Call { callee; args } ->
         (* Format.printf "Trying to translate function call %a@." Clang.Expr.pp callee; *)
         let callee = translate_expr env callee in
-        (* TODO: adjust the type of the callee to strip the pointer *)
-        (* NOTE: should not be necessary since the map is constructed properly without the pointer *)
+        (* Krml.KPrint.bprintf "calle is %a and has type %a\n" pexpr callee ptyp callee.typ; *)
         let args = List.map (fun x -> translate_expr env x) args in
         with_type (fst (Helpers.flatten_arrow callee.typ)) (EApp (callee, args))
     | Cast { qual_type; operand; _ } ->
@@ -1257,7 +1260,7 @@ let translate_fundecl (fdecl : function_decl) =
         else
           []
       in
-      let lid = fst (FileMap.find name !name_map), name in
+      let lid = Option.get (lid_of_name name) in
       let binders =
         List.map2
           (fun b (_, _, m) -> { b with node = { b.node with mut = !m } })
@@ -1341,21 +1344,16 @@ let translate_external_fundecl (fdecl : function_decl) =
   let name = get_id_name fdecl.name in
   let binders, ret_type = compute_external_type fdecl in
   let fn_type = Helpers.fold_arrow (List.map (fun x -> x.typ) binders) ret_type in
-  (* TODO: translate_lid *)
-  let lid = fst (FileMap.find name !name_map), name in
+  let lid = Option.get (lid_of_name name) in
 
   Krml.Ast.(
     DExternal (None, [], 0, 0, lid, fn_type, List.map (fun x -> Krml.Ast.(x.node.name)) binders))
 
-(* Returning an option is only a hack to make progress.
-   TODO: Proper handling of  decls *)
 let translate_decl (decl : decl) =
   (* Format.printf "visiting decl %s\n%a\n@." (name_of_decl decl) Clang.Decl.pp decl; *)
   decl_error_handler decl None @@ fun () ->
   match decl.desc with
   | Function fdecl ->
-      (* TODO: How to handle libc? *)
-      (* TODO: Support multiple files *)
       if Attributes.has_opaque_attr fdecl.attributes then
         Some (translate_external_fundecl fdecl)
       else
@@ -1366,7 +1364,7 @@ let translate_decl (decl : decl) =
         None
       else
         let _, _, e = translate_vardecl empty_env vdecl in
-        let lid = fst (FileMap.find vdecl.var_name !name_map), vdecl.var_name in
+        let lid = Option.get (lid_of_name vdecl.var_name) in
         let typ = translate_typ vdecl.var_type in
         (* TODO: Flags *)
         let flags = [] in
@@ -1374,12 +1372,9 @@ let translate_decl (decl : decl) =
            constants. *)
         Some (DGlobal (flags, lid, 0, typ, e))
   | RecordDecl _ ->
-      (* Already processed in prepopulate_name_map *)
       None
   | TypedefDecl { name; _ } ->
-      (* Already processed in prepopulate_name_map -- just synthesize something if this is pertinent
-         to the current compilation unit?. *)
-      let lid = fst (FileMap.find name !name_map), name in
+      let lid = Option.get (lid_of_name name) in
       begin
         match LidMap.find_opt lid !type_def_map with
         | Some def -> Some (DType (lid, [], 0, 0, Lazy.force def))
@@ -1425,13 +1420,13 @@ let add_to_list x data m =
     | None -> Some [ data ]
     | Some l -> Some (data :: l)
   in
-  FileMap.update x add m
+  StringMap.update x add m
 
 (* C guarantees very little in terms of ordering of declarations. To make our translation
    successful, we run a first pass that pre-allocates names and types of functions, and records type
    definitions so that we can have enough type information accessible to generate a well-typed krml
    AST. This phase does not produce any declarations -- it merely fills some maps. *)
-let prepopulate_name_map (decl : decl) (filename : string) =
+let prepopulate_type_map (decl : decl) =
   decl_error_handler decl () @@ fun () ->
   let name = name_of_decl decl in
   let t = 
@@ -1445,7 +1440,8 @@ let prepopulate_name_map (decl : decl) (filename : string) =
 
     | _ -> TAny (* FIXME: should be in a separate map since types have no types *)
   in
-  name_map := FileMap.add name ([filename], t) !name_map
+  (* Krml.KPrint.bprintf "Adding into type map %s --> %a\n" name ptyp t; *)
+  global_type_map := StringMap.add name t !global_type_map
 
 type deduplicated_decls = (decl * Clang.concrete_location) StringMap.t
 
@@ -1461,6 +1457,7 @@ let prepopulate_type_maps (decls: deduplicated_decls) (decl: decl) =
          synthesized type against expected type accurately during the translation, which in turn
          allows us to insert casts in suitable places. *)
       let lid = Option.get (lid_of_name tdecl.name) in
+      (* Krml.KPrint.bprintf "typedef %s --> %a\n" tdecl.name plid lid; *)
       let def =
         match tdecl.underlying_type.desc with
         | Elaborated { keyword = Struct; named_type = { desc = Record { name; _ }; _ }; _ } ->
@@ -1571,18 +1568,25 @@ let split_into_files (lib_dirs : string list) (decls : deduplicated_decls): grou
   ) decls in
 
   let add_decl _ (decl, loc) acc =
-    prepopulate_name_map decl (file_of_loc loc);
+    (* Remember the file that this declaration is conceptually associated to *)
+    name_map := StringMap.add (name_of_decl decl) [file_of_loc loc] !name_map;
+    (* Group this declaration with others that also "belong" to this file *)
     add_to_list (file_of_loc loc) decl acc
   in
-  let decl_map = StringMap.fold add_decl decls FileMap.empty in
-  FileMap.bindings decl_map |> List.map (fun (k, l) -> k, List.rev l)
+  let decl_map = StringMap.fold add_decl decls StringMap.empty in
+  StringMap.bindings decl_map |> List.map (fun (k, l) -> k, List.rev l)
 
 (* Third pass. Now that names can be resolved properly, we fill various type maps, and precompute type
    definitions while we're at it -- this makes sure type aliases are known, since they need to be
    substituted away (normalized) prior to doing the type-directed expression translation. *)
 let fill_type_maps (decls: deduplicated_decls) =
-  FileMap.iter (fun _ (decl, _) ->
+  StringMap.iter (fun _ (decl, _) ->
     prepopulate_type_maps decls decl
+  ) decls;
+  (* This can only be done AFTER abbreviations are recorded, otherwise, the annotations cannot be
+     applied properly. *)
+  StringMap.iter (fun _ (decl, _) ->
+    prepopulate_type_map decl
   ) decls
 
 (* Final pass. Actually emit definitions. *)
