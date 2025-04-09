@@ -10,8 +10,8 @@ module Helpers = Krml.Helpers
 
 let fatal_error = Krml.Warn.fatal_error
 
-module FileMap = Map.Make (String)
-module StructMap = Map.Make (String)
+module StringMap = Map.Make(String)
+
 module LidMap = Krml.AstToMiniRust.LidMap
 module LidSet = Krml.AstToMiniRust.LidSet
 
@@ -25,11 +25,11 @@ end)
 
 (* A map from function names to the string list used in their fully qualified
    name. It is filled at the beginning of the translation, when exploring the
-   translation unit *)
-(* FIXME this map is shared across all top-level declarations (typedefs, functions) but this is not
-   right since they live in different namespaces in C. Also, we want the type of functions, but not
-   the type of typedefs. *)
-let name_map = ref FileMap.empty
+   translation unit. (TODO: should this simply be an lid?) *)
+let name_map: string list StringMap.t ref = ref StringMap.empty
+
+(* This domain of this map is functions and global variables. *)
+let global_type_map: typ StringMap.t ref = ref StringMap.empty
 
 (* A map from an elaborated type reference (e.g. `struct S`) to the lid it has been assigned in the
  translation -- we always eliminate elaborated types in favor of lids. *)
@@ -46,17 +46,6 @@ let boxed_types = ref LidSet.empty
    abbreviations away. Finally, it also allows resolving proper type information for field
    operations. *)
 let type_def_map = ref LidMap.empty
-
-(* A map from structure names to their corresponding KaRaMeL `type_def` declaration,
-   as well as whether the struct type is annotated with the `scylla_box` attribute.
-   Struct declarations are typically done through a typedef indirection in C, e.g.,
-   `typedef struct name_s { ... } name;`
-   This map is used to deconstruct the indirection in Rust, and directly define
-   a struct type `name`.
-
-   This is intentionally global so that it can be used across multiple runs.
-*)
-let struct_map = ref StructMap.empty
 
 (* ENVIRONMENTS *)
 
@@ -92,7 +81,8 @@ let find_var env name =
   | Found (i, t, mut) -> with_type t (EBound i), mut
   | Not_found -> (
       try
-        let path, t = FileMap.find name !name_map in
+        let path = StringMap.find name !name_map in
+        let t = StringMap.find name !global_type_map in
         (* FIXME handle mutable globals *)
         with_type t (EQualified (path, name)), ref false
       with Not_found ->
@@ -112,6 +102,12 @@ let get_id_name (dname : declaration_name) =
   | LiteralOperatorName _ -> failwith "literal operator name"
   | UsingDirectiveName -> failwith "using directive"
 
+let lid_of_name name =
+  match StringMap.find_opt name !name_map with
+  | Some path -> Some (path, name)
+  | None ->
+      None
+
 let translate_typ_name = function
   | "size_t" -> Helpers.usize
   | "uint8_t" -> Helpers.uint8
@@ -120,8 +116,8 @@ let translate_typ_name = function
   | "uint64_t" -> Helpers.uint64
   | s -> (
       (* We first try to find the type name in the environment *)
-      match FileMap.find_opt s !name_map with
-      | Some (path, _t) -> TQualified (path, s)
+      match lid_of_name s with
+      | Some lid -> TQualified lid
       | None ->
           (* If the type is not found in the environment, we assume
            it is an external type, and translate A_B_ty to a_b::ty *)
@@ -274,7 +270,7 @@ let translate_builtin_typ (t : Clang.Ast.builtin_type) =
 
 let rec translate_typ (typ : qual_type) =
   match typ.desc with
-  | Pointer typ -> TBuf (translate_typ typ, false)
+  | Pointer typ -> TBuf (translate_typ typ, typ.const)
   | LValueReference _ -> failwith "translate_typ: lvalue reference"
   | RValueReference _ -> failwith "translate_typ: rvalue reference"
   (* ConstantArray is a constant-size array. If we refine the AstToMiniRust analysis,
@@ -319,10 +315,15 @@ let rec normalize_type t =
     end
   | TBuf (t, c) -> TBuf (normalize_type t, c)
   | TArray (t, c) -> TArray (normalize_type t, c)
+  | TArrow (t1, t2) -> TArrow (normalize_type t1, normalize_type t2)
   | _ -> t
 
 let translate_typ t = normalize_type (translate_typ t)
 let translate_typ_name t = normalize_type (translate_typ_name t)
+let find_var env name =
+  match find_var env name with
+  | { node = EQualified _; _ } as e, mut -> { e with typ = normalize_type e.typ }, mut
+  | e -> e
 
 (* Indicate that we synthesize the type of an expression based on the information provided by
    Clang. We aim to do this only in a few select cases:
@@ -726,8 +727,7 @@ let rec translate_expr (env : env) (e : Clang.Ast.expr) : Krml.Ast.expr =
         mk_binop lhs kind rhs
     | DeclRef { name; _ } ->
         let e, _ = get_id_name name |> find_var env in
-        (* Krml.KPrint.bprintf "non-normalized type: %a\n" ptyp e.typ; *)
-        (* TODO: should this be done more generally? *)
+        (* Krml.KPrint.bprintf "%a: %a\n" pexpr e ptyp e.typ; *)
         e
     | Call { callee; args } when is_scylla_reset callee -> begin
         match args with
@@ -799,8 +799,7 @@ let rec translate_expr (env : env) (e : Clang.Ast.expr) : Krml.Ast.expr =
     | Call { callee; args } ->
         (* Format.printf "Trying to translate function call %a@." Clang.Expr.pp callee; *)
         let callee = translate_expr env callee in
-        (* TODO: adjust the type of the callee to strip the pointer *)
-        (* NOTE: should not be necessary since the map is constructed properly without the pointer *)
+        (* Krml.KPrint.bprintf "calle is %a and has type %a\n" pexpr callee ptyp callee.typ; *)
         let args = List.map (fun x -> translate_expr env x) args in
         with_type (fst (Helpers.flatten_arrow callee.typ)) (EApp (callee, args))
     | Cast { qual_type; operand; _ } ->
@@ -1260,7 +1259,7 @@ let translate_fundecl (fdecl : function_decl) =
         else
           []
       in
-      let lid = fst (FileMap.find name !name_map), name in
+      let lid = Option.get (lid_of_name name) in
       let binders =
         List.map2
           (fun b (_, _, m) -> { b with node = { b.node with mut = !m } })
@@ -1344,21 +1343,16 @@ let translate_external_fundecl (fdecl : function_decl) =
   let name = get_id_name fdecl.name in
   let binders, ret_type = compute_external_type fdecl in
   let fn_type = Helpers.fold_arrow (List.map (fun x -> x.typ) binders) ret_type in
-  (* TODO: translate_lid *)
-  let lid = fst (FileMap.find name !name_map), name in
+  let lid = Option.get (lid_of_name name) in
 
   Krml.Ast.(
     DExternal (None, [], 0, 0, lid, fn_type, List.map (fun x -> Krml.Ast.(x.node.name)) binders))
 
-(* Returning an option is only a hack to make progress.
-   TODO: Proper handling of  decls *)
 let translate_decl (decl : decl) =
   (* Format.printf "visiting decl %s\n%a\n@." (name_of_decl decl) Clang.Decl.pp decl; *)
   decl_error_handler decl None @@ fun () ->
   match decl.desc with
   | Function fdecl ->
-      (* TODO: How to handle libc? *)
-      (* TODO: Support multiple files *)
       if Attributes.has_opaque_attr fdecl.attributes then
         Some (translate_external_fundecl fdecl)
       else
@@ -1369,7 +1363,7 @@ let translate_decl (decl : decl) =
         None
       else
         let _, _, e = translate_vardecl empty_env vdecl in
-        let lid = fst (FileMap.find vdecl.var_name !name_map), vdecl.var_name in
+        let lid = Option.get (lid_of_name vdecl.var_name) in
         let typ = translate_typ vdecl.var_type in
         (* TODO: Flags *)
         let flags = [] in
@@ -1377,12 +1371,9 @@ let translate_decl (decl : decl) =
            constants. *)
         Some (DGlobal (flags, lid, 0, typ, e))
   | RecordDecl _ ->
-      (* Already processed in prepopulate_decl *)
       None
   | TypedefDecl { name; _ } ->
-      (* Already processed in prepopulate_decl -- just synthesize something if this is pertinent
-         to the current compilation unit?. *)
-      let lid = fst (FileMap.find name !name_map), name in
+      let lid = Option.get (lid_of_name name) in
       begin
         match LidMap.find_opt lid !type_def_map with
         | Some def -> Some (DType (lid, [], 0, 0, Lazy.force def))
@@ -1428,192 +1419,184 @@ let add_to_list x data m =
     | None -> Some [ data ]
     | Some l -> Some (data :: l)
   in
-  FileMap.update x add m
+  StringMap.update x add m
 
 (* C guarantees very little in terms of ordering of declarations. To make our translation
    successful, we run a first pass that pre-allocates names and types of functions, and records type
    definitions so that we can have enough type information accessible to generate a well-typed krml
    AST. This phase does not produce any declarations -- it merely fills some maps. *)
-let prepopulate_decl (decl : decl) (filename : string) =
+let prepopulate_type_map (decl : decl) =
   decl_error_handler decl () @@ fun () ->
-  (* Format.printf "add_lident_mapping %s\n%a\n@." (name_of_decl decl) Clang.Decl.pp decl; *)
-  let path = [ Filename.(remove_extension (basename filename)) ] in
+  let name = name_of_decl decl in
+  let t = 
+    match decl.desc with
+    | Function fdecl ->
+        let binders, ret_type = compute_external_type fdecl in
+        Helpers.fold_arrow (List.map (fun x -> x.typ) binders) ret_type
+
+    | Var vdecl ->
+        translate_typ vdecl.var_type
+
+    | _ -> TAny (* FIXME: should be in a separate map since types have no types *)
+  in
+  (* Krml.KPrint.bprintf "Adding into type map %s --> %a\n" name ptyp t; *)
+  global_type_map := StringMap.add name t !global_type_map
+
+type deduplicated_decls = (decl * Clang.concrete_location) StringMap.t
+
+let prepopulate_type_maps (decls: deduplicated_decls) (decl: decl) =
+  decl_error_handler decl () @@ fun () ->
   match decl.desc with
-  | Function fdecl ->
-      let name = get_id_name fdecl.name in
-      let t =
-        try
-          let binders, ret_type = compute_external_type fdecl in
-          Helpers.fold_arrow (List.map (fun x -> x.typ) binders) ret_type
-        with _ ->
-          Format.printf "FIXME: could not represent the type of function declaration %s\n@." name;
-          TAny
+  | TypedefDecl tdecl when not (Attributes.decl_is_opaque decl) ->
+      (* To normalize correctly, we might need to retrieve types beyond the file currently
+         being translated. We thus construct this map here rather than during type declaration
+         translation.
+
+         We substitute type abbreviations on the fly, via normalize_type. This allows us to match
+         synthesized type against expected type accurately during the translation, which in turn
+         allows us to insert casts in suitable places. *)
+      let lid = Option.get (lid_of_name tdecl.name) in
+      (* Krml.KPrint.bprintf "typedef %s --> %a\n" tdecl.name plid lid; *)
+      let def =
+        match tdecl.underlying_type.desc with
+        | Elaborated { keyword = Struct; named_type = { desc = Record { name; _ }; _ }; _ } ->
+            (* When writing `typedef struct S { ... } T;` in C, we actually see two declarations:
+              - first, one for the `struct S { ... }` part (case RecordDecl)
+              - second, one for the the `typedef struct S T;` part (case TypedefDecl).
+              We are now visiting the latter. Because our deduplicated map contains the most
+              informative version of the former, we can look it up to get the definition.
+            *)
+
+            (* We record a mapping `struct S` ~~> `T` in our map, so that occurrence of the type
+               `struct S` in the Clang AST become nominal types `T` in the krml Ast. *)
+            elaborated_map := ElaboratedMap.add (name, `Struct) lid !elaborated_map;
+
+            Some
+              (lazy
+                ( match StringMap.find (get_id_name name) decls with
+                | { desc = RecordDecl { fields; attributes; _ }; _ }, _ ->
+                    let is_box = Attributes.has_box_attr attributes in
+                    let fields = List.map translate_field fields in
+                    if is_box then
+                      boxed_types := LidSet.add lid !boxed_types;
+                    Flat fields
+                | _ ->
+                    fatal_error "unknown struct definition: %s" (get_id_name name)
+                ))
+        | Pointer t ->
+            Some
+              (lazy
+                (let ty = translate_typ t in
+                 Abbrev (TBuf (ty, t.const))))
+        | BuiltinType t ->
+            Some
+              (lazy
+                (let ty = translate_builtin_typ t in
+                 Abbrev ty))
+        | Typedef { name; _ } ->
+            Some
+              (lazy
+                (let name = get_id_name name in
+                 let ty = translate_typ_name name in
+                 Abbrev ty))
+        | _ ->
+            (* Unsupported *)
+            None
       in
-      let path = path, t in
-      (* Krml.KPrint.bprintf "%s --> %s\n" name (String.concat "::" path); *)
-      name_map :=
-        FileMap.update name
-          (function
-            | None -> Some path
-            | Some _ ->
-                Format.printf
-                  "Declaration %s appears twice in translation unit, found again in %s\n@." name
-                  filename;
-                Some path)
-          !name_map
-  | Var vdecl ->
-      let t =
-        try translate_typ vdecl.var_type
-        with _ ->
-          Format.printf "FIXME: could not represent the type of global declaration %s\n@."
-            vdecl.var_name;
-          TAny
-      in
-      let path = path, t in
-      name_map :=
-        FileMap.update vdecl.var_name
-          (function
-            | None -> Some path
-            | Some _ ->
-                Format.printf "Variable declaration %s appears twice in translation unit\n@."
-                  vdecl.var_name;
-                Some path)
-          !name_map
-  | RecordDecl { name; fields; attributes; _ } ->
-      (* When writing `typedef struct S { ... } T;` in C, we actually see two declarations:
-        - first, one for the `struct S { ... }` part (case RecordDecl)
-        - second, one for the the `typedef struct S T;` part (case TypedefDecl).
-        When visiting the first case, we generate the krml `type_decl` body, and store it in `struct_map`.
-        When visiting the second case, we retrieve the `type_decl` and construct a `DType` node.
+      Option.iter (fun def -> type_def_map := LidMap.add lid def !type_def_map) def
 
-        This performs the first task. *)
-      let def = lazy begin
-        let is_box = Attributes.has_box_attr attributes in
-        let fields = List.map translate_field fields in
-        Flat fields, is_box
-      end in
-      struct_map :=
-        StructMap.update name
-          (function
-            | None ->
-                Some def
-            | Some (lazy old_def) ->
-                let old_n = match old_def with Flat old_fields, _ -> List.length old_fields | _ -> failwith "impossible" in
-                if old_n = 0 then
-                  Some def
-                else begin
-                  Printf.eprintf "A type declaration already exists for struct %s\n" name;
-                  failwith "redefining a structure type"
-                end
-          )
-          !struct_map;
-
-      (* Record the name. FIXME: should be in a separate map since types have no type. *)
-      let path = path, TAny in
-      name_map :=
-        FileMap.update name
-          (function
-            | None -> Some path
-            | Some _ ->
-                Format.printf "Record Type declaration %s appears twice in translation unit\n@."
-                  name;
-                Some path)
-          !name_map
-  | TypedefDecl tdecl ->
-      (* FIXME dummy *)
-      name_map :=
-        FileMap.update tdecl.name
-          (function
-            | None -> Some (path, TAny)
-            | Some _ ->
-                Format.printf "Typedef declaration %s appears twice in translation unit\n@."
-                  tdecl.name;
-                Some (path, TAny))
-          !name_map;
-
-      if Attributes.decl_is_opaque decl then
-        ()
-      else
-        (* To normalize correctly, we might need to retrieve types beyond the file currently
-           being translated. We thus construct this map here rather than during type declaration
-           translation.
-
-           We substitute type abbreviations on the fly, via normalize_type. This allows us to match
-           synthesized type against expected type accurately during the translation, which in turn
-           allows us to insert casts in suitable places. *)
-        let lid = path, tdecl.name in
-        let def =
-          match tdecl.underlying_type.desc with
-          | Elaborated { keyword = Struct; named_type = { desc = Record { name; _ }; _ }; _ } ->
-              elaborated_map := ElaboratedMap.add (name, `Struct) lid !elaborated_map;
-
-              Some
-                (lazy
-                  ((* When writing `typedef Struct S { ... } T;` in C, we see a RecordDecl (`struct S { ... };`)
-                   *and* a TypedefDecl (`typedef struct S T;`). This is the latter. We record a mapping
-                   `struct S` ~~> `T` in our map, so that occurrence of the type `struct S` in the Clang
-                   AST become nominal types `T` in the krml Ast. *)
-                   let ty, is_box = Lazy.force (StructMap.find (get_id_name name) !struct_map) in
-                   if is_box then
-                     boxed_types := LidSet.add lid !boxed_types;
-                   ty))
-          | Pointer t ->
-              Some
-                (lazy
-                  (let ty = translate_typ t in
-                   Abbrev (TBuf (ty, t.const))))
-          | BuiltinType t ->
-              Some
-                (lazy
-                  (let ty = translate_builtin_typ t in
-                   Abbrev ty))
-          | Typedef { name; _ } ->
-              Some
-                (lazy
-                  (let name = get_id_name name in
-                   let ty = translate_typ_name name in
-                   Abbrev ty))
-          | _ ->
-              (* Unsupported *)
-              None
-        in
-        Option.iter (fun def -> type_def_map := LidMap.add lid def !type_def_map) def
-  (* TODO: Do we need to support this mapping for more decls *)
   | _ ->
-      (* Format.printf "add_lident_mapping: ignoring %a\n" Clang.Decl.pp decl *)
       ()
 
-let split_into_files (lib_dirs : string list) (ast : translation_unit) =
-  let add_decl acc decl =
-    let loc = Clang.Ast.location_of_node decl |> Clang.Ast.concrete_of_source_location File in
-    (* If this belongs to the C library, do not extract it *)
-    (* TODO: This could be done more efficiently by filtering after splitting into files,
-       to avoid repeated traversals of lib_dirs *)
+let stem_of_file f =
+  f |> Filename.basename |> Filename.remove_extension
+
+let file_of_loc (loc: Clang.concrete_location) =
+  loc.filename |> stem_of_file
+
+let decl_is_better ~(old_decl:decl) (decl: decl) =
+  (* TODO: we are assuming global consistency, i.e. that for all the translation units passed on the
+     command-line, it is never the case that two definitions exist in two translation units, with
+     identical names, but with different meanings. This is of course not true (static inline, extern
+     vs inline visibilities, etc. -- especially the devious case for the latter where there can be
+     two functions that have different definitions as long as they are equivalent, anyhow, I
+     digress). *)
+  match old_decl.desc, decl.desc with
+  (* A definition is better than its prototype *)
+  | Function { body = None; _ }, Function { body = Some _; _ } -> true
+  (* A full struct is better than its forward declaration *)
+  | RecordDecl { fields = []; _ }, RecordDecl { fields = _ :: _; _ } -> true
+  | _ -> false
+
+(* A first pass that considers all possible declarations for a given name, then retains the most
+   precise one. For instance, the prototype for `f` might be in header Foo.h but its
+   definition might be in Bar.c -- this first pass considers all possible declarations for a given
+   name then keeps the "best" one. *)
+let pick_most_suitable (files: translation_unit list): deduplicated_decls =
+  List.fold_left (fun map (file: translation_unit) ->
+    List.fold_left (fun map (decl: decl) ->
+      let name = name_of_decl decl in
+      StringMap.update name (fun old_entry ->
+        let loc = Clang.Ast.location_of_node decl |> Clang.Ast.concrete_of_source_location File in
+        match old_entry with
+        | None -> Some (decl, loc)
+        | Some ((old_decl, _) as old_entry) ->
+            if decl_is_better ~old_decl decl then
+              Some (decl, loc)
+            else
+              Some old_entry
+      ) map
+    ) map file.desc.items
+  ) StringMap.empty files
+
+type grouped_decls = (string * decl list) list
+
+(* A second pass that preallocates names (since everything is potentially mutually recursive),
+   relying on the fact that we now know the "best" location for a definition (first pass). This also
+   groups declarations by file. Note that we have totally lost the order of declarations within a
+   file here. *)
+let split_into_files (lib_dirs : string list) (decls : deduplicated_decls): grouped_decls =
+  (* If this belongs to the C library, do not extract it. FIXME: this probably doesn't quite work
+     with the sysroot for clangml (e.g. /opt/homebrew/Cellar/...) being different from SDKROOT which
+     is for system compilers (e.g. /Library/Developer/...). *)
+  let decls = StringMap.filter (fun _ (_, (loc: Clang.concrete_location)) ->
     if List.exists (fun x -> String.starts_with ~prefix:x loc.filename) lib_dirs then
-      acc
-    else (
-      prepopulate_decl decl loc.filename;
-      (* We merge .h and .c files here. Duplicated declarations (e.g., prototypes in the
-         .h file, and definitions in the .c file) will be filtered during the translation
-         of declaration *)
-      let filename = loc.filename |> Filename.basename |> Filename.remove_extension in
-      add_to_list filename decl acc)
+      false
+    else
+      true
+  ) decls in
+
+  let add_decl _ (decl, loc) acc =
+    (* Remember the file that this declaration is conceptually associated to *)
+    name_map := StringMap.add (name_of_decl decl) [file_of_loc loc] !name_map;
+    (* Group this declaration with others that also "belong" to this file *)
+    add_to_list (file_of_loc loc) decl acc
   in
-  let decl_map = List.fold_left add_decl FileMap.empty ast.desc.items in
-  FileMap.bindings decl_map |> List.map (fun (k, l) -> k, List.rev l)
+  let decl_map = StringMap.fold add_decl decls StringMap.empty in
+  StringMap.bindings decl_map |> List.map (fun (k, l) -> k, List.rev l)
 
-(* On MacOS, C compilation often relies on a SDK, where parts of the stdlib
-    is located *)
-let get_sdkroot () =
-  (* TODO: Is there something similar on Linux, or is the stdlib included in
-     the Clang default include directories? *)
-  try Unix.getenv "SDKROOT" |> String.split_on_char ':' with Not_found -> []
+(* Third pass. Now that names can be resolved properly, we fill various type maps, and precompute type
+   definitions while we're at it -- this makes sure type aliases are known, since they need to be
+   substituted away (normalized) prior to doing the type-directed expression translation. *)
+let fill_type_maps (decls: deduplicated_decls) =
+  StringMap.iter (fun _ (decl, _) ->
+    prepopulate_type_maps decls decl
+  ) decls;
+  (* This can only be done AFTER abbreviations are recorded, otherwise, the annotations cannot be
+     applied properly. *)
+  StringMap.iter (fun _ (decl, _) ->
+    prepopulate_type_map decl
+  ) decls
 
-let translate_compil_unit (ast : translation_unit) (wanted_c_file : string) =
-  let lib_dirs = get_sdkroot () @ Clang.default_include_directories () in
-  let files = split_into_files lib_dirs ast in
-  let files = List.filter_map (translate_file wanted_c_file) files in
-  !boxed_types, files
+(* Final pass. Actually emit definitions. *)
+let translate_compil_units (ast : grouped_decls) (command_line_args : string list) =
+  let file_args = List.map stem_of_file command_line_args in
+  !boxed_types, List.map (fun (file, decls) ->
+    if List.mem file file_args then
+      file, List.filter_map translate_decl decls
+    else
+      file, List.filter_map translate_external_decl decls
+  ) ast
 
 let read_file (filename : string) : translation_unit =
   Format.printf "Clang version is %s\n@." (Clang.get_clang_version ());

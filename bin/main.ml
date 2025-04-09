@@ -1,3 +1,10 @@
+(* On MacOS, C compilation often relies on a SDK, where parts of the stdlib
+    is located *)
+let get_sdkroot () =
+  (* TODO: Is there something similar on Linux, or is the stdlib included in
+     the Clang default include directories? *)
+  try Unix.getenv "SDKROOT" |> String.split_on_char ':' with Not_found -> []
+
 let () =
   let usage =
     Printf.sprintf
@@ -59,24 +66,22 @@ Supported options:|}
       fatal_error "Incorrect invocation, was: %s\n" (String.concat "␣" (Array.to_list Sys.argv))
   end;
 
-  let files = !files in
+  let command_line_args = !files in
 
-  if files = [] then
+  if command_line_args = [] then
     fatal_error "%s" (Arg.usage_string spec usage);
 
   Krml.Options.(warn_error := !warn_error ^ "-6");
   Krml.Warn.parse_warn_error !Krml.Options.warn_error;
 
-  let boxed_types, files =
-    List.fold_left_map
-      (fun acc (f : string) ->
-        let boxed_types, files =
-          Scylla.ClangToAst.translate_compil_unit (Scylla.ClangToAst.read_file f) f
-        in
-        Krml.AstToMiniRust.LidSet.union acc boxed_types, files)
-      Krml.AstToMiniRust.LidSet.empty files
-  in
-  let files = Krml.Builtin.lowstar_ignore :: List.concat files in
+  let files = List.map Scylla.ClangToAst.read_file command_line_args in
+  let deduped_files = Scylla.ClangToAst.pick_most_suitable files in
+  let lib_dirs = get_sdkroot () @ Clang.default_include_directories () in
+  let files = Scylla.ClangToAst.split_into_files lib_dirs deduped_files in
+  Scylla.ClangToAst.fill_type_maps deduped_files;
+  let boxed_types, files = Scylla.ClangToAst.translate_compil_units files command_line_args in
+
+  let files = Krml.Builtin.lowstar_ignore :: files in
 
   (* Makes debugging the checker messages horrible, otherwise *)
   let files = Krml.Simplify.let_to_sequence#visit_files () files in
