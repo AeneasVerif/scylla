@@ -106,7 +106,6 @@ let lid_of_name name =
   match StringMap.find_opt name !name_map with
   | Some path -> Some (path, name)
   | None ->
-      if true then fatal_error "No entry for %s\n" name;
       None
 
 let translate_typ_name = function
