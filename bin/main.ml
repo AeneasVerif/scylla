@@ -72,6 +72,7 @@ Supported options:|}
     fatal_error "%s" (Arg.usage_string spec usage);
 
   Krml.Options.(warn_error := !warn_error ^ "-6");
+  Krml.Options.(backend := Rust);
   Krml.Warn.parse_warn_error !Krml.Options.warn_error;
 
   let files = List.map Scylla.ClangToAst.read_file command_line_args in
@@ -103,6 +104,8 @@ Supported options:|}
 
   let files = Krml.Simplify.sequence_to_let#visit_files () files in
   let files = Scylla.Simplify.remove_addrof_index#visit_files () files in
+  (* To obtain correct visibility after bundling *)
+  let files = Krml.Inlining.cross_call_analysis files in
 
   let files = Krml.AstToMiniRust.translate_files_with_boxed_types files boxed_types in
   let files = Krml.OptimizeMiniRust.cleanup_minirust files in
