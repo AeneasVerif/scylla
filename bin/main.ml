@@ -103,6 +103,8 @@ Supported options:|}
 
   let files = Krml.Simplify.sequence_to_let#visit_files () files in
   let files = Scylla.Simplify.remove_addrof_index#visit_files () files in
+  (* To obtain correct visibility after bundling *)
+  let files = Krml.Inlining.cross_call_analysis files in
 
   let files = Krml.AstToMiniRust.translate_files_with_boxed_types files boxed_types in
   let files = Krml.OptimizeMiniRust.cleanup_minirust files in
