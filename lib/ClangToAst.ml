@@ -23,10 +23,10 @@ end)
 
 (* GLOBAL STATE *)
 
-(* A map from function names to the string list used in their fully qualified
-   name. It is filled at the beginning of the translation, when exploring the
-   translation unit. (TODO: should this simply be an lid?) *)
-let name_map: string list StringMap.t ref = ref StringMap.empty
+(* A map from C names to the file stem (i.e. `foo` for `bar/foo.c`) they belong to. It is filled
+   at the beginning of the translation, when exploring the translation unit. It allows converting a
+   C name to a krml `lident`. *)
+let name_map: string StringMap.t ref = ref StringMap.empty
 
 (* This domain of this map is functions and global variables. *)
 let global_type_map: typ StringMap.t ref = ref StringMap.empty
@@ -84,7 +84,7 @@ let find_var env name =
         let path = StringMap.find name !name_map in
         let t = StringMap.find name !global_type_map in
         (* FIXME handle mutable globals *)
-        with_type t (EQualified (path, name)), ref false
+        with_type t (EQualified ([ path ], name)), ref false
       with Not_found ->
         Printf.eprintf "Could not find variable %s\n" name;
         raise Not_found)
@@ -104,7 +104,7 @@ let get_id_name (dname : declaration_name) =
 
 let lid_of_name name =
   match StringMap.find_opt name !name_map with
-  | Some path -> Some (path, name)
+  | Some path -> Some ([ path ], name)
   | None ->
       None
 
@@ -1442,7 +1442,11 @@ let prepopulate_type_map (decl : decl) =
   (* Krml.KPrint.bprintf "Adding into type map %s --> %a\n" name ptyp t; *)
   global_type_map := StringMap.add name t !global_type_map
 
-type deduplicated_decls = (decl * Clang.concrete_location) StringMap.t
+type filename = string
+
+(* A map from C identifier to its "best" declaration, along with the file the declaration belongs
+   to. *)
+type deduplicated_decls = (decl * filename) StringMap.t
 
 let prepopulate_type_maps (decls: deduplicated_decls) (decl: decl) =
   decl_error_handler decl () @@ fun () ->
@@ -1528,6 +1532,14 @@ let decl_is_better ~(old_decl:decl) (decl: decl) =
   | RecordDecl { fields = []; _ }, RecordDecl { fields = _ :: _; _ } -> true
   | _ -> false
 
+let assign_file (file: translation_unit) (decl: decl) =
+  match decl.desc with
+  | Function fdecl when fdecl.body <> None && not fdecl.inline_specified ->
+      file.desc.filename
+  | _ ->
+      let loc = Clang.Ast.location_of_node decl |> Clang.Ast.concrete_of_source_location File in
+      loc.filename
+
 (* A first pass that considers all possible declarations for a given name, then retains the most
    precise one. For instance, the prototype for `f` might be in header Foo.h but its
    definition might be in Bar.c -- this first pass considers all possible declarations for a given
@@ -1537,18 +1549,18 @@ let pick_most_suitable (files: translation_unit list): deduplicated_decls =
     List.fold_left (fun map (decl: decl) ->
       let name = name_of_decl decl in
       StringMap.update name (fun old_entry ->
-        let loc = Clang.Ast.location_of_node decl |> Clang.Ast.concrete_of_source_location File in
         match old_entry with
-        | None -> Some (decl, loc)
+        | None -> Some (decl, assign_file file decl)
         | Some ((old_decl, _) as old_entry) ->
             if decl_is_better ~old_decl decl then
-              Some (decl, loc)
+              Some (decl, assign_file file decl)
             else
               Some old_entry
       ) map
     ) map file.desc.items
   ) StringMap.empty files
 
+(* Declarations, grouped by filename *)
 type grouped_decls = (string * decl list) list
 
 (* A second pass that preallocates names (since everything is potentially mutually recursive),
@@ -1559,8 +1571,8 @@ let split_into_files (lib_dirs : string list) (decls : deduplicated_decls): grou
   (* If this belongs to the C library, do not extract it. FIXME: this probably doesn't quite work
      with the sysroot for clangml (e.g. /opt/homebrew/Cellar/...) being different from SDKROOT which
      is for system compilers (e.g. /Library/Developer/...). *)
-  let decls = StringMap.filter (fun _ (_, (loc: Clang.concrete_location)) ->
-    if List.exists (fun x -> String.starts_with ~prefix:x loc.filename) lib_dirs then
+  let decls = StringMap.filter (fun _ (_, filename) ->
+    if List.exists (fun x -> String.starts_with ~prefix:x filename) lib_dirs then
       false
     else
       true
@@ -1568,9 +1580,10 @@ let split_into_files (lib_dirs : string list) (decls : deduplicated_decls): grou
 
   let add_decl _ (decl, loc) acc =
     (* Remember the file that this declaration is conceptually associated to *)
-    name_map := StringMap.add (name_of_decl decl) [file_of_loc loc] !name_map;
+    (* Krml.KPrint.bprintf "Declaration %s goes into file %s\n" (name_of_decl decl) (stem_of_file loc); *)
+    name_map := StringMap.add (name_of_decl decl) (stem_of_file loc) !name_map;
     (* Group this declaration with others that also "belong" to this file *)
-    add_to_list (file_of_loc loc) decl acc
+    add_to_list (stem_of_file loc) decl acc
   in
   let decl_map = StringMap.fold add_decl decls StringMap.empty in
   StringMap.bindings decl_map |> List.map (fun (k, l) -> k, List.rev l)
