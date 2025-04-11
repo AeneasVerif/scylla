@@ -12,6 +12,9 @@ let opaque_attr = "scylla_opaque"
    which will be checked during the translation from Clang to Ast *)
 let mut_attr = "scylla_mutability"
 
+(* Generate #[deriving(Default)] *)
+let default_attr = "scylla_default"
+
 (* An attribute to specify that a given type (and its internal pointers) should
    be translated to `Box`es instead of borrows *)
 let box_attr = "scylla_box"
@@ -76,17 +79,25 @@ let retrieve_mutability (attrs : attribute list) =
 
 (* This attempts to read the attributes since typedef attributes are not exposed in the
    ClangMl high-level AST. This is painful. *)
-let decl_is_opaque (decl : decl) =
-  let is_opaque = ref false in
+let decl_has_attr (decl : decl) attr =
+  let has_attr = ref false in
   begin
     match decl.decoration with
     | Cursor cx ->
         Clang__.Clang__utils.iter_decl_attributes
           (fun cx ->
             match Clang.ext_attr_get_kind cx with
-            | Annotate when Clang.ext_attrs_get_annotation cx = opaque_attr -> is_opaque := true
+            | Annotate when Clang.ext_attrs_get_annotation cx = attr -> has_attr := true
             | _ -> ())
           cx
     | Custom _ -> failwith "no cursor"
   end;
-  !is_opaque
+  !has_attr
+
+(* This attempts to read the attributes since typedef attributes are not exposed in the
+   ClangMl high-level AST. This is painful. *)
+let decl_is_opaque (decl : decl) =
+  decl_has_attr decl opaque_attr
+
+let decl_has_default decl =
+  decl_has_attr decl default_attr

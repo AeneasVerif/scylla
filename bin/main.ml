@@ -107,9 +107,16 @@ Supported options:|}
   (* To obtain correct visibility after bundling *)
   let files = Krml.Inlining.cross_call_analysis files in
 
-  let files = Krml.AstToMiniRust.translate_files_with_boxed_types files boxed_types in
+  (* Addition of derives has to be done this way because we have a map from Ast lids to the derives
+     we want, and if we try to do this after AstToMiniRust then we have Rust names that we do not
+     know how to match with Ast names. *)
+  let files = Krml.AstToMiniRust.translate_files_with_metadata files {
+    boxed_types;
+    derives = Krml.Idents.LidMap.map (fun x -> List.map (fun x -> Krml.MiniRust.Custom x) x) !Scylla.ClangToAst.deriving_traits;
+  } in
   let files = Krml.OptimizeMiniRust.cleanup_minirust files in
   let files = Krml.OptimizeMiniRust.infer_mut_borrows files in
   let files = Krml.OptimizeMiniRust.simplify_minirust files in
+  let files = Scylla.CleanupRust.add_defaults files in
   debug "rs-filenames";
   Krml.OutputRust.write_all files

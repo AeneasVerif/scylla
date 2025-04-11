@@ -47,6 +47,10 @@ let boxed_types = ref LidSet.empty
    operations. *)
 let type_def_map = ref LidMap.empty
 
+(* A map from top-level declaration to additional traits that they ought to derive *)
+let deriving_traits: string list LidMap.t ref =
+  ref LidMap.empty
+
 (* ENVIRONMENTS *)
 
 type env = {
@@ -885,7 +889,7 @@ and translate_fields env t es =
     | _ -> failwith "impossible"
   in
   if List.length field_names <> List.length es then
-    fatal_error "TODO: partial initializers (%d vs %d)" (List.length field_names) (List.length es);
+    fatal_error "TODO: partial initializers (%s but %d initialiers)" (String.concat ", " field_names) (List.length es);
   Krml.Ast.with_type t (EFlat (List.map2 (translate_field_expr env) es field_names))
 
 (* Create a default value associated to a given type [typ] *)
@@ -1450,6 +1454,15 @@ type deduplicated_decls = (decl * filename) StringMap.t
 
 let prepopulate_type_maps (decls: deduplicated_decls) (decl: decl) =
   decl_error_handler decl () @@ fun () ->
+  (* declarations may be annotated with scylla_default *)
+  if Attributes.decl_has_default decl then (
+    let lid = Option.get (lid_of_name (name_of_decl decl)) in
+    (* Krml.KPrint.bprintf "%a has default\n" plid lid; *)
+    deriving_traits := LidMap.update lid (function
+      | None -> Some [ "Default" ]
+      | Some l -> Some ("Default" :: l)
+    ) !deriving_traits
+  );
   match decl.desc with
   | TypedefDecl tdecl when not (Attributes.decl_is_opaque decl) ->
       (* To normalize correctly, we might need to retrieve types beyond the file currently
