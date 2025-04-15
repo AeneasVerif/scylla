@@ -10,3 +10,4 @@ test/build
 lib/DataModel.ml
 *.o
 *.exe
+.sysroot
