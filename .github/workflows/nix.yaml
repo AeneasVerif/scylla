@@ -15,10 +15,31 @@ jobs:
   check:
     runs-on: self-hosted
     steps:
-      - uses: actions/checkout@v3
-      - name: Build and test
-        run: nix develop --command make test
+      - name: Clone scylla
+        uses: actions/checkout@v4
+        with:
+          path: scylla
+
+      - name: Clone symcrypt
+        uses: actions/checkout@v4
+        with:
+          repository: msprotz/SymCrypt
+          path: symcrypt
+          submodules: true
+
+      - name: Build symcrypt
+        working-directory: symcrypt
+        run: |
+          nix develop "$GITHUB_WORKSPACE/scylla" --command scripts/build.py cmake build --no-fips --no-asm --config Release
+
+      - name: Build and test scylla
+        working-directory: scylla
+        run: |
+          export SYMCRYPT_HOME=$GITHUB_WORKSPACE/symcrypt
+          nix develop --command make test
+
       - name: Check output
+        working-directory: scylla
         run: |
           # Check that there are no differences between the generated outputs
           # and the committed outputs.
