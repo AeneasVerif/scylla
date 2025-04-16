@@ -51,6 +51,10 @@ let type_def_map = ref LidMap.empty
 let deriving_traits: string list LidMap.t ref =
   ref LidMap.empty
 
+(* A map from top-level declarations to additional attributes they may have *)
+let attributes_map: string list LidMap.t ref =
+  ref LidMap.empty
+
 (* ENVIRONMENTS *)
 
 type env = {
@@ -1425,6 +1429,13 @@ let add_to_list x data m =
   in
   StringMap.update x add m
 
+let add_to_list_lid x data m =
+  let add = function
+    | None -> Some [ data ]
+    | Some l -> Some (data :: l)
+  in
+  LidMap.update x add m
+
 (* C guarantees very little in terms of ordering of declarations. To make our translation
    successful, we run a first pass that pre-allocates names and types of functions, and records type
    definitions so that we can have enough type information accessible to generate a well-typed krml
@@ -1458,10 +1469,7 @@ let prepopulate_type_maps (decls: deduplicated_decls) (decl: decl) =
   if Attributes.decl_has_default decl then (
     let lid = Option.get (lid_of_name (name_of_decl decl)) in
     (* Krml.KPrint.bprintf "%a has default\n" plid lid; *)
-    deriving_traits := LidMap.update lid (function
-      | None -> Some [ "Default" ]
-      | Some l -> Some ("Default" :: l)
-    ) !deriving_traits
+    deriving_traits := add_to_list_lid lid "Default" !deriving_traits
   );
   match decl.desc with
   | TypedefDecl tdecl when not (Attributes.decl_is_opaque decl) ->
@@ -1492,10 +1500,27 @@ let prepopulate_type_maps (decls: deduplicated_decls) (decl: decl) =
               (lazy
                 ( match StringMap.find (get_id_name name) decls with
                 | { desc = RecordDecl { fields; attributes; _ }; _ }, _ ->
-                    let is_box = Attributes.has_box_attr attributes in
                     let fields = List.map translate_field fields in
-                    if is_box then
+
+                    if Attributes.has_box_attr attributes then
                       boxed_types := LidSet.add lid !boxed_types;
+
+                    (* By default, we compile C structs to Rust structs with a C layout. This could
+                       be changed, for instance, either with a command-line flag, or by defining a
+                       new attribute __attribute__((annotate("scylla_c_layout"))) *)
+                    attributes_map := add_to_list_lid lid (Printf.sprintf "repr(C)") !attributes_map;
+
+                    (* Carry alignment down to Rust *)
+                    begin match Attributes.retrieve_alignment attributes with
+                    | Some { desc = IntegerLiteral n; _ } ->
+                        let n = Clang.Ast.int_of_literal n in
+                        attributes_map := add_to_list_lid lid (Printf.sprintf "repr(align(%d))" n) !attributes_map
+                    | Some _ ->
+                        Krml.KPrint.bprintf "Warning: alignment for %a is not a constant, ignoring\n" plid lid
+                    | None ->
+                        ()
+                    end;
+
                     Flat fields
                 | _ ->
                     fatal_error "unknown struct definition: %s" (get_id_name name)

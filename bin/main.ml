@@ -113,6 +113,7 @@ Supported options:|}
   let files = Krml.AstToMiniRust.translate_files_with_metadata files {
     boxed_types;
     derives = Krml.Idents.LidMap.map (fun x -> List.map (fun x -> Krml.MiniRust.Custom x) x) !Scylla.ClangToAst.deriving_traits;
+    attributes = !Scylla.ClangToAst.attributes_map;
   } in
   let files = Krml.OptimizeMiniRust.cleanup_minirust files in
   let files = Krml.OptimizeMiniRust.infer_mut_borrows files in
