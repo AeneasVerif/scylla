@@ -17,4 +17,15 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Build and test
-        run: nix flake check -L
+        run: nix develop --command make test
+      - name: Check output
+        run: |
+          # Check that there are no differences between the generated outputs
+          # and the committed outputs.
+          if git diff --exit-code --quiet out > /dev/null; then
+            echo "Ok: the regenerated files are the same as the checked out files"
+          else
+            echo "Error: the regenerated files differ from the checked out files"
+            git diff out
+            exit 1
+          fi

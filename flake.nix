@@ -1,20 +1,15 @@
 {
   inputs = {
     flake-utils.follows = "karamel/flake-utils";
-    nix-filter.url = "github:numtide/nix-filter";
     nixpkgs.url = "nixpkgs/nixpkgs-unstable";
     karamel.url = "github:FStarLang/karamel";
     karamel.inputs.nixpkgs.follows = "nixpkgs";
     rust-overlay.url = "github:oxalica/rust-overlay";
     rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
-    crane.url = "github:ipetkov/crane";
-    crane.inputs.nixpkgs.follows = "nixpkgs";
   };
   outputs = { self, ... } @ inputs:
     inputs.flake-utils.lib.eachDefaultSystem (system:
       let
-        nix-filter = inputs.nix-filter.lib;
-
         overlays = [
           # Rust toolchain
           (import inputs.rust-overlay)
@@ -26,7 +21,6 @@
         # LLVM version to use for clang bindings
         llvmPackages = pkgs.llvmPackages_15;
         rustToolchain = pkgs.rust-bin.stable.latest.default;
-        craneLib = (inputs.crane.mkLib pkgs).overrideToolchain rustToolchain;
 
         karamel = inputs.karamel.packages.${system}.default.override { ocamlPackages = pkgs.ocamlPackages; };
 
@@ -173,112 +167,29 @@
               libllvm = llvmPackages.libllvm;
             };
         };
-
-        scylla = pkgs.callPackage
-          ({ version
-           , ocamlPackages
-           , libclang
-           , krml
-           , clangml
-           , clang-tools
-           }:
-            ocamlPackages.buildDunePackage {
-              pname = "scylla";
-              inherit version;
-              src = nix-filter {
-                root = ./.;
-                exclude = [
-                  "flake.nix"
-                ];
-              };
-              buildInputs = [
-                libclang
-                clang-tools
-              ];
-              propagatedBuildInputs = [
-                krml
-                clangml
-              ];
-              preBuild = ''
-                make lib/DataModel.ml
-              '';
-            })
-          {
-            version = self.rev or "dirty";
-            krml = karamel.passthru.lib;
-            # Provide this package which isn't in nixpkgs.
-            clangml = extraOcamlPackages.clangml;
-            # Override to use our chosen llvm version.
-            libclang = llvmPackages.libclang;
-          };
-
-        # Regenerate the rust files and check that they match the committed files.
-        scylla-generate-rust-files = llvmPackages.stdenv.mkDerivation {
-          name = "scylla-generate-rust-files";
-          src = nix-filter {
-            root = ./.;
-            include = [
-              "Makefile"
-              "out"
-              "rs"
-              "test"
-            ];
-          };
-          # Unsure why adding these as `buildInputs` didn't work, but at least this works.
-          C_INCLUDE_PATH = "${llvmPackages.clang}/resource-root/include:${pkgs.glibc.dev}/include";
-          committed_output = ./out;
-          buildPhase = ''
-            ln -sf ${scylla}/bin/scylla scylla
-            # Don't try to rebuild
-            sed -i 's/scylla: build//' Makefile
-            make regen-outputs
-
-            # Check that there are no differences between the generated
-            # outputs and the committed outputs.
-            if diff -rq $committed_output out > /dev/null; then
-              echo "Ok: the regenerated files are the same as the checked out files"
-            else
-              echo "Error: the regenerated files differ from the checked out files"
-              diff -ru $committed_output out
-              exit 1
-            fi
-          '';
-          installPhase = ''
-            mv out $out
-          '';
-        };
-
-        # Run `cargo test` on the generated rust files.
-        scylla-test-rust-files = craneLib.cargoTest rec {
-          name = "scylla-test-rust-files";
-          src = craneLib.cleanCargoSource "${scylla-generate-rust-files}/hacl";
-          cargoArtifacts = craneLib.buildDepsOnly { inherit src; };
-          installPhase = ''touch $out'';
-        };
       in
       {
-        # Provide the custom ocaml packages as well, in case a downstream user
-        # wants to override something.
-        packages = extraOcamlPackages // { default = scylla; };
-        checks = {
-          inherit scylla-generate-rust-files scylla-test-rust-files;
-        };
-
         devShells.default = (pkgs.mkShell.override { stdenv = llvmPackages.stdenv; }) {
-          OCAMLRUNPARAM = "b"; # Get backtrace on exception
-          packages = [
+          # Get backtrace on exception
+          OCAMLRUNPARAM = "b";
+          # Unsure why adding these as `buildInputs` didn't work, but at least this works.
+          C_INCLUDE_PATH = "${llvmPackages.clang}/resource-root/include:${pkgs.glibc.dev}/include";
+
+          buildInputs = [
+            llvmPackages.libclang
+            pkgs.clang-tools
+            karamel.passthru.lib
+            extraOcamlPackages.clangml
+          ];
+
+          nativeBuildInputs = [
+            rustToolchain
+
+            pkgs.ocamlPackages.dune_3
             pkgs.ocamlPackages.ocaml
             # ocaml-lsp's version must match the ocaml version used. Pinning
             # this here to save me a headache.
             pkgs.ocamlPackages.ocaml-lsp
-          ];
-
-          # Same as for scylla-generate-rust-files.
-          C_INCLUDE_PATH = "${llvmPackages.clang}/resource-root/include:${pkgs.glibc.dev}/include";
-          inputsFrom = [
-            self.packages.${system}.default
-            scylla-generate-rust-files
-            scylla-test-rust-files
           ];
         };
       });

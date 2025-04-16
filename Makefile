@@ -26,7 +26,6 @@ build: lib/DataModel.ml
 	@ocamlfind list | grep -q krml || test -L lib/krml || echo "⚠️⚠️⚠️ krml not found; we suggest cd lib && ln -s path/to/karamel/lib krml"
 	dune build && ln -sf _build/default/bin/main.exe scylla
 
-# This target is removed in CI because CI builds `scylla` itself.
 scylla: build
 
 .PHONY: test
