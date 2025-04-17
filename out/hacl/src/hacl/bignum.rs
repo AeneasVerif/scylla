@@ -1519,11 +1519,15 @@ pub fn Hacl_Bignum_ModInvLimb_mod_inv_uint64(n0: u64) -> u64
 }
 
 #[derive(PartialEq, Clone)]
-pub struct Hacl_Bignum_MontArithmetic_bn_mont_ctx_u32
+#[repr(C)]
+pub
+struct Hacl_Bignum_MontArithmetic_bn_mont_ctx_u32
 { pub len: u32, pub n: Box<[u32]>, pub mu: u32, pub r2: Box<[u32]> }
 
 #[derive(PartialEq, Clone)]
-pub struct Hacl_Bignum_MontArithmetic_bn_mont_ctx_u64
+#[repr(C)]
+pub
+struct Hacl_Bignum_MontArithmetic_bn_mont_ctx_u64
 { pub len: u32, pub n: Box<[u64]>, pub mu: u64, pub r2: Box<[u64]> }
 
 pub fn Hacl_Bignum_Montgomery_bn_check_modulus_u32(len: u32, n: &[u32]) -> u32
