@@ -55,6 +55,21 @@ let deriving_traits: string list LidMap.t ref =
 let attributes_map: string list LidMap.t ref =
   ref LidMap.empty
 
+(* add_to_list is only available starting from OCaml 5.1 *)
+let add_to_list x data m =
+  let add = function
+    | None -> Some [ data ]
+    | Some l -> Some (data :: l)
+  in
+  StringMap.update x add m
+
+let add_to_list_lid x data m =
+  let add = function
+    | None -> Some [ data ]
+    | Some l -> Some (data :: l)
+  in
+  LidMap.update x add m
+
 (* ENVIRONMENTS *)
 
 type env = {
@@ -1273,6 +1288,10 @@ let translate_fundecl (fdecl : function_decl) =
           (fun b (_, _, m) -> { b with node = { b.node with mut = !m } })
           binders (List.rev env.vars)
       in
+
+      if Attributes.has_always_inline fdecl.attributes then
+        attributes_map := add_to_list_lid lid (Printf.sprintf "inline(always)") !attributes_map;
+
       let decl = Krml.Ast.(DFunction (None, flags, 0, 0, ret_type, lid, binders, body)) in
       (* Krml.KPrint.bprintf "Resulting decl %a\n" Krml.PrintAst.pdecl decl; *)
       Some decl
@@ -1420,21 +1439,6 @@ let translate_file wanted_c_file file =
      out in krml during the Rust translation.
      Hence, we can apply translate_external_decl on any file in the tree *)
     Some (name, List.filter_map translate_external_decl decls)
-
-(* add_to_list is only available starting from OCaml 5.1 *)
-let add_to_list x data m =
-  let add = function
-    | None -> Some [ data ]
-    | Some l -> Some (data :: l)
-  in
-  StringMap.update x add m
-
-let add_to_list_lid x data m =
-  let add = function
-    | None -> Some [ data ]
-    | Some l -> Some (data :: l)
-  in
-  LidMap.update x add m
 
 (* C guarantees very little in terms of ordering of declarations. To make our translation
    successful, we run a first pass that pre-allocates names and types of functions, and records type

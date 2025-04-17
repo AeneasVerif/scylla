@@ -84,6 +84,11 @@ let retrieve_alignment (attrs: attribute list) =
     | _ -> None
   ) attrs
 
+let has_always_inline (attrs: attribute list) =
+  List.exists (fun (x: attribute) -> match x.desc with Clang__.Attributes.AlwaysInline _ -> true | _ -> false) attrs
+
+(* LOW-LEVEL API -- FOR THINGS THAT DO NOT HAVE AN ATTRIBUTES FIELD *)
+
 (* This attempts to read the attributes since typedef attributes are not exposed in the
    ClangMl high-level AST. This is painful. *)
 let decl_has_attr (decl : decl) attr =
