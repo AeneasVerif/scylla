@@ -1,16 +1,15 @@
-# We try to figure out the best include paths, compiler options, etc. from the build system.
-
-SCYLLA_OPTS = --ccopts -DKRML_UNROLL_MAX=0,-I,test/include,-I,test/ --errors_as_warnings
-
-# On OSX, querying xcrun appears to provide the sysroot.
-# FIXME: no, you want the sysroot from the clang version that clangml was compiled with
+# We need the sysroot for the version of llvm clangml was built against. Running brew takes ages so
+# we cache the result. No assumptions made on the underlying shell or gnu-ness of sed.
 ifeq ($(shell uname -s),Darwin)
-  ISYSROOT=$(shell xcrun --show-sdk-path)
+  ISYSROOT=$(shell [ -f .sysroot ] && cat .sysroot || \
+    brew info llvm@15 | egrep '^/' | sed 's!\(15\.[^ ]*\) .*!\1/Toolchains/LLVM\1.xctoolchain!' | tee .sysroot)
   ifneq ($(ISYSROOT),)
-    SCYLLA_OPTS += --ccopts -I,$(ISYSROOT)/usr/include
+    SCYLLA_SYSROOT_OPT = --ccopts -isysroot,$(ISYSROOT)/
   endif
 endif
 
+# We try to figure out the best include paths, compiler options, etc. from the build system.
+SCYLLA_OPTS += --ccopts -DKRML_UNROLL_MAX=0,-I,test/include,-I,test/ --errors_as_warnings $(SCYLLA_SYSROOT_OPT)
 
 .PHONY: all
 all: build format-check
@@ -29,8 +28,25 @@ build: lib/DataModel.ml
 scylla: build
 
 .PHONY: test
-test: regen-outputs
+test: regen-outputs test-symcrypt
 	cd out/hacl && cargo test
+
+# Approximation -- but we are not doing the whole gcc -MM dance
+SYMCRYPT_SOURCES=$(wildcard $(addprefix $(SYMCRYPT_HOME)/,inc/symcrypt_internal.h lib/sha3.c lib/sha3_*.c lib/shake.c))
+SYMCRYPT_DYLIB=$(wildcard $(addprefix $(SYMCRYPT_HOME)/build/module/generic/libsymcrypt.,dll so dylib))
+
+test-symcrypt: $(SYMCRYPT_HOME)/rs/src/sha3.rs
+	cd $(SYMCRYPT_HOME)/rs && \
+	  DYLD_LIBRARY_PATH=$(dir $(SYMCRYPT_DYLIB)):$$DYLD_LIBRARYPATH \
+	  LD_LIBRARY_PATH=$(dir $(SYMCRYPT_DYLIB)):$$LD_LIBRARYPATH \
+	  SYMCRYPT_LIB_PATH=$(SYMCRYPT_HOME)/build/module/generic/ \
+	  cargo test
+
+# Approximation -- this recipe produces multiple targets
+$(SYMCRYPT_HOME)/rs/src/sha3.rs: $(SYMCRYPT_SOURCES)
+	[ x"$(SYMCRYPT_HOME)" != x ] # Error out because $$SYMCRYPT_HOME is empty
+	./scylla $(SCYLLA_SYSROOT_OPT) --ccopts -DSYMCRYPT_IGNORE_PLATFORM,-I$(SYMCRYPT_HOME)/inc,-I$(SYMCRYPT_HOME)/build/inc,-std=gnu11,-DSCYLLA \
+	  --errors_as_warnings --output $(dir $@) --bundle symcrypt_internal $(SYMCRYPT_SOURCES)
 
 # We extract all of the tests into the same hacl directory
 .PHONY: regen-outputs

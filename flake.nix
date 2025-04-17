@@ -171,7 +171,7 @@
       {
         devShells.default = (pkgs.mkShell.override { stdenv = llvmPackages.stdenv; }) {
           # Get backtrace on exception
-          OCAMLRUNPARAM = "b";
+          # OCAMLRUNPARAM = "b";
           # Unsure why adding these as `buildInputs` didn't work, but at least this works.
           C_INCLUDE_PATH = "${llvmPackages.clang}/resource-root/include:${pkgs.glibc.dev}/include";
 
@@ -184,6 +184,8 @@
 
           nativeBuildInputs = [
             rustToolchain
+            pkgs.python3
+            pkgs.cmake
 
             pkgs.ocamlPackages.dune_3
             pkgs.ocamlPackages.ocaml
