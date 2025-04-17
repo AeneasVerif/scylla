@@ -26,6 +26,7 @@ jobs:
           repository: msprotz/SymCrypt
           path: symcrypt
           submodules: true
+          ref: protz/scylla
 
       - name: Build symcrypt
         working-directory: symcrypt
