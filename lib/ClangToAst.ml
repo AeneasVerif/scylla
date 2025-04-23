@@ -1472,7 +1472,7 @@ let translate_file wanted_c_file file =
 let prepopulate_type_map (decl : decl) =
   decl_error_handler decl () @@ fun () ->
   let name = name_of_decl decl in
-  let t = 
+  let t =
     match decl.desc with
     | Function fdecl ->
         let binders, ret_type = compute_external_type fdecl in
