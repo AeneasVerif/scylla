@@ -158,7 +158,7 @@ let translate_builtin_typ (t : Clang.Ast.builtin_type) =
   match[@warnerror "-11"] t with
   | Void -> TUnit
   | UInt -> TInt UInt32
-  | UShort -> failwith "translate_builtin_typ: ushort"
+  | UShort -> TInt UInt16
   | ULong -> begin
       match DataModel.size_long with
       | 4 -> TInt UInt32
@@ -1447,7 +1447,7 @@ let translate_file wanted_c_file file =
 let prepopulate_type_map (decl : decl) =
   decl_error_handler decl () @@ fun () ->
   let name = name_of_decl decl in
-  let t = 
+  let t =
     match decl.desc with
     | Function fdecl ->
         let binders, ret_type = compute_external_type fdecl in
