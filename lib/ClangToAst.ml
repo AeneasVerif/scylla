@@ -158,7 +158,7 @@ let translate_builtin_typ (t : Clang.Ast.builtin_type) =
   match[@warnerror "-11"] t with
   | Void -> TUnit
   | UInt -> TInt UInt32
-  | UShort -> failwith "translate_builtin_typ: ushort"
+  | UShort -> TInt UInt16
   | ULong -> begin
       match DataModel.size_long with
       | 4 -> TInt UInt32
@@ -168,7 +168,7 @@ let translate_builtin_typ (t : Clang.Ast.builtin_type) =
   | ULongLong -> TInt UInt64
   | UInt128 -> failwith "translate_builtin_typ: uint128"
   | Int -> TInt Int32
-  | Short -> failwith "translate_builtin_tyo: short"
+  | Short -> TInt Int16
   | Long -> begin
       match DataModel.size_long with
       | 4 -> TInt Int32
@@ -317,6 +317,7 @@ let rec translate_typ (typ : qual_type) =
   | Typedef { name; _ } -> get_id_name name |> translate_typ_name
   | BuiltinType t -> translate_builtin_typ t
   | Elaborated { keyword = Struct; named_type = { desc = Record { name; _ }; _ }; _ } -> begin
+      assert ((get_id_name name) <> "");
       try TQualified (ElaboratedMap.find (name, `Struct) !elaborated_map)
       with Not_found ->
         Format.eprintf "Trying to translate type %a\n@." Clang.Type.pp typ;
@@ -860,7 +861,13 @@ let rec translate_expr (env : env) (e : Clang.Ast.expr) : Krml.Ast.expr =
                  base.typ)
           in
           match LidMap.find_opt lid !type_def_map with
-          | Some (lazy (Flat fields)) -> fst (List.assoc (Some f) fields)
+          | Some (lazy (Flat fields)) ->
+              if List.mem_assoc (Some f) fields then
+                fst (List.assoc (Some f) fields)
+              else
+                fatal_error "Field %s of %a not found in struct def (available fields are: %s)"
+                  f plid lid
+                  (String.concat ", " (List.map (fun (f, _) -> Option.value ~default:"<noname>" f) fields))
           | Some _ -> fatal_error "Taking a field of %a which is not a struct" plid lid
           | None -> fatal_error "Taking a field of %a which is not in the map" plid lid
         in
@@ -1119,19 +1126,26 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
               let e2 = translate_stmt env' (Compound (List.tl tl)) in
               with_type e2.typ (ELet (b, e, e2))
           (* Regular variable declaration case *)
-          | Decl [ { desc = Var vdecl; _ } ], _ ->
-              let env', b, e = translate_vardecl env vdecl in
-              (* TODO: analysis that figures out what needs to be mut *)
-              let e2 = translate_stmt env' (Compound tl) in
-              let b =
-                if !(thd3 (List.hd env'.vars)) then
-                  Helpers.mark_mut b
-                else
-                  b
+          | Decl ds, _ ->
+              let rec translate_one_decl env (decls: decl list) =
+                match decls with
+                | { desc = Var vdecl; _ } :: decls ->
+                    let env, b, e = translate_vardecl env vdecl in
+                    (* TODO: analysis that figures out what needs to be mut *)
+                    let e2 = translate_one_decl env decls in
+                    let b =
+                      if !(thd3 (List.hd env.vars)) then
+                        Helpers.mark_mut b
+                      else
+                        b
+                    in
+                    with_type e2.typ (ELet (b, e, e2))
+                | _ :: _ ->
+                    failwith "This decl is not a var declaration"
+                | [] ->
+                    translate_stmt env (Compound tl)
               in
-              with_type e2.typ (ELet (b, e, e2))
-          | Decl [ _ ], _ -> failwith "This decl is not a var declaration"
-          | Decl _, _ -> failwith "multiple decls"
+              translate_one_decl env ds
           | stmt, _ ->
               let e2 = translate_stmt (add_var env ("_", TUnit)) (Compound tl) in
               with_type e2.typ (ELet (Helpers.sequence_binding (), translate_stmt env stmt, e2)))
@@ -1321,20 +1335,31 @@ let name_of_decl (decl : decl) : string =
 
 exception Unsupported
 
-let decl_error_handler (decl : decl) default f =
+let filename_of_decl (decl: decl) =
+  let loc = Clang.Ast.location_of_node decl |> Clang.Ast.concrete_of_source_location File in
+  loc.filename
+
+let has_prefix_in filename lib_dirs =
+  List.exists (fun x -> String.starts_with ~prefix:x filename) lib_dirs
+
+let decl_error_handler ?(ignored_dirs=[]) (decl : decl) default f =
   try f ()
   with e ->
-    Format.eprintf "%!@.";
-    Format.printf "%!@.";
-    (* Format.printf "Declaration %s not supported\n%a@." (name_of_decl decl) Clang.Decl.pp decl; *)
-    Format.printf "Declaration %s not supported\n@." (name_of_decl decl);
-    if !ScyllaOptions.fatal_errors then
-      raise e
-    else begin
-      Format.eprintf "Error: %s\n@." (Printexc.to_string e);
-      Printexc.print_backtrace stderr;
+    if not (has_prefix_in (filename_of_decl decl) ignored_dirs) then begin
+      Format.eprintf "%!@.";
+      Format.printf "%!@.";
+      (* Format.printf "Declaration %s not supported\n%a@." (name_of_decl decl) Clang.Decl.pp decl; *)
+      let loc = Clang.Ast.location_of_node decl |> Clang.Ast.concrete_of_source_location File in
+      Format.printf "Declaration %s (in file %s) not supported\n@." (name_of_decl decl) loc.filename;
+      if !ScyllaOptions.fatal_errors then
+        raise e
+      else begin
+        Format.eprintf "Error: %s\n@." (Printexc.to_string e);
+        Printexc.print_backtrace stderr;
+        default
+      end
+    end else
       default
-    end
 
 (* Computes the argument and return types of a function potentially marked as [[scylla_opaque]],
    taking into account attributes to adjust const/non-const pointers. *)
@@ -1467,14 +1492,14 @@ type filename = string
    to. *)
 type deduplicated_decls = (decl * filename) StringMap.t
 
-let prepopulate_type_maps (decls: deduplicated_decls) (decl: decl) =
-  decl_error_handler decl () @@ fun () ->
+let prepopulate_type_maps (ignored_dirs: string list) (decls: deduplicated_decls) (decl: decl) =
+  decl_error_handler ~ignored_dirs decl () @@ fun () ->
+  let lid = Option.get (lid_of_name (name_of_decl decl)) in
+
   (* declarations may be annotated with scylla_default *)
-  if Attributes.decl_has_default decl then (
-    let lid = Option.get (lid_of_name (name_of_decl decl)) in
-    (* Krml.KPrint.bprintf "%a has default\n" plid lid; *)
-    deriving_traits := add_to_list_lid lid "Default" !deriving_traits
-  );
+  if Attributes.decl_has_default decl then
+    deriving_traits := add_to_list_lid lid "Default" !deriving_traits;
+
   match decl.desc with
   | TypedefDecl tdecl when not (Attributes.decl_is_opaque decl) ->
       (* To normalize correctly, we might need to retrieve types beyond the file currently
@@ -1498,6 +1523,7 @@ let prepopulate_type_maps (decls: deduplicated_decls) (decl: decl) =
 
             (* We record a mapping `struct S` ~~> `T` in our map, so that occurrence of the type
                `struct S` in the Clang AST become nominal types `T` in the krml Ast. *)
+            assert ((get_id_name name) <> "");
             elaborated_map := ElaboratedMap.add (name, `Struct) lid !elaborated_map;
 
             Some
@@ -1547,6 +1573,7 @@ let prepopulate_type_maps (decls: deduplicated_decls) (decl: decl) =
                  Abbrev ty))
         | _ ->
             (* Unsupported *)
+            (* Krml.KPrint.bprintf "%a is unsupported\n" plid lid; *)
             None
       in
       Option.iter (fun def -> type_def_map := LidMap.add lid def !type_def_map) def
@@ -1579,8 +1606,7 @@ let assign_file (file: translation_unit) (decl: decl) =
   | Function fdecl when fdecl.body <> None && not fdecl.inline_specified ->
       file.desc.filename
   | _ ->
-      let loc = Clang.Ast.location_of_node decl |> Clang.Ast.concrete_of_source_location File in
-      loc.filename
+      filename_of_decl decl
 
 (* A first pass that considers all possible declarations for a given name, then retains the most
    precise one. For instance, the prototype for `f` might be in header Foo.h but its
@@ -1610,11 +1636,9 @@ type grouped_decls = (string * decl list) list
    groups declarations by file. Note that we have totally lost the order of declarations within a
    file here. *)
 let split_into_files (lib_dirs : string list) (decls : deduplicated_decls): grouped_decls =
-  (* If this belongs to the C library, do not extract it. FIXME: this probably doesn't quite work
-     with the sysroot for clangml (e.g. /opt/homebrew/Cellar/...) being different from SDKROOT which
-     is for system compilers (e.g. /Library/Developer/...). *)
+  (* If this belongs to the C library, do not extract it. *)
   let decls = StringMap.filter (fun _ (_, filename) ->
-    if List.exists (fun x -> String.starts_with ~prefix:x filename) lib_dirs then
+    if has_prefix_in filename lib_dirs then
       false
     else
       true
@@ -1633,9 +1657,9 @@ let split_into_files (lib_dirs : string list) (decls : deduplicated_decls): grou
 (* Third pass. Now that names can be resolved properly, we fill various type maps, and precompute type
    definitions while we're at it -- this makes sure type aliases are known, since they need to be
    substituted away (normalized) prior to doing the type-directed expression translation. *)
-let fill_type_maps (decls: deduplicated_decls) =
+let fill_type_maps (ignored_dirs : string list) (decls: deduplicated_decls) =
   StringMap.iter (fun _ (decl, _) ->
-    prepopulate_type_maps decls decl
+    prepopulate_type_maps ignored_dirs decls decl
   ) decls;
   (* This can only be done AFTER abbreviations are recorded, otherwise, the annotations cannot be
      applied properly. *)
