@@ -591,10 +591,18 @@ let mk_binop lhs kind rhs =
     (* FIXME: this needs to follow the C integer promotion rules. *)
     let lhs_typ = lhs.typ in
     let w = Helpers.assert_tint_or_tbool lhs_typ in
-    let op = Helpers.mk_op kind w in
-    let t_ret, t_args = Helpers.flatten_arrow op.typ in
-    let rhs = adjust rhs (List.nth t_args 1) in
-    with_type t_ret (EApp (op, [ lhs; rhs ]))
+    match kind with
+    | And | Or | Xor | Not ->
+        (* Monomorphic boolean operators *)
+        let lhs = adjust lhs TBool in
+        let rhs = adjust rhs TBool in
+        with_type TBool (EApp (Helpers.mk_op kind Bool, [ lhs; rhs ]))
+    | _ ->
+        (* Width-polymorphic operators *)
+        let op = Helpers.mk_op kind w in
+        let t_ret, t_args = Helpers.flatten_arrow op.typ in
+        let rhs = adjust rhs (List.nth t_args 1) in
+        with_type t_ret (EApp (op, [ lhs; rhs ]))
   in
 
   (* In case of pointer arithmetic, we need to perform a rewriting into EBufSub/Diff *)
@@ -1166,7 +1174,7 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
                       else
                         b
                     in
-                    with_type e2.typ (ELet (b, e, e2))
+                    with_type e2.typ (ELet (b, adjust e b.typ, e2))
                 | _ :: _ ->
                     failwith "This decl is not a var declaration"
                 | [] ->
