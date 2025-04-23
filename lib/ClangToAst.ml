@@ -561,10 +561,19 @@ let adjust e t =
         e
   (* Conversions via expected return type of the function (return NULL) *)
   | EBufNull, _, TBuf _ -> with_type t e.node
+
+  (* Array decay in C -- it's ok *)
+  | _, TArray (t, _), TBuf (t', _) when t = t' ->
+      e
+
+  (* Casting to const -- also ok *)
+  | _, TBuf (t, false), TBuf (t', true) when t = t' ->
+      e
+
   (* TODO: tag indices *)
   | _ ->
       if e.typ <> t then
-        fatal_error "Could not convert expression %a to have type %a" pexpr e ptyp t;
+        fatal_error "Could not convert expression %a: %a to have type %a" pexpr e ptyp e.typ ptyp t;
       e
 
 let mark_mut_if_variable env e =
@@ -697,6 +706,14 @@ let rec translate_expr (env : env) (e : Clang.Ast.expr) : Krml.Ast.expr =
         (* Logical not: The operand should be a boolean *)
         let o = translate_expr env operand in
         Helpers.mk_not (adjust o TBool)
+
+    | UnaryOperator { kind = Minus; operand } ->
+        (* No unary minus in krml ast *)
+        let o = translate_expr env operand in
+        let w = Helpers.assert_tint o.typ in
+        with_type o.typ (EApp (Helpers.mk_op Sub w,
+          [ Helpers.zero w; o ]))
+
     | UnaryOperator { kind = Deref; operand } ->
         let o = translate_expr env operand in
         let t = Helpers.assert_tbuf_or_tarray o.typ in
@@ -714,10 +731,12 @@ let rec translate_expr (env : env) (e : Clang.Ast.expr) : Krml.Ast.expr =
           begin
             match lhs.node with
             (* Special-case rewriting for buffer assignments *)
-            | EBufRead (base, index) -> EBufWrite (base, index, rhs)
+            | EBufRead (base, index) ->
+                let t = Helpers.assert_tbuf_or_tarray base.typ in
+                EBufWrite (base, index, adjust rhs t)
             | _ ->
                 mark_mut_if_variable env lhs;
-                EAssign (lhs, rhs)
+                EAssign (lhs, adjust rhs lhs.typ)
           end
     | BinaryOperator { lhs; kind; rhs } when is_assign_op kind ->
         (* FIXME this is not correct if the lhs is not a value -- consider, for instance:
@@ -738,10 +757,12 @@ let rec translate_expr (env : env) (e : Clang.Ast.expr) : Krml.Ast.expr =
           begin
             match lhs.node with
             (* Special-case rewriting for buffer assignments *)
-            | EBufRead (base, index) -> EBufWrite (base, index, rhs)
+            | EBufRead (base, index) ->
+                let t = Helpers.assert_tbuf_or_tarray base.typ in
+                EBufWrite (base, index, adjust rhs t)
             | _ ->
                 mark_mut_if_variable env lhs;
-                EAssign (lhs, rhs)
+                EAssign (lhs, adjust rhs lhs.typ)
           end
     | BinaryOperator { lhs; kind; rhs } ->
         let lhs = translate_expr env lhs in
@@ -822,8 +843,9 @@ let rec translate_expr (env : env) (e : Clang.Ast.expr) : Krml.Ast.expr =
         (* Format.printf "Trying to translate function call %a@." Clang.Expr.pp callee; *)
         let callee = translate_expr env callee in
         (* Krml.KPrint.bprintf "calle is %a and has type %a\n" pexpr callee ptyp callee.typ; *)
-        let args = List.map (fun x -> translate_expr env x) args in
-        with_type (fst (Helpers.flatten_arrow callee.typ)) (EApp (callee, args))
+        let t, ts = Helpers.flatten_arrow callee.typ in
+        let args = List.map2 (fun x t -> adjust (translate_expr env x) t) args ts in
+        with_type t (EApp (callee, args))
     | Cast { qual_type; operand; _ } ->
         (* Format.printf "Cast %a@."  Clang.Expr.pp e; *)
         let typ = translate_typ qual_type in
@@ -834,7 +856,14 @@ let rec translate_expr (env : env) (e : Clang.Ast.expr) : Krml.Ast.expr =
         let index = adjust (translate_expr env index) (TInt SizeT) in
         (* Is this only called on rvalues? Otherwise, might need EBufWrite *)
         with_type (Helpers.assert_tbuf_or_tarray base.typ) (EBufRead (base, index))
-    | ConditionalOperator _ -> failwith "translate_expr: conditional operator"
+    | ConditionalOperator { cond; then_branch; else_branch } ->
+        let cond = translate_expr env cond in
+        let else_branch = translate_expr env else_branch in
+        let then_branch = match then_branch with
+          | None -> assert (else_branch.typ = TUnit); Helpers.eunit
+          | Some e -> adjust (translate_expr env e) else_branch.typ
+        in
+        with_type else_branch.typ (EIfThenElse (cond, then_branch, else_branch))
     | Paren _ -> failwith "translate_expr: paren"
     | Member { base; arrow; field } ->
         let base =
@@ -1152,19 +1181,29 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
       assert (condition_variable = None);
       begin
         match init, cond, inc with
-        | Some init, Some cond, Some inc -> begin
-            match init.desc with
-            | Decl [ { desc = Var vdecl; _ } ] ->
-                let env, b, init = translate_vardecl env vdecl in
-                let b = Helpers.mark_mut b in
-                (* Cannot use type_of_expr cond here since C uses `int` but we want bool *)
-                let cond = adjust (translate_expr env cond) TBool in
-                let inc = translate_stmt env inc.desc in
-                let body = translate_stmt env body.desc in
-                with_type TUnit (EFor (b, init, cond, inc, body))
-            | _ -> failwith "loop variable must be declared in for loop initializer"
-          end
-        | _ -> failwith "translation of for loops requires initialize, condition, and increment"
+        | Some { desc = Decl [ { desc = Var vdecl; _ } ]; _ }, Some cond, Some inc ->
+            let env, b, init = translate_vardecl env vdecl in
+            let b = Helpers.mark_mut b in
+            (* Cannot use type_of_expr cond here since C uses `int` but we want bool *)
+            let cond = adjust (translate_expr env cond) TBool in
+            let inc = translate_stmt env inc.desc in
+            let body = translate_stmt env body.desc in
+            with_type TUnit (EFor (b, init, cond, inc, body))
+        | _ ->
+            let init = match init with None -> Helpers.eunit | Some init -> translate_stmt env init.desc in
+            let cond = match cond with None -> Helpers.etrue | Some cond -> translate_expr env cond in
+            let inc = match inc with None -> Helpers.eunit | Some inc -> translate_stmt env inc.desc in
+            let body = translate_stmt env body.desc in
+            with_type TUnit (ESequence [
+              init;
+              with_type TUnit (EWhile (
+                adjust cond TBool,
+                with_type TUnit (ESequence [
+                  body;
+                  inc
+                ])
+              ))
+            ])
       end
   | ForRange _ -> failwith "translate_stmt: for range"
   (* There is no null pointer in Rust. We remove branching based on null-pointer
@@ -1219,8 +1258,8 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
   | Label _ -> failwith "translate_stmt: label"
   | Goto _ -> failwith "translate_stmt: goto"
   | IndirectGoto _ -> failwith "translate_stmt: indirect goto"
-  | Continue -> failwith "translate_stmt: continue"
-  | Break -> failwith "translate_stmt: break"
+  | Continue -> with_type TAny EContinue
+  | Break -> with_type TAny EBreak
   | Asm _ -> failwith "translate_stmt: asm"
   | Return eo ->
       with_type TAny
@@ -1473,7 +1512,12 @@ let prepopulate_type_map ignored_dirs (decl : decl) =
   let t =
     match decl.desc with
     | Function fdecl ->
-        let binders, ret_type = compute_external_type fdecl in
+        let binders, ret_type =
+          if Attributes.has_opaque_attr fdecl.attributes then
+            compute_external_type fdecl
+          else
+            translate_params fdecl, translate_typ fdecl.function_type.result
+        in
         Helpers.fold_arrow (List.map (fun x -> x.typ) binders) ret_type
 
     | Var vdecl ->
