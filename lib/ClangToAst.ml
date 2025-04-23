@@ -1166,7 +1166,7 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
                       else
                         b
                     in
-                    with_type e2.typ (ELet (b, e, e2))
+                    with_type e2.typ (ELet (b, adjust e b.typ, e2))
                 | _ :: _ ->
                     failwith "This decl is not a var declaration"
                 | [] ->
