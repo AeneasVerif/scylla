@@ -320,12 +320,10 @@ let rec translate_typ (typ : qual_type) =
       assert ((get_id_name name) <> "");
       try TQualified (ElaboratedMap.find (name, `Struct) !elaborated_map)
       with Not_found ->
-        Format.eprintf "Trying to translate type %a\n@." Clang.Type.pp typ;
-        failwith "translate_typ: unsupported type"
+        failwith (Format.asprintf "translate_typ: unsupported elaborated type %a\n@." Clang.Type.pp typ)
     end
   | _ ->
-      Format.eprintf "Trying to translate type %a\n@." Clang.Type.pp typ;
-      failwith "translate_typ: unsupported type"
+      failwith (Format.asprintf "translate_typ: unsupported type %a\n@." Clang.Type.pp typ)
 
 let rec normalize_type t =
   match t with
@@ -1469,8 +1467,8 @@ let translate_file wanted_c_file file =
    successful, we run a first pass that pre-allocates names and types of functions, and records type
    definitions so that we can have enough type information accessible to generate a well-typed krml
    AST. This phase does not produce any declarations -- it merely fills some maps. *)
-let prepopulate_type_map (decl : decl) =
-  decl_error_handler decl () @@ fun () ->
+let prepopulate_type_map ignored_dirs (decl : decl) =
+  decl_error_handler ~ignored_dirs decl () @@ fun () ->
   let name = name_of_decl decl in
   let t =
     match decl.desc with
@@ -1664,7 +1662,7 @@ let fill_type_maps (ignored_dirs : string list) (decls: deduplicated_decls) =
   (* This can only be done AFTER abbreviations are recorded, otherwise, the annotations cannot be
      applied properly. *)
   StringMap.iter (fun _ (decl, _) ->
-    prepopulate_type_map decl
+    prepopulate_type_map ignored_dirs decl
   ) decls
 
 (* Final pass. Actually emit definitions. *)
