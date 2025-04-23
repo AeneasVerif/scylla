@@ -564,7 +564,7 @@ let adjust e t =
   (* TODO: tag indices *)
   | _ ->
       if e.typ <> t then
-        fatal_error "Could not convert expression %a to have type %a" pexpr e ptyp t;
+        fatal_error "Could not convert expression %a: %a to have type %a" pexpr e ptyp e.typ ptyp t;
       e
 
 let mark_mut_if_variable env e =
@@ -847,7 +847,14 @@ let rec translate_expr (env : env) (e : Clang.Ast.expr) : Krml.Ast.expr =
         let index = adjust (translate_expr env index) (TInt SizeT) in
         (* Is this only called on rvalues? Otherwise, might need EBufWrite *)
         with_type (Helpers.assert_tbuf_or_tarray base.typ) (EBufRead (base, index))
-    | ConditionalOperator _ -> failwith "translate_expr: conditional operator"
+    | ConditionalOperator { cond; then_branch; else_branch } ->
+        let cond = translate_expr env cond in
+        let else_branch = translate_expr env else_branch in
+        let then_branch = match then_branch with
+          | None -> assert (else_branch.typ = TUnit); Helpers.eunit
+          | Some e -> adjust (translate_expr env e) else_branch.typ
+        in
+        with_type else_branch.typ (EIfThenElse (cond, then_branch, else_branch))
     | Paren _ -> failwith "translate_expr: paren"
     | Member { base; arrow; field } ->
         let base =
@@ -1242,7 +1249,7 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
   | Label _ -> failwith "translate_stmt: label"
   | Goto _ -> failwith "translate_stmt: goto"
   | IndirectGoto _ -> failwith "translate_stmt: indirect goto"
-  | Continue -> failwith "translate_stmt: continue"
+  | Continue -> with_type TAny EContinue
   | Break -> with_type TAny EBreak
   | Asm _ -> failwith "translate_stmt: asm"
   | Return eo ->
@@ -1496,7 +1503,12 @@ let prepopulate_type_map ignored_dirs (decl : decl) =
   let t =
     match decl.desc with
     | Function fdecl ->
-        let binders, ret_type = compute_external_type fdecl in
+        let binders, ret_type =
+          if Attributes.has_opaque_attr fdecl.attributes then
+            compute_external_type fdecl
+          else
+            translate_params fdecl, translate_typ fdecl.function_type.result
+        in
         Helpers.fold_arrow (List.map (fun x -> x.typ) binders) ret_type
 
     | Var vdecl ->
