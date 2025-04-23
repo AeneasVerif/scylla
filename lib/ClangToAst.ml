@@ -561,6 +561,15 @@ let adjust e t =
         e
   (* Conversions via expected return type of the function (return NULL) *)
   | EBufNull, _, TBuf _ -> with_type t e.node
+
+  (* Array decay in C -- it's ok *)
+  | _, TArray (t, _), TBuf (t', _) when t = t' ->
+      e
+
+  (* Casting to const -- also ok *)
+  | _, TBuf (t, false), TBuf (t', true) when t = t' ->
+      e
+
   (* TODO: tag indices *)
   | _ ->
       if e.typ <> t then
