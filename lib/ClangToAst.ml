@@ -733,19 +733,33 @@ let rec translate_expr (env : env) (e : Clang.Ast.expr) : Krml.Ast.expr =
         Format.printf "Trying to translate unary operator %a@." Clang.Expr.pp e;
         failwith "translate_expr: unary operator"
     | BinaryOperator { lhs; kind = Assign; rhs } ->
-        let lhs = translate_expr env lhs in
+        let rec find_extra_lhs lhss (rhs: expr) =
+          match rhs.desc with
+          | BinaryOperator { lhs; kind = Assign; rhs } ->
+              find_extra_lhs (lhs :: lhss) rhs
+          | _ ->
+              List.rev lhss, rhs
+        in
+        let lhs, rhs = find_extra_lhs [ lhs ] rhs in
+        let lhs = List.map (translate_expr env) lhs in
         let rhs = translate_expr env rhs in
-        with_type TUnit
-          begin
-            match lhs.node with
-            (* Special-case rewriting for buffer assignments *)
-            | EBufRead (base, index) ->
-                let t = Helpers.assert_tbuf_or_tarray base.typ in
-                EBufWrite (base, index, adjust rhs t)
-            | _ ->
-                mark_mut_if_variable env lhs;
-                EAssign (lhs, adjust rhs lhs.typ)
-          end
+        let assign_one lhs =
+          with_type TUnit
+            begin
+              match lhs.node with
+              (* Special-case rewriting for buffer assignments *)
+              | EBufRead (base, index) ->
+                  let t = Helpers.assert_tbuf_or_tarray base.typ in
+                  EBufWrite (base, index, adjust rhs t)
+              | _ ->
+                  mark_mut_if_variable env lhs;
+                  EAssign (lhs, adjust rhs lhs.typ)
+            end
+        in
+        if List.length lhs > 1 then
+          with_type TUnit (ESequence (List.map assign_one lhs))
+        else
+          assign_one (Krml.KList.one lhs)
     | BinaryOperator { lhs; kind; rhs } when is_assign_op kind ->
         (* FIXME this is not correct if the lhs is not a value -- consider, for instance:
           int x;
