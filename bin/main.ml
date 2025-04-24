@@ -106,7 +106,7 @@ Supported options:|}
   let files = Krml.Bundles.make_bundles files in
 
   let files = Krml.Simplify.sequence_to_let#visit_files () files in
-  let files = Scylla.Simplify.remove_addrof_index#visit_files () files in
+  let files = Scylla.Simplify.simplify files in
   (* To obtain correct visibility after bundling *)
   let files = Krml.Inlining.cross_call_analysis files in
 
