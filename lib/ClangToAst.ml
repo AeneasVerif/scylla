@@ -1266,8 +1266,8 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
   | Label _ -> failwith "translate_stmt: label"
   | Goto _ -> failwith "translate_stmt: goto"
   | IndirectGoto _ -> failwith "translate_stmt: indirect goto"
-  | Continue -> with_type TAny EContinue
-  | Break -> with_type TAny EBreak
+  | Continue -> with_type TUnit EContinue
+  | Break -> with_type TUnit EBreak
   | Asm _ -> failwith "translate_stmt: asm"
   | Return eo ->
       with_type TAny
