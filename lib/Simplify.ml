@@ -27,7 +27,7 @@ let inline_immediate_vardef =
       let e2 = self#visit_expr_w () e2 in
       match e1.node, e2.node with
       | EAny, ELet (_, { node = EAssign (var, e); _}, e3) when var.node = EBound 0 ->
-          ELet (b, e, Krml.DeBruijn.lift (-1) e3)
+          ELet (b, Krml.DeBruijn.lift (-1) e, Krml.DeBruijn.lift (-1) e3)
       (* More uncommon case, where the assignment is in terminal position *)
       | EAny, EAssign (var, e) when var.node = EBound 0 ->
           ELet (b, e, Krml.Helpers.eunit)
