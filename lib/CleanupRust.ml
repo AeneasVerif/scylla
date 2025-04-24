@@ -17,7 +17,9 @@ let add_defaults = object
       match e1 with
       | None ->
           if not (is_scalar b.typ) then
-            Some default
+            match b.typ with
+            | Array (Constant w, n) -> Some (Array (Repeat (Constant (w, "0"), Constant (SizeT, string_of_int n))))
+            | _ -> Some default
           else
             None
       | Some _ -> e1
