@@ -40,31 +40,30 @@ let has_box_attr (attrs : attribute list) = List.exists has_box_attr' attrs
 let retrieve_mutability' (attr : attribute) =
   match attr.desc with
   | Clang__.Attributes.Annotate s ->
-      let prefix = mut_attr in
-      if String.starts_with ~prefix s.annotation then
+      let parse_mut x =
+        match x with
+        | "mut" -> true
+        | "_" -> false
+        | _ -> failwith "Ill-formed mutability annotation"
+      in
+      if String.starts_with ~prefix:mut_attr s.annotation then
+        (* Syntax: scylla_mutability (mut, _, mut, ...) -> mut
+           where the -> mut part is optional *)
+        let after_open_paren = String.index s.annotation '(' + 1 in
+        let close_paren = String.index s.annotation ')' in
         (* We extract the substring corresponding to the list of mut annotations *)
-        let muts =
-          String.sub s.annotation
-            (* We start after the mut_attr annotation and the opening parenthesis *)
-            (String.length mut_attr + 1)
-            (* The length is the length of the full annotation, minus the mut_attr
-             annotation and the enclosing parentheses *)
-            (String.length s.annotation - String.length mut_attr - 2)
-        in
+        let muts = String.sub s.annotation after_open_paren (close_paren - after_open_paren) in
         (* We split into a list of attributes, and trim whitespaces *)
-        let muts = String.split_on_char ',' muts |> List.map String.trim in
-        let muts =
-          List.map
-            (fun x ->
-              if String.equal x "mut" then
-                true
-              else if String.equal x "_" then
-                false
-              else
-                failwith "Ill-formed mutability annotation")
-            muts
+        let muts = String.split_on_char ',' muts |> List.map String.trim |> List.map parse_mut in
+        (* Optional return annotation *)
+        let ret = String.trim (String.sub s.annotation (close_paren + 1) (String.length s.annotation - (close_paren + 1))) in
+        let ret =
+          if ret <> "" then
+            parse_mut (String.sub s.annotation (String.length s.annotation - 3) 3)
+          else
+            false
         in
-        Some muts
+        Some (muts, ret)
       else
         None
   | _ -> None

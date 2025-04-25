@@ -1430,27 +1430,21 @@ let compute_external_type (fdecl : function_decl) : binder list * typ =
   let ret_type = translate_typ fdecl.function_type.result in
   let binders = translate_params fdecl in
   let args_mut = Attributes.retrieve_mutability fdecl.attributes in
-  let binders =
+  let set_const t b =
+    match t with
+    | TBuf (t, _) -> TBuf (t, b)
+    | _ -> t
+  in
+  let binders, ret_type =
     match args_mut with
     | None ->
         (* No mutability was specified, but we are in an opaque definition:
            All arguments must be considered as read-only *)
-        List.map
-          (fun arg ->
-            match arg.typ with
-            | TBuf (t, _) -> { arg with typ = TBuf (t, true) }
-            | _ -> arg)
-          binders
-    | Some muts ->
-        List.map2
-          (fun mut arg ->
-            match arg.typ, mut with
-            (* In Ast, the flag set to true represents a constant, immutable array.
-           The mutability flag is the converse, so we need to take the negation *)
-            | TBuf (t, _), b -> { arg with typ = TBuf (t, not b) }
-            (* For all other types, we do not modify the mutability *)
-            | _ -> arg)
-          muts binders
+        List.map (fun arg -> { arg with typ = set_const arg.typ true }) binders, ret_type
+    | Some (muts, mut_ret) ->
+        (* In Ast, the flag set to true represents a constant, immutable array.
+         The mutability flag is the converse, so we need to take the negation *)
+        List.map2 (fun mut arg -> { arg with typ = set_const arg.typ (not mut) }) muts binders, set_const ret_type (not mut_ret)
   in
   binders, ret_type
 
