@@ -3,6 +3,7 @@
 #![allow(non_camel_case_types)]
 #![allow(unused_assignments)]
 #![allow(unreachable_patterns)]
+#![allow(unused_mut)]
 
 pub fn Hacl_Bignum_Addition_bn_add_eq_len_u32(aLen: u32, a: &[u32], b: &[u32], res: &mut [u32]) ->
     u32
@@ -196,7 +197,7 @@ pub fn Hacl_Bignum_Convert_bn_to_bytes_be_uint64(len: u32, b: &[u64], res: &mut 
     )
   };
   (res[0usize..len as usize]).copy_from_slice(
-    &(&(&tmp)[tmpLen.wrapping_sub(len) as usize..])[0usize..len as usize]
+    &(&(&tmp)[(tmpLen as usize).wrapping_sub(len as usize)..])[0usize..len as usize]
   )
 }
 
