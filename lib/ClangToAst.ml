@@ -1256,8 +1256,9 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
       assert (condition_variable = None);
 
       let cond = translate_expr env cond in
+
       (* TODO most likely adjust *)
-      let branches = translate_branches env body.desc in
+      let branches = translate_branches env cond.typ body.desc in
       with_type (thd3 (List.hd branches)).typ (EMatch (Unchecked, cond, branches))
   | Case _ -> failwith "case not encapsulated in a switch"
   | Default _ -> failwith "default not encapsulated in a switch"
@@ -1297,8 +1298,11 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
 (* Translate case and default statements inside a switch to a list of branches for
    structured pattern-matching.
    The original C branches must consist of a list of `case` statements, terminated by
-   a `default` statement *)
-and translate_branches (env : env) (s : stmt_desc) : Krml.Ast.branches =
+   a `default` statement.
+   [t] corresponds to the type of the expression we are pattern-matching on, to
+   direct the translation
+   *)
+and translate_branches (env : env) (t: typ) (s : stmt_desc) : Krml.Ast.branches =
   match s with
   | Compound [ { desc = Default body; _ } ] ->
       let body = translate_stmt env body.desc in
@@ -1307,7 +1311,7 @@ and translate_branches (env : env) (s : stmt_desc) : Krml.Ast.branches =
   | Compound ({ desc = Case { lhs; rhs; body }; _ } :: tl) ->
       (* Unsupported GCC extension *)
       assert (rhs = None);
-      let pat = translate_expr env lhs in
+      let pat = adjust (translate_expr env lhs) t in
       let body = translate_stmt env body.desc in
       (* We only support pattern-matching on constants here.
          This allows to translate switches corresponding to pattern
@@ -1317,7 +1321,7 @@ and translate_branches (env : env) (s : stmt_desc) : Krml.Ast.branches =
         | EConstant n -> [], Krml.Ast.with_type pat.typ (PConstant n), body
         | _ -> failwith "Only constant patterns supported"
       end
-      :: translate_branches env (Compound tl)
+      :: translate_branches env t (Compound tl)
   | _ -> failwith "Ill-formed switch branches: Expected a case or a default"
 
 let translate_param (p : parameter) : binder =
