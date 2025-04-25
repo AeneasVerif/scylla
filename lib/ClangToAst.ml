@@ -617,7 +617,7 @@ let mk_binop lhs kind rhs =
           *)
           | EBufSub (lhs', rhs') ->
               (* (lhs' + rhs') + rhs --> lhs' + (rhs' + rhs) *)
-              EBufSub (lhs', apply_op Add rhs' rhs)
+              EBufSub (lhs', adjust (apply_op Add rhs' rhs) (TInt SizeT))
           | EBufDiff (lhs', rhs') ->
               (* JP: I doubt this happens, and if it does, I doubt the code below is correct:
             EBufSub returns a t* but EBufDiff returns a ptrdiff_t. Also C does not allow
@@ -626,8 +626,8 @@ let mk_binop lhs kind rhs =
               if true then
                 failwith "is this really happening???";
               (* (lhs' - rhs') + rhs --> lhs' + (rhs - rhs') *)
-              EBufSub (lhs', apply_op Sub rhs rhs')
-          | _ -> EBufSub (lhs, rhs)
+              EBufSub (lhs', adjust (apply_op Sub rhs rhs') (TInt SizeT))
+          | _ -> EBufSub (lhs, adjust rhs (TInt SizeT))
         end
   | (TBuf _ | TArray _), Sub ->
       with_type lhs_typ
@@ -635,7 +635,7 @@ let mk_binop lhs kind rhs =
           match lhs.node with
           | EBufSub (lhs', rhs') ->
               (* (lhs' + rhs') - rhs --> lhs' + (rhs' - rhs) *)
-              EBufSub (lhs', apply_op Sub rhs' rhs)
+              EBufSub (lhs', adjust (apply_op Sub rhs' rhs) (TInt SizeT))
           | EBufDiff (lhs', rhs') ->
               (* (lhs' - rhs') - rhs --> lhs' - (rhs' + rhs) *)
               EBufDiff (lhs', apply_op Add rhs' rhs)

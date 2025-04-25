@@ -76,6 +76,7 @@ Supported options:|}
 
   Krml.Options.(warn_error := !warn_error ^ "-6");
   Krml.Options.(backend := Rust);
+  Krml.OutputRust.(directives := !directives ^ "\n#![allow(unused_mut)]");
   Krml.Warn.parse_warn_error !Krml.Options.warn_error;
 
   let files = List.map Scylla.ClangToAst.read_file command_line_args in
