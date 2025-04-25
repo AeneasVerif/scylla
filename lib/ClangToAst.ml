@@ -652,7 +652,7 @@ let mk_binop lhs kind rhs =
  - are we trusting the type from clang when we shouldn't? (i.e., is it ok to call typ_from_clang) --
    this should generally be avoided, because it is not true that `(translate_expr e).typ =
    typ_from_clang e`. *)
-let rec translate_expr (env : env) (e : Clang.Ast.expr) : Krml.Ast.expr =
+let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.expr) : Krml.Ast.expr =
   if is_null e then
     with_type (TBuf (TAny, false)) EBufNull
   else
@@ -682,7 +682,7 @@ let rec translate_expr (env : env) (e : Clang.Ast.expr) : Krml.Ast.expr =
            extraction pipeline only supports a specific case of loops *)
         let o = translate_expr env operand in
         mark_mut_if_variable env o;
-        begin
+        let assignment =
           match o.typ with
           | TInt w ->
               mark_mut_if_variable env o;
@@ -696,7 +696,12 @@ let rec translate_expr (env : env) (e : Clang.Ast.expr) : Krml.Ast.expr =
               with_type TUnit
               @@ EAssign (o, Krml.Ast.with_type t_buf (EBufSub (o, Helpers.one SizeT)))
           | _ -> failwith "cannot increment this type"
-        end
+        in
+        if not must_return_value then
+          assignment
+        else
+          with_type o.typ (ESequence [ assignment; o ])
+
     | UnaryOperator { kind = PostDec | PreDec; operand } ->
         (* This is a special case for loop increments. The current Karamel
            extraction pipeline only supports a specific case of loops *)
@@ -704,8 +709,15 @@ let rec translate_expr (env : env) (e : Clang.Ast.expr) : Krml.Ast.expr =
         mark_mut_if_variable env o;
         let w = Helpers.assert_tint o.typ in
         (* We rewrite `name++` into `name := name + 1` *)
-        with_type TUnit
-        @@ EAssign (o, Krml.Ast.with_type o.typ (EApp (Helpers.mk_op K.Sub w, [ o; Helpers.one w ])))
+        let assignment = 
+          with_type TUnit
+          @@ EAssign (o, Krml.Ast.with_type o.typ (EApp (Helpers.mk_op K.Sub w, [ o; Helpers.one w ])))
+        in
+        if not must_return_value then
+          assignment
+        else
+          with_type o.typ (ESequence [ assignment; o ])
+
     | UnaryOperator { kind = Not; operand } ->
         (* Bitwise not: ~ syntax, operates on integers *)
         let o = translate_expr env operand in
@@ -732,6 +744,7 @@ let rec translate_expr (env : env) (e : Clang.Ast.expr) : Krml.Ast.expr =
     | UnaryOperator _ ->
         Format.printf "Trying to translate unary operator %a@." Clang.Expr.pp e;
         failwith "translate_expr: unary operator"
+
     | BinaryOperator { lhs; kind = Assign; rhs } ->
         let rec find_extra_lhs lhss (rhs: expr) =
           match rhs.desc with
@@ -756,10 +769,17 @@ let rec translate_expr (env : env) (e : Clang.Ast.expr) : Krml.Ast.expr =
                   EAssign (lhs, adjust rhs lhs.typ)
             end
         in
-        if List.length lhs > 1 then
-          with_type TUnit (ESequence (List.map assign_one lhs))
+        let assignment =
+          if List.length lhs > 1 then
+            with_type TUnit (ESequence (List.map assign_one lhs))
+          else
+            assign_one (Krml.KList.one lhs)
+        in
+        if not must_return_value then
+          assignment
         else
-          assign_one (Krml.KList.one lhs)
+          with_type (List.hd lhs).typ (ESequence [ assignment; List.hd lhs ])
+
     | BinaryOperator { lhs; kind; rhs } when is_assign_op kind ->
         (* FIXME this is not correct if the lhs is not a value -- consider, for instance:
           int x;
@@ -873,11 +893,13 @@ let rec translate_expr (env : env) (e : Clang.Ast.expr) : Krml.Ast.expr =
         let typ = translate_typ qual_type in
         let e = translate_expr env operand in
         with_type typ (ECast (e, typ))
+
     | ArraySubscript { base; index } ->
         let base = translate_expr env base in
-        let index = adjust (translate_expr env index) (TInt SizeT) in
+        let index = adjust (translate_expr env ~must_return_value:true index) (TInt SizeT) in
         (* Is this only called on rvalues? Otherwise, might need EBufWrite *)
         with_type (Helpers.assert_tbuf_or_tarray base.typ) (EBufRead (base, index))
+
     | ConditionalOperator { cond; then_branch; else_branch } ->
         let cond = translate_expr env cond in
         let else_branch = translate_expr env else_branch in
