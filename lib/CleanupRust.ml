@@ -22,7 +22,7 @@ let add_defaults = object
             | _ -> Some default
           else
             None
-      | Some _ -> e1
+      | Some e1 -> Some (self#visit_expr () e1)
     in
     Let (b, e1, self#visit_expr () e2)
 end
