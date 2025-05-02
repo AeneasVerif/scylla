@@ -599,8 +599,30 @@ let mk_binop lhs kind rhs =
   (* Krml.KPrint.bprintf "mk_binop: lhs=%a, rhs=%a\n" pexpr lhs pexpr rhs; *)
   let lhs_typ = lhs.typ in
 
+  (* This function first compiles pointer arithmetic *then* defers to this to compile integer
+     arithmetic. *)
   let apply_op kind lhs rhs =
     let kind = translate_binop kind in
+
+    (* "Note: integer promotions are applied only (...)
+
+      to the operand of the unary arithmetic operators + and -, TODO
+      to the operand of the unary bitwise operator ~, TODO
+      to both operands of the shift operators << and >>. " *)
+    let lhs, rhs =
+      match kind with
+      | BShiftL | BShiftR ->
+          let integer_promotion e =
+            if rank (Helpers.assert_tint_or_tbool e.typ) < rank Int32 then
+              adjust e (TInt Int32)
+            else
+              e
+          in
+          integer_promotion lhs, integer_promotion rhs
+      | _ ->
+          lhs, rhs
+    in
+
     let w, lhs, rhs =
       match kind with
       (* "The arguments of the following arithmetic operators undergo implicit conversions... " *)
