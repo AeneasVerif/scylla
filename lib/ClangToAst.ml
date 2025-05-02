@@ -597,7 +597,6 @@ let rank (w: Krml.Constant.width) =
    AST (arithmetic operations are distinguished) *)
 let mk_binop lhs kind rhs =
   (* Krml.KPrint.bprintf "mk_binop: lhs=%a, rhs=%a\n" pexpr lhs pexpr rhs; *)
-  let lhs_typ = lhs.typ in
 
   (* This function first compiles pointer arithmetic *then* defers to this to compile integer
      arithmetic. *)
@@ -612,16 +611,19 @@ let mk_binop lhs kind rhs =
     let lhs, rhs =
       match kind with
       | BShiftL | BShiftR ->
-          let integer_promotion e =
-            if rank (Helpers.assert_tint_or_tbool e.typ) < rank Int32 then
-              adjust e (TInt Int32)
+          let integer_promotion w e =
+            if rank (Helpers.assert_tint_or_tbool e.typ) < rank w then
+              adjust e (TInt w)
             else
               e
           in
-          integer_promotion lhs, integer_promotion rhs
+          integer_promotion Int32 lhs, integer_promotion UInt32 rhs (* krml wants u32 here *)
       | _ ->
           lhs, rhs
     in
+
+(*     Krml.KPrint.bprintf "After promotions: w=%a lhs=%a, rhs=%a\n" *)
+(*       pwidth (Helpers.assert_tint_or_tbool lhs.typ) pexpr lhs pexpr rhs; *)
 
     let w, lhs, rhs =
       match kind with
@@ -670,8 +672,13 @@ let mk_binop lhs kind rhs =
               w, adjust (TInt w) lhs, adjust (TInt w) rhs
 
       | _ ->
-          Helpers.assert_tint_or_tbool lhs_typ, lhs, rhs
+          Helpers.assert_tint_or_tbool lhs.typ, lhs, rhs
     in
+
+    (* Krml.KPrint.bprintf "After conversions: w=%a w=%a lhs=%a, rhs=%a\n" *)
+    (*   pwidth w *)
+    (*   pwidth (Helpers.assert_tint_or_tbool lhs.typ) pexpr lhs pexpr rhs; *)
+
     match kind with
     | And | Or | Xor | Not ->
         (* Monomorphic boolean operators *)
@@ -681,15 +688,19 @@ let mk_binop lhs kind rhs =
     | _ ->
         (* Width-polymorphic operators *)
         let op = Helpers.mk_op kind w in
+        (* Krml.KPrint.bprintf "w=%a, op=%a\n" pwidth w pexpr op; *)
         let t_ret, t_args = Helpers.flatten_arrow op.typ in
         let rhs = adjust rhs (List.nth t_args 1) in
+
+        (* Krml.KPrint.bprintf "Result: %a\n" pexpr (with_type t_ret (EApp (op, [ lhs; rhs ]))); *)
+
         with_type t_ret (EApp (op, [ lhs; rhs ]))
   in
 
   (* In case of pointer arithmetic, we need to perform a rewriting into EBufSub/Diff *)
-  match lhs_typ, kind with
+  match lhs.typ, kind with
   | (TBuf _ | TArray _), Clang.Add ->
-      with_type lhs_typ
+      with_type lhs.typ
         begin
           match lhs.node with
           (* Successive pointer arithmetic operations are likely due to operator precedence, e.g.,
@@ -711,7 +722,7 @@ let mk_binop lhs kind rhs =
           | _ -> EBufSub (lhs, adjust rhs (TInt SizeT))
         end
   | (TBuf _ | TArray _), Sub ->
-      with_type lhs_typ
+      with_type lhs.typ
         begin
           match lhs.node with
           | EBufSub (lhs', rhs') ->
