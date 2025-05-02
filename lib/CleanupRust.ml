@@ -29,22 +29,3 @@ end
 
 let add_defaults files =
   map_funs add_defaults#visit_expr files
-
-let add_no_mangle files =
-  if !Options.all_extern then
-    List.map (fun (f, decls) ->
-      f, List.map (function
-        | Function f ->
-            Function { f with
-              extern = true;
-              meta = { f.meta with
-                attributes = "no_mangle" :: f.meta.attributes
-              }
-            }
-        | d ->
-            d
-      ) decls
-    ) files
-  else
-    files
-

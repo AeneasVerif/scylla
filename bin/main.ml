@@ -44,7 +44,6 @@ Supported options:|}
       ( "--ignore_lib_errors",
         Arg.Set Scylla.Options.ignore_lib_errors,
         " ignore errors in standard include directories" );
-      "--all_extern", Arg.Set Scylla.Options.all_extern, " all definitions are #[no_mangle] extern \"C\"";
     ]
   in
   let spec = Arg.align spec in
