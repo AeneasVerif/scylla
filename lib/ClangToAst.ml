@@ -1762,6 +1762,7 @@ let decl_is_better ~(old_decl:decl) (decl: decl) =
   match old_decl.desc, decl.desc with
   (* A definition is better than its prototype *)
   | Function { body = None; _ }, Function { body = Some _; _ } -> true
+  | Var { var_init = None; _ }, Var { var_init = Some _; _ } -> true
   (* A full struct is better than its forward declaration *)
   | RecordDecl { fields = []; _ }, RecordDecl { fields = _ :: _; _ } -> true
   | _ -> false
