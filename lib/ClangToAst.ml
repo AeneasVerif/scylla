@@ -769,7 +769,7 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
        be a struct initialization *)
     | CompoundLiteral { init = { desc = InitList l; _ }; _ } ->
         translate_fields env (typ_from_clang e) l
-    | UnaryOperator { kind = PostInc | PreInc; operand } ->
+    | UnaryOperator { kind = PostInc | PreInc as kind; operand } ->
         (* This is a special case for loop increments. The current Karamel
            extraction pipeline only supports a specific case of loops *)
         let o = translate_expr env operand in
@@ -791,10 +791,14 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
         in
         if not must_return_value then
           assignment
-        else
+        else if kind = PreInc then
           with_type o.typ (ESequence [ assignment; o ])
+        else
+          with_type o.typ (ELet (Helpers.fresh_binder "old_value" o.typ,
+            o,
+            with_type o.typ (ESequence [ Krml.DeBruijn.lift 1 assignment; with_type o.typ (EBound 0) ])))
 
-    | UnaryOperator { kind = PostDec | PreDec; operand } ->
+    | UnaryOperator { kind = PostDec | PreDec as kind; operand } ->
         (* This is a special case for loop increments. The current Karamel
            extraction pipeline only supports a specific case of loops *)
         let o = translate_expr env operand in
@@ -807,8 +811,12 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
         in
         if not must_return_value then
           assignment
-        else
+        else if kind = PreDec then
           with_type o.typ (ESequence [ assignment; o ])
+        else
+          with_type o.typ (ELet (Helpers.fresh_binder "old_value" o.typ,
+            o,
+            with_type o.typ (ESequence [ Krml.DeBruijn.lift 1 assignment; with_type o.typ (EBound 0) ])))
 
     | UnaryOperator { kind = Not; operand } ->
         (* Bitwise not: ~ syntax, operates on integers *)
