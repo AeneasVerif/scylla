@@ -41,7 +41,7 @@ let retrieve_mutability' (attr : attribute) =
   match attr.desc with
   | Clang__.Attributes.Annotate s ->
       let parse_mut x =
-        match x with
+        match String.trim x with
         | "mut" -> true
         | "_" -> false
         | _ -> failwith "Ill-formed mutability annotation"
@@ -54,12 +54,13 @@ let retrieve_mutability' (attr : attribute) =
         (* We extract the substring corresponding to the list of mut annotations *)
         let muts = String.sub s.annotation after_open_paren (close_paren - after_open_paren) in
         (* We split into a list of attributes, and trim whitespaces *)
-        let muts = String.split_on_char ',' muts |> List.map String.trim |> List.map parse_mut in
+        let muts = String.split_on_char ',' muts |> List.map parse_mut in
         (* Optional return annotation *)
         let ret = String.trim (String.sub s.annotation (close_paren + 1) (String.length s.annotation - (close_paren + 1))) in
         let ret =
           if ret <> "" then
-            parse_mut (String.sub s.annotation (String.length s.annotation - 3) 3)
+            let gt = String.index s.annotation '>' in
+            parse_mut (String.sub s.annotation (gt + 1) (String.length s.annotation - (gt + 1)))
           else
             false
         in
