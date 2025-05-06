@@ -133,6 +133,10 @@ let lid_of_name name =
 
 let translate_typ_name = function
   | "size_t" -> Helpers.usize
+  | "int8_t" -> TInt K.Int8
+  | "int16_t" -> TInt K.Int16
+  | "int32_t" -> TInt K.Int32
+  | "int64_t" -> TInt K.Int64
   | "uint8_t" -> Helpers.uint8
   | "uint16_t" -> Helpers.uint16
   | "uint32_t" -> Helpers.uint32
@@ -555,8 +559,11 @@ let adjust e t =
   | _, TBuf _, TBool -> Helpers.mk_neq e (with_type e.typ EBufNull)
   | _, _, TBool ->
       if e.typ <> t then
-        let w = Helpers.assert_tint e.typ in
-        Helpers.mk_neq e (Helpers.zero w)
+        match e.typ with
+        | TInt w ->
+            Helpers.mk_neq e (Helpers.zero w)
+        | _ ->
+            fatal_error "Cannot adjust %a: %a to have type bool" pexpr e ptyp e.typ
       else
         e
   (* Conversions via expected return type of the function (return NULL) *)
@@ -927,24 +934,29 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
            This function has a fourth argument, corresponding to the number of bytes
            remaining in dst. We omit it during the translation *)
           | dst :: src :: len :: _ ->
-              (* TODO: The type returned by clangml for the arguments is void*.
-               However, clang-analyzer is able to find the correct type, so it should be possible to get the correct type through clangml
-
-               In the meantime, we extract it from the sizeof call
-            *)
-              let len, _ty =
-                match len.desc with
-                (* We recognize the case `len = lhs * sizeof (_)` *)
-                | BinaryOperator
-                    { lhs; kind = Mul; rhs = { desc = UnaryExpr { kind = SizeOf; argument }; _ } }
-                  ->
-                    let len = adjust (translate_expr env lhs) (TInt SizeT) in
-                    let ty = extract_sizeof_ty argument in
-                    len, ty
-                | _ -> failwith "ill-formed memcpy"
-              in
               let dst = translate_expr env dst in
               let src = translate_expr env src in
+              if Helpers.assert_tbuf_or_tarray dst.typ <> Helpers.assert_tbuf_or_tarray src.typ then
+                fatal_error "in this memcpy, source and destination types differ: memcpy(%a: %a, %a: %a, ...)"
+                  pexpr dst ptyp dst.typ
+                  pexpr src ptyp src.typ;
+              let len =
+                match len.desc, src.typ with
+                | BinaryOperator
+                    { lhs; kind = Mul; rhs = { desc = UnaryExpr { kind = SizeOf; argument }; _ } },
+                    _
+                  ->
+                    (* We recognize the case `len = lhs * sizeof (_)` *)
+                    let len = adjust (translate_expr env lhs) (TInt SizeT) in
+                    let ty = extract_sizeof_ty argument in
+                    assert (ty = Helpers.assert_tbuf_or_tarray dst.typ);
+                    len
+                | _, TBuf (TInt UInt8, _) ->
+                    (* Unless it's a UInt8 in which case we may omit the sizeof *)
+                    adjust (translate_expr env len) (TInt SizeT)
+                | _ ->
+                    fatal_error "ill-formed memcpy; type is %a" ptyp src.typ
+              in
               with_type TUnit @@ EBufBlit (src, Helpers.zerou32, dst, Helpers.zerou32, len)
           | _ -> failwith "memcpy does not have the right number of arguments"
         end
@@ -953,19 +965,25 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
         begin
           match args with
           | dst :: v :: len :: _ ->
-              let len, ty =
-                match len.desc with
+              let dst = translate_expr env dst in
+              let len =
+                match len.desc, dst.typ with
                 (* We recognize the case `len = lhs * sizeof (_)` *)
                 | BinaryOperator
-                    { lhs; kind = Mul; rhs = { desc = UnaryExpr { kind = SizeOf; argument }; _ } }
+                    { lhs; kind = Mul; rhs = { desc = UnaryExpr { kind = SizeOf; argument }; _ } },
+                    _
                   ->
                     let len = adjust (translate_expr env lhs) (TInt SizeT) in
                     let ty = extract_sizeof_ty argument in
-                    len, ty
-                | _ -> failwith "ill-formed memcpy"
+                    assert (ty = Helpers.assert_tbuf_or_tarray dst.typ);
+                    len
+                | _, TBuf (TInt UInt8, _) ->
+                    (* Unless it's a UInt8 in which case we may omit the sizeof *)
+                    adjust (translate_expr env len) (TInt SizeT)
+                | _ ->
+                    failwith "ill-formed memset"
               in
-              let dst = translate_expr env dst in
-              let elt = adjust (translate_expr env v) ty in
+              let elt = adjust (translate_expr env v) (Helpers.assert_tbuf_or_tarray dst.typ) in
               with_type TUnit @@ EBufFill (dst, elt, len)
           | _ -> failwith "memset does not have the right number of arguments"
         end
@@ -1279,7 +1297,7 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
           let _, b, e = translate_vardecl env vdecl in
           with_type TUnit (ELet (b, e, Helpers.eunit))
       | [ stmt ] -> translate_stmt env stmt.desc
-      | hd :: tl -> (
+      | hd :: tl -> begin
           match hd.desc, (List.hd tl).desc with
           (* Special case when we have a variable declaration followed by a
          memset: this likely corresponds to an array initialization *)
@@ -1318,8 +1336,13 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
               in
               translate_one_decl env ds
           | stmt, _ ->
-              let e2 = translate_stmt (add_var env ("_", TUnit)) (Compound tl) in
-              with_type e2.typ (ELet (Helpers.sequence_binding (), translate_stmt env stmt, e2)))
+              let s = translate_stmt env stmt in
+              let e2 = translate_stmt (add_var env ("_", s.typ)) (Compound tl) in
+              if s.typ = TUnit then
+                with_type e2.typ (ELet (Helpers.sequence_binding (), s, e2))
+              else
+                with_type e2.typ (ELet (Helpers.fresh_binder "_ignored_stmt" s.typ, s, e2))
+      end
     end
   | For { init; condition_variable; cond; inc; body } ->
       assert (condition_variable = None);
@@ -1371,7 +1394,13 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
         | None -> Helpers.eunit
         | Some el -> translate_stmt env el.desc
       in
-      with_type then_b.typ (EIfThenElse (cond, then_b, else_b))
+      let t =
+        match then_b.typ, else_b.typ with
+        | TAny, t -> t
+        | t, TAny -> t
+        | _ -> then_b.typ
+      in
+      with_type t (EIfThenElse (cond, then_b, else_b))
   | Switch { init; condition_variable; cond; body } ->
       (* C++ constructs *)
       assert (init = None);
@@ -1412,7 +1441,8 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
         | None -> EReturn Helpers.eunit
         | Some e -> EReturn (adjust (translate_expr env e) env.ret_t))
   | Decl _ -> failwith "translate_stmt: decl"
-  | Expr e -> translate_expr env e
+  | Expr e ->
+      translate_expr env e
   | Try _ -> failwith "translate_stmt: try"
   | AttributedStmt _ -> failwith "translate_stmt: AttributedStmt"
   | UnknownStmt _ -> failwith "translate_stmt: UnknownStmt"
@@ -1541,6 +1571,7 @@ let decl_error_handler ?(ignored_dirs=[]) (decl : decl) default f =
       else begin
         Format.eprintf "Error: %s\n@." (Printexc.to_string e);
         Printexc.print_backtrace stderr;
+        Format.eprintf "%s\n@." (String.make 80 '-');
         default
       end
     end else
