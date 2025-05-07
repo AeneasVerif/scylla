@@ -76,6 +76,7 @@ Supported options:|}
 
   Krml.Options.(warn_error := !warn_error ^ "-6");
   Krml.Options.(backend := Rust);
+  Krml.OutputRust.(directives := !directives ^ "\n#![allow(unused_mut)]");
   Krml.Warn.parse_warn_error !Krml.Options.warn_error;
 
   let files = List.map Scylla.ClangToAst.read_file command_line_args in
@@ -102,6 +103,7 @@ Supported options:|}
   if had_errors then
     fatal_error "%s:%d: input Ast is ill-typed, aborting" __FILE__ __LINE__;
 
+  let files = Scylla.Simplify.materialize_casts#visit_files () files in
   let files = Krml.Bundles.topological_sort files in
   let files = Krml.Bundles.make_bundles files in
 
@@ -109,6 +111,10 @@ Supported options:|}
   let files = Scylla.Simplify.simplify files in
   (* To obtain correct visibility after bundling *)
   let files = Krml.Inlining.cross_call_analysis files in
+
+  let had_errors, files = Krml.Checker.check_everything ~warn:true files in
+  if had_errors then
+    fatal_error "%s:%d: input Ast is ill-typed (after optimizations), aborting" __FILE__ __LINE__;
 
   (* Addition of derives has to be done this way because we have a map from Ast lids to the derives
      we want, and if we try to do this after AstToMiniRust then we have Rust names that we do not

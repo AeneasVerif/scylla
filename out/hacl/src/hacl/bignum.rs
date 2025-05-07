@@ -3,6 +3,7 @@
 #![allow(non_camel_case_types)]
 #![allow(unused_assignments)]
 #![allow(unreachable_patterns)]
+#![allow(unused_mut)]
 
 pub fn Hacl_Bignum_AlmostMontgomery_bn_almost_mont_reduction_u32(
   len: u32,
@@ -42,7 +43,7 @@ pub fn Hacl_Bignum_AlmostMontgomery_bn_almost_mont_reduction_u32(
     let r: u32 = c1;
     let c10: u32 = r;
     let res_j: u32 = c[len.wrapping_add(i0) as usize];
-    let resb: (&mut [u32], &mut [u32]) = c.split_at_mut(len.wrapping_add(i0) as usize);
+    let resb: (&mut [u32], &mut [u32]) = c.split_at_mut((len as usize).wrapping_add(i0 as usize));
     c0 = crate::lib_intrinsics::Lib_IntTypes_Intrinsics_add_carry_u32(c0, c10, res_j, resb.1)
   };
   (res[0usize..len.wrapping_add(len).wrapping_sub(len) as usize]).copy_from_slice(
@@ -100,7 +101,7 @@ pub fn Hacl_Bignum_AlmostMontgomery_bn_almost_mont_reduction_u64(
     let r: u64 = c1;
     let c10: u64 = r;
     let res_j: u64 = c[len.wrapping_add(i0) as usize];
-    let resb: (&mut [u64], &mut [u64]) = c.split_at_mut(len.wrapping_add(i0) as usize);
+    let resb: (&mut [u64], &mut [u64]) = c.split_at_mut((len as usize).wrapping_add(i0 as usize));
     c0 = crate::lib_intrinsics::Lib_IntTypes_Intrinsics_add_carry_u64(c0, c10, res_j, resb.1)
   };
   (res[0usize..len.wrapping_add(len).wrapping_sub(len) as usize]).copy_from_slice(
@@ -979,7 +980,7 @@ pub fn Hacl_Bignum_Karatsuba_bn_karatsuba_mul_uint32(
   let c11: u32 = c010;
   let t23: (&mut [u32], &mut [u32]) = (tmp_.1).split_at_mut(0usize);
   let tmp1: (&mut [u32], &mut [u32]) =
-      (t23.1).split_at_mut(aLen.wrapping_add(aLen) as usize - aLen as usize);
+      (t23.1).split_at_mut((aLen as usize).wrapping_add(aLen as usize) - aLen as usize);
   Hacl_Bignum_Karatsuba_bn_karatsuba_mul_uint32(len2, t1.0, tmp_.0, tmp1.1, tmp1.0);
   let r01: (&mut [u32], &mut [u32]) = res.split_at_mut(0usize);
   let r23: (&mut [u32], &mut [u32]) = (r01.1).split_at_mut(aLen as usize);
@@ -1026,7 +1027,8 @@ pub fn Hacl_Bignum_Karatsuba_bn_karatsuba_mul_uint32(
   let c60: u32 = c6;
   let c7: u32 = c5.wrapping_add(c60);
   crate::lowstar::ignore::ignore::<&[u32]>(res);
-  let r: (&mut [u32], &mut [u32]) = res.split_at_mut(aLen.wrapping_add(aLen2) as usize);
+  let r: (&mut [u32], &mut [u32]) =
+      res.split_at_mut((aLen as usize).wrapping_add(aLen2 as usize));
   let c01: u32 =
       crate::lib_intrinsics::Lib_IntTypes_Intrinsics_add_carry_u32(0u32, r.1[0usize], c7, r.1);
   let mut r1: u32;
@@ -1132,7 +1134,7 @@ pub fn Hacl_Bignum_Karatsuba_bn_karatsuba_mul_uint64(
   let c11: u64 = c010;
   let t23: (&mut [u64], &mut [u64]) = (tmp_.1).split_at_mut(0usize);
   let tmp1: (&mut [u64], &mut [u64]) =
-      (t23.1).split_at_mut(aLen.wrapping_add(aLen) as usize - aLen as usize);
+      (t23.1).split_at_mut((aLen as usize).wrapping_add(aLen as usize) - aLen as usize);
   Hacl_Bignum_Karatsuba_bn_karatsuba_mul_uint64(len2, t1.0, tmp_.0, tmp1.1, tmp1.0);
   let r01: (&mut [u64], &mut [u64]) = res.split_at_mut(0usize);
   let r23: (&mut [u64], &mut [u64]) = (r01.1).split_at_mut(aLen as usize);
@@ -1179,7 +1181,8 @@ pub fn Hacl_Bignum_Karatsuba_bn_karatsuba_mul_uint64(
   let c60: u64 = c6;
   let c7: u64 = c5.wrapping_add(c60);
   crate::lowstar::ignore::ignore::<&[u64]>(res);
-  let r: (&mut [u64], &mut [u64]) = res.split_at_mut(aLen.wrapping_add(aLen2) as usize);
+  let r: (&mut [u64], &mut [u64]) =
+      res.split_at_mut((aLen as usize).wrapping_add(aLen2 as usize));
   let c01: u64 =
       crate::lib_intrinsics::Lib_IntTypes_Intrinsics_add_carry_u64(0u64, r.1[0usize], c7, r.1);
   let mut r1: u64;
@@ -1267,7 +1270,7 @@ pub fn Hacl_Bignum_Karatsuba_bn_karatsuba_sqr_uint32(
   crate::lowstar::ignore::ignore::<u32>(c00);
   let t23: (&mut [u32], &mut [u32]) = (tmp_.1).split_at_mut(0usize);
   let tmp1: (&mut [u32], &mut [u32]) =
-      (t23.1).split_at_mut(aLen.wrapping_add(aLen) as usize - aLen as usize);
+      (t23.1).split_at_mut((aLen as usize).wrapping_add(aLen as usize) - aLen as usize);
   Hacl_Bignum_Karatsuba_bn_karatsuba_sqr_uint32(len2, tmp_.0, tmp1.1, tmp1.0);
   let r01: (&mut [u32], &mut [u32]) = res.split_at_mut(0usize);
   let r23: (&mut [u32], &mut [u32]) = (r01.1).split_at_mut(aLen as usize);
@@ -1300,7 +1303,8 @@ pub fn Hacl_Bignum_Karatsuba_bn_karatsuba_sqr_uint32(
   let c6: u32 = c4;
   let c7: u32 = c5.wrapping_add(c6);
   crate::lowstar::ignore::ignore::<&[u32]>(res);
-  let r: (&mut [u32], &mut [u32]) = res.split_at_mut(aLen.wrapping_add(aLen2) as usize);
+  let r: (&mut [u32], &mut [u32]) =
+      res.split_at_mut((aLen as usize).wrapping_add(aLen2 as usize));
   let c01: u32 =
       crate::lib_intrinsics::Lib_IntTypes_Intrinsics_add_carry_u32(0u32, r.1[0usize], c7, r.1);
   let mut r1: u32;
@@ -1388,7 +1392,7 @@ pub fn Hacl_Bignum_Karatsuba_bn_karatsuba_sqr_uint64(
   crate::lowstar::ignore::ignore::<u64>(c00);
   let t23: (&mut [u64], &mut [u64]) = (tmp_.1).split_at_mut(0usize);
   let tmp1: (&mut [u64], &mut [u64]) =
-      (t23.1).split_at_mut(aLen.wrapping_add(aLen) as usize - aLen as usize);
+      (t23.1).split_at_mut((aLen as usize).wrapping_add(aLen as usize) - aLen as usize);
   Hacl_Bignum_Karatsuba_bn_karatsuba_sqr_uint64(len2, tmp_.0, tmp1.1, tmp1.0);
   let r01: (&mut [u64], &mut [u64]) = res.split_at_mut(0usize);
   let r23: (&mut [u64], &mut [u64]) = (r01.1).split_at_mut(aLen as usize);
@@ -1421,7 +1425,8 @@ pub fn Hacl_Bignum_Karatsuba_bn_karatsuba_sqr_uint64(
   let c6: u64 = c4;
   let c7: u64 = c5.wrapping_add(c6);
   crate::lowstar::ignore::ignore::<&[u64]>(res);
-  let r: (&mut [u64], &mut [u64]) = res.split_at_mut(aLen.wrapping_add(aLen2) as usize);
+  let r: (&mut [u64], &mut [u64]) =
+      res.split_at_mut((aLen as usize).wrapping_add(aLen2 as usize));
   let c01: u64 =
       crate::lib_intrinsics::Lib_IntTypes_Intrinsics_add_carry_u64(0u64, r.1[0usize], c7, r.1);
   let mut r1: u64;
@@ -2102,7 +2107,7 @@ pub fn bn_mont_reduction_u32(len: u32, n: &[u32], nInv: u32, c: &mut [u32], res:
     let r: u32 = c1;
     let c10: u32 = r;
     let res_j: u32 = c[len.wrapping_add(i0) as usize];
-    let resb: (&mut [u32], &mut [u32]) = c.split_at_mut(len.wrapping_add(i0) as usize);
+    let resb: (&mut [u32], &mut [u32]) = c.split_at_mut((len as usize).wrapping_add(i0 as usize));
     c0 = crate::lib_intrinsics::Lib_IntTypes_Intrinsics_add_carry_u32(c0, c10, res_j, resb.1)
   };
   (res[0usize..len.wrapping_add(len).wrapping_sub(len) as usize]).copy_from_slice(
@@ -2179,7 +2184,7 @@ pub fn bn_mont_reduction_u64(len: u32, n: &[u64], nInv: u64, c: &mut [u64], res:
     let r: u64 = c1;
     let c10: u64 = r;
     let res_j: u64 = c[len.wrapping_add(i0) as usize];
-    let resb: (&mut [u64], &mut [u64]) = c.split_at_mut(len.wrapping_add(i0) as usize);
+    let resb: (&mut [u64], &mut [u64]) = c.split_at_mut((len as usize).wrapping_add(i0 as usize));
     c0 = crate::lib_intrinsics::Lib_IntTypes_Intrinsics_add_carry_u64(c0, c10, res_j, resb.1)
   };
   (res[0usize..len.wrapping_add(len).wrapping_sub(len) as usize]).copy_from_slice(

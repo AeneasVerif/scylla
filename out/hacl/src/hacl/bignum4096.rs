@@ -3,6 +3,7 @@
 #![allow(non_camel_case_types)]
 #![allow(unused_assignments)]
 #![allow(unreachable_patterns)]
+#![allow(unused_mut)]
 
 pub fn Hacl_Bignum4096_add(a: &[u64], b: &[u64], res: &mut [u64]) -> u64
 {
@@ -419,7 +420,7 @@ pub fn Hacl_Bignum4096_new_bn_from_bytes_be <'a>(len: u32, b: &'a [u8]) -> Box<[
   let bnLen: u32 = len.wrapping_sub(1u32).wrapping_div(8u32).wrapping_add(1u32);
   let tmpLen: u32 = 8u32.wrapping_mul(bnLen);
   let mut tmp: Box<[u8]> = vec![0u8; tmpLen as usize].into_boxed_slice();
-  ((&mut (&mut tmp)[tmpLen.wrapping_sub(len) as usize..])[0usize..len as usize]).copy_from_slice(
+  ((&mut (&mut tmp)[(tmpLen as usize).wrapping_sub(len as usize)..])[0usize..len as usize]).copy_from_slice(
     &b[0usize..len as usize]
   );
   for i in 0u32..bnLen

@@ -3,6 +3,7 @@
 #![allow(non_camel_case_types)]
 #![allow(unused_assignments)]
 #![allow(unreachable_patterns)]
+#![allow(unused_mut)]
 
 pub const chacha20_constants: [u32; 4] =
     [1634760805u32, 857760878u32, 2036477234u32, 1797285236u32];

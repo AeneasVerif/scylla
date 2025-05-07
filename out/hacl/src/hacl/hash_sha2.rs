@@ -3,6 +3,7 @@
 #![allow(non_camel_case_types)]
 #![allow(unused_assignments)]
 #![allow(unreachable_patterns)]
+#![allow(unused_mut)]
 
 pub fn Hacl_Hash_SHA2_copy_256 <'a>(
   state: &'a [crate::hacl::streaming_types::Hacl_Streaming_MD_state_32]
@@ -17,8 +18,8 @@ pub fn Hacl_Hash_SHA2_copy_256 <'a>(
   let mut b: Box<[u32]> = vec![0u32; 8usize].into_boxed_slice();
   let block_state: crate::hacl::streaming_types::Hacl_Streaming_Types_optional_32 =
       crate::hacl::streaming_types::Hacl_Streaming_Types_optional_32 { tag: 1u8, v: &mut b };
-  if block_state.tag == 0u8 { return [].into() };
-  if block_state.tag == 1u8
+  if block_state.tag as u32 == 0u32 { return [].into() };
+  if block_state.tag as u32 == 1u32
   {
     let block_state1: &mut [u32] = block_state.v;
     let block_state2: (&mut [u32], &mut [u32]) = block_state1.split_at_mut(0usize);
@@ -55,8 +56,8 @@ pub fn Hacl_Hash_SHA2_copy_512 <'a>(
   let mut b: Box<[u64]> = vec![0u64; 8usize].into_boxed_slice();
   let block_state: crate::hacl::streaming_types::Hacl_Streaming_Types_optional_64 =
       crate::hacl::streaming_types::Hacl_Streaming_Types_optional_64 { tag: 1u8, v: &mut b };
-  if block_state.tag == 0u8 { return [].into() };
-  if block_state.tag == 1u8
+  if block_state.tag as u32 == 0u32 { return [].into() };
+  if block_state.tag as u32 == 1u32
   {
     let block_state1: &mut [u64] = block_state.v;
     let block_state2: (&mut [u64], &mut [u64]) = block_state1.split_at_mut(0usize);
@@ -102,7 +103,7 @@ pub fn Hacl_Hash_SHA2_digest_224(
   { ite = 64u32 }
   else
   { ite = r.wrapping_rem(64u32) };
-  let buf_last: (&[u8], &[u8]) = (buf_multi.1).split_at(r.wrapping_sub(ite) as usize);
+  let buf_last: (&[u8], &[u8]) = (buf_multi.1).split_at((r as usize).wrapping_sub(ite as usize));
   Hacl_Hash_SHA2_sha224_update_nblocks(0u32, buf_last.0, &mut tmp_block_state);
   let prev_len_last: u64 = total_len.wrapping_sub(r as u64);
   Hacl_Hash_SHA2_sha224_update_last(
@@ -136,7 +137,7 @@ pub fn Hacl_Hash_SHA2_digest_256(
   { ite = 64u32 }
   else
   { ite = r.wrapping_rem(64u32) };
-  let buf_last: (&[u8], &[u8]) = (buf_multi.1).split_at(r.wrapping_sub(ite) as usize);
+  let buf_last: (&[u8], &[u8]) = (buf_multi.1).split_at((r as usize).wrapping_sub(ite as usize));
   Hacl_Hash_SHA2_sha256_update_nblocks(0u32, buf_last.0, &mut tmp_block_state);
   let prev_len_last: u64 = total_len.wrapping_sub(r as u64);
   Hacl_Hash_SHA2_sha256_update_last(
@@ -170,7 +171,7 @@ pub fn Hacl_Hash_SHA2_digest_384(
   { ite = 128u32 }
   else
   { ite = r.wrapping_rem(128u32) };
-  let buf_last: (&[u8], &[u8]) = (buf_multi.1).split_at(r.wrapping_sub(ite) as usize);
+  let buf_last: (&[u8], &[u8]) = (buf_multi.1).split_at((r as usize).wrapping_sub(ite as usize));
   Hacl_Hash_SHA2_sha384_update_nblocks(0u32, buf_last.0, &mut tmp_block_state);
   let prev_len_last: u64 = total_len.wrapping_sub(r as u64);
   Hacl_Hash_SHA2_sha384_update_last(
@@ -207,7 +208,7 @@ pub fn Hacl_Hash_SHA2_digest_512(
   { ite = 128u32 }
   else
   { ite = r.wrapping_rem(128u32) };
-  let buf_last: (&[u8], &[u8]) = (buf_multi.1).split_at(r.wrapping_sub(ite) as usize);
+  let buf_last: (&[u8], &[u8]) = (buf_multi.1).split_at((r as usize).wrapping_sub(ite as usize));
   Hacl_Hash_SHA2_sha512_update_nblocks(0u32, buf_last.0, &mut tmp_block_state);
   let prev_len_last: u64 = total_len.wrapping_sub(r as u64);
   Hacl_Hash_SHA2_sha512_update_last(
@@ -281,7 +282,7 @@ pub fn Hacl_Hash_SHA2_hash_224(output: &mut [u8], input: &[u8], input_len: u32)
   Hacl_Hash_SHA2_sha224_update_nblocks(input_len, ib.1, &mut st);
   let rem1: u32 = input_len.wrapping_rem(64u32);
   let b0: (&[u8], &[u8]) = (ib.1).split_at(0usize);
-  let lb: (&[u8], &[u8]) = (b0.1).split_at(input_len.wrapping_sub(rem1) as usize);
+  let lb: (&[u8], &[u8]) = (b0.1).split_at((input_len as usize).wrapping_sub(rem1 as usize));
   Hacl_Hash_SHA2_sha224_update_last(len_, rem, lb.1, &mut st);
   Hacl_Hash_SHA2_sha224_finish(&st, rb.1)
 }
@@ -297,7 +298,7 @@ pub fn Hacl_Hash_SHA2_hash_256(output: &mut [u8], input: &[u8], input_len: u32)
   Hacl_Hash_SHA2_sha256_update_nblocks(input_len, ib.1, &mut st);
   let rem1: u32 = input_len.wrapping_rem(64u32);
   let b0: (&[u8], &[u8]) = (ib.1).split_at(0usize);
-  let lb: (&[u8], &[u8]) = (b0.1).split_at(input_len.wrapping_sub(rem1) as usize);
+  let lb: (&[u8], &[u8]) = (b0.1).split_at((input_len as usize).wrapping_sub(rem1 as usize));
   Hacl_Hash_SHA2_sha256_update_last(len_, rem, lb.1, &mut st);
   Hacl_Hash_SHA2_sha256_finish(&st, rb.1)
 }
@@ -314,7 +315,7 @@ pub fn Hacl_Hash_SHA2_hash_384(output: &mut [u8], input: &[u8], input_len: u32)
   Hacl_Hash_SHA2_sha384_update_nblocks(input_len, ib.1, &mut st);
   let rem1: u32 = input_len.wrapping_rem(128u32);
   let b0: (&[u8], &[u8]) = (ib.1).split_at(0usize);
-  let lb: (&[u8], &[u8]) = (b0.1).split_at(input_len.wrapping_sub(rem1) as usize);
+  let lb: (&[u8], &[u8]) = (b0.1).split_at((input_len as usize).wrapping_sub(rem1 as usize));
   Hacl_Hash_SHA2_sha384_update_last(len_, rem, lb.1, &mut st);
   Hacl_Hash_SHA2_sha384_finish(&st, rb.1)
 }
@@ -331,7 +332,7 @@ pub fn Hacl_Hash_SHA2_hash_512(output: &mut [u8], input: &[u8], input_len: u32)
   Hacl_Hash_SHA2_sha512_update_nblocks(input_len, ib.1, &mut st);
   let rem1: u32 = input_len.wrapping_rem(128u32);
   let b0: (&[u8], &[u8]) = (ib.1).split_at(0usize);
-  let lb: (&[u8], &[u8]) = (b0.1).split_at(input_len.wrapping_sub(rem1) as usize);
+  let lb: (&[u8], &[u8]) = (b0.1).split_at((input_len as usize).wrapping_sub(rem1 as usize));
   Hacl_Hash_SHA2_sha512_update_last(len_, rem, lb.1, &mut st);
   Hacl_Hash_SHA2_sha512_finish(&st, rb.1)
 }
@@ -386,8 +387,8 @@ pub fn Hacl_Hash_SHA2_malloc_224 <'a>() ->
   let mut b: Box<[u32]> = vec![0u32; 8usize].into_boxed_slice();
   let block_state: crate::hacl::streaming_types::Hacl_Streaming_Types_optional_32 =
       crate::hacl::streaming_types::Hacl_Streaming_Types_optional_32 { tag: 1u8, v: &mut b };
-  if block_state.tag == 0u8 { return [].into() };
-  if block_state.tag == 1u8
+  if block_state.tag as u32 == 0u32 { return [].into() };
+  if block_state.tag as u32 == 1u32
   {
     let block_state1: &mut [u32] = block_state.v;
     let block_state2: (&mut [u32], &mut [u32]) = block_state1.split_at_mut(0usize);
@@ -423,8 +424,8 @@ pub fn Hacl_Hash_SHA2_malloc_256 <'a>() ->
   let mut b: Box<[u32]> = vec![0u32; 8usize].into_boxed_slice();
   let block_state: crate::hacl::streaming_types::Hacl_Streaming_Types_optional_32 =
       crate::hacl::streaming_types::Hacl_Streaming_Types_optional_32 { tag: 1u8, v: &mut b };
-  if block_state.tag == 0u8 { return [].into() };
-  if block_state.tag == 1u8
+  if block_state.tag as u32 == 0u32 { return [].into() };
+  if block_state.tag as u32 == 1u32
   {
     let block_state1: &mut [u32] = block_state.v;
     let block_state2: (&mut [u32], &mut [u32]) = block_state1.split_at_mut(0usize);
@@ -460,8 +461,8 @@ pub fn Hacl_Hash_SHA2_malloc_384 <'a>() ->
   let mut b: Box<[u64]> = vec![0u64; 8usize].into_boxed_slice();
   let block_state: crate::hacl::streaming_types::Hacl_Streaming_Types_optional_64 =
       crate::hacl::streaming_types::Hacl_Streaming_Types_optional_64 { tag: 1u8, v: &mut b };
-  if block_state.tag == 0u8 { return [].into() };
-  if block_state.tag == 1u8
+  if block_state.tag as u32 == 0u32 { return [].into() };
+  if block_state.tag as u32 == 1u32
   {
     let block_state1: &mut [u64] = block_state.v;
     let block_state2: (&mut [u64], &mut [u64]) = block_state1.split_at_mut(0usize);
@@ -497,8 +498,8 @@ pub fn Hacl_Hash_SHA2_malloc_512 <'a>() ->
   let mut b: Box<[u64]> = vec![0u64; 8usize].into_boxed_slice();
   let block_state: crate::hacl::streaming_types::Hacl_Streaming_Types_optional_64 =
       crate::hacl::streaming_types::Hacl_Streaming_Types_optional_64 { tag: 1u8, v: &mut b };
-  if block_state.tag == 0u8 { return [].into() };
-  if block_state.tag == 1u8
+  if block_state.tag as u32 == 0u32 { return [].into() };
+  if block_state.tag as u32 == 1u32
   {
     let block_state1: &mut [u64] = block_state.v;
     let block_state2: (&mut [u64], &mut [u64]) = block_state1.split_at_mut(0usize);
@@ -630,7 +631,7 @@ pub fn Hacl_Hash_SHA2_sha256_update_last(totlen: u64, len: u32, b: &[u8], hash: 
   let b0: (&[u8], &[u8]) = b.split_at(0usize);
   (last[0usize..len as usize]).copy_from_slice(&b0.1[0usize..len as usize]);
   last[len as usize] = 128u8;
-  ((&mut last[fin.wrapping_sub(8u32) as usize..])[0usize..8usize]).copy_from_slice(
+  ((&mut last[(fin as usize).wrapping_sub(8usize)..])[0usize..8usize]).copy_from_slice(
     &totlen_buf[0usize..8usize]
   );
   let last00: (&[u8], &[u8]) = last.split_at(0usize);
@@ -738,7 +739,7 @@ pub fn Hacl_Hash_SHA2_sha512_update_last(
   let b0: (&[u8], &[u8]) = b.split_at(0usize);
   (last[0usize..len as usize]).copy_from_slice(&b0.1[0usize..len as usize]);
   last[len as usize] = 128u8;
-  ((&mut last[fin.wrapping_sub(16u32) as usize..])[0usize..16usize]).copy_from_slice(
+  ((&mut last[(fin as usize).wrapping_sub(16usize)..])[0usize..16usize]).copy_from_slice(
     &totlen_buf[0usize..16usize]
   );
   let last00: (&[u8], &[u8]) = last.split_at(0usize);

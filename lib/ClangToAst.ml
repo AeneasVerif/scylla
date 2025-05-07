@@ -133,6 +133,10 @@ let lid_of_name name =
 
 let translate_typ_name = function
   | "size_t" -> Helpers.usize
+  | "int8_t" -> TInt K.Int8
+  | "int16_t" -> TInt K.Int16
+  | "int32_t" -> TInt K.Int32
+  | "int64_t" -> TInt K.Int64
   | "uint8_t" -> Helpers.uint8
   | "uint16_t" -> Helpers.uint16
   | "uint32_t" -> Helpers.uint32
@@ -555,8 +559,11 @@ let adjust e t =
   | _, TBuf _, TBool -> Helpers.mk_neq e (with_type e.typ EBufNull)
   | _, _, TBool ->
       if e.typ <> t then
-        let w = Helpers.assert_tint e.typ in
-        Helpers.mk_neq e (Helpers.zero w)
+        match e.typ with
+        | TInt w ->
+            Helpers.mk_neq e (Helpers.zero w)
+        | _ ->
+            fatal_error "Cannot adjust %a: %a to have type bool" pexpr e ptyp e.typ
       else
         e
   (* Conversions via expected return type of the function (return NULL) *)
@@ -581,16 +588,104 @@ let mark_mut_if_variable env e =
   | EBound i -> thd3 (List.nth env.vars i) := true
   | _ -> ()
 
+(* A function that behaves like compare, but implements C's notion of rank
+   See https://en.cppreference.com/w/c/language/conversion#Integer_promotions *)
+let rank (w: Krml.Constant.width) =
+  match w with
+  | Bool -> 1
+  | UInt8 | Int8 -> 8
+  | UInt16 | Int16 -> 16
+  | UInt32 | Int32 -> 32
+  | UInt64 | Int64 -> 64
+  | SizeT | PtrdiffT -> 8 * DataModel.size_size
+  | _ -> invalid_arg "rank"
+
 (* Deal with various discrepancies between C (arithmetic operations work for pointers, too) vs. krml
    AST (arithmetic operations are distinguished) *)
 let mk_binop lhs kind rhs =
-  let lhs_typ = lhs.typ in
+  (* Krml.KPrint.bprintf "mk_binop: lhs=%a, rhs=%a\n" pexpr lhs pexpr rhs; *)
 
+  (* This function first compiles pointer arithmetic *then* defers to this to compile integer
+     arithmetic. *)
   let apply_op kind lhs rhs =
     let kind = translate_binop kind in
-    (* FIXME: this needs to follow the C integer promotion rules. *)
-    let lhs_typ = lhs.typ in
-    let w = Helpers.assert_tint_or_tbool lhs_typ in
+
+    (* "Note: integer promotions are applied only (...)
+
+      to the operand of the unary arithmetic operators + and -, TODO
+      to the operand of the unary bitwise operator ~, TODO
+      to both operands of the shift operators << and >>. " *)
+    let lhs, rhs =
+      match kind with
+      | BShiftL | BShiftR ->
+          let integer_promotion w e =
+            if rank (Helpers.assert_tint_or_tbool e.typ) < rank w then
+              adjust e (TInt w)
+            else
+              e
+          in
+          integer_promotion Int32 lhs, integer_promotion UInt32 rhs (* krml wants u32 here *)
+      | _ ->
+          lhs, rhs
+    in
+
+(*     Krml.KPrint.bprintf "After promotions: w=%a lhs=%a, rhs=%a\n" *)
+(*       pwidth (Helpers.assert_tint_or_tbool lhs.typ) pexpr lhs pexpr rhs; *)
+
+    let w, lhs, rhs =
+      match kind with
+      (* "The arguments of the following arithmetic operators undergo implicit conversions... " *)
+      | Mult | Div | Mod | Add | Sub
+      | Lt | Gt | Lte | Gte | Eq | Neq
+      | BAnd | BXor | BOr ->
+          let open Krml.Constant in
+          let adjust x y = adjust y x in
+
+          (* https://en.cppreference.com/w/c/language/conversion, 5) *)
+          let wl = Helpers.assert_tint_or_tbool lhs.typ in
+          let wr = Helpers.assert_tint_or_tbool rhs.typ in
+
+          (* "If the types are the same, that type is the common type. " *)
+          if wl = wr then
+            wl, lhs, rhs
+
+          (*  "If the types have the same signedness (both signed or both unsigned), the operand
+              whose type has the lesser conversion rank is implicitly converted to the
+              other type." *)
+          else if is_signed wl = is_signed wr then
+            if rank wl < rank wr then
+              wr, adjust (TInt wr) lhs, rhs
+            else
+              wl, lhs, adjust (TInt wl) rhs
+
+          else
+            (* "If the unsigned type has conversion rank greater than or equal to the rank of the
+               signed type, then the operand with the signed type is implicitly converted to the
+               unsigned type." *)
+            if is_unsigned wl && rank wl >= rank wr then
+              wl, lhs, adjust (TInt wl) rhs
+            else if is_unsigned wr && rank wr >= rank wl then
+              wr, adjust (TInt wr) lhs, rhs
+
+            else
+              (* "If the signed type can represent all values of the unsigned type, then the operand
+                 with the unsigned type is implicitly converted to the signed type."
+                 ^^^ This doesn't happen here -- I presume this is for the case where e.g. long and
+                 long long have the same size. *)
+
+              (* "Else, both operands undergo implicit conversion to the unsigned type counterpart of
+                 the signed operand's type." *)
+              let w = if is_signed wl then unsigned_of_signed wl else unsigned_of_signed wr in
+              w, adjust (TInt w) lhs, adjust (TInt w) rhs
+
+      | _ ->
+          Helpers.assert_tint_or_tbool lhs.typ, lhs, rhs
+    in
+
+    (* Krml.KPrint.bprintf "After conversions: w=%a w=%a lhs=%a, rhs=%a\n" *)
+    (*   pwidth w *)
+    (*   pwidth (Helpers.assert_tint_or_tbool lhs.typ) pexpr lhs pexpr rhs; *)
+
     match kind with
     | And | Or | Xor | Not ->
         (* Monomorphic boolean operators *)
@@ -600,15 +695,19 @@ let mk_binop lhs kind rhs =
     | _ ->
         (* Width-polymorphic operators *)
         let op = Helpers.mk_op kind w in
+        (* Krml.KPrint.bprintf "w=%a, op=%a\n" pwidth w pexpr op; *)
         let t_ret, t_args = Helpers.flatten_arrow op.typ in
         let rhs = adjust rhs (List.nth t_args 1) in
+
+        (* Krml.KPrint.bprintf "Result: %a\n" pexpr (with_type t_ret (EApp (op, [ lhs; rhs ]))); *)
+
         with_type t_ret (EApp (op, [ lhs; rhs ]))
   in
 
   (* In case of pointer arithmetic, we need to perform a rewriting into EBufSub/Diff *)
-  match lhs_typ, kind with
+  match lhs.typ, kind with
   | (TBuf _ | TArray _), Clang.Add ->
-      with_type lhs_typ
+      with_type lhs.typ
         begin
           match lhs.node with
           (* Successive pointer arithmetic operations are likely due to operator precedence, e.g.,
@@ -617,7 +716,7 @@ let mk_binop lhs kind rhs =
           *)
           | EBufSub (lhs', rhs') ->
               (* (lhs' + rhs') + rhs --> lhs' + (rhs' + rhs) *)
-              EBufSub (lhs', apply_op Add rhs' rhs)
+              EBufSub (lhs', adjust (apply_op Add rhs' rhs) (TInt SizeT))
           | EBufDiff (lhs', rhs') ->
               (* JP: I doubt this happens, and if it does, I doubt the code below is correct:
             EBufSub returns a t* but EBufDiff returns a ptrdiff_t. Also C does not allow
@@ -626,16 +725,16 @@ let mk_binop lhs kind rhs =
               if true then
                 failwith "is this really happening???";
               (* (lhs' - rhs') + rhs --> lhs' + (rhs - rhs') *)
-              EBufSub (lhs', apply_op Sub rhs rhs')
-          | _ -> EBufSub (lhs, rhs)
+              EBufSub (lhs', adjust (apply_op Sub rhs rhs') (TInt SizeT))
+          | _ -> EBufSub (lhs, adjust rhs (TInt SizeT))
         end
   | (TBuf _ | TArray _), Sub ->
-      with_type lhs_typ
+      with_type lhs.typ
         begin
           match lhs.node with
           | EBufSub (lhs', rhs') ->
               (* (lhs' + rhs') - rhs --> lhs' + (rhs' - rhs) *)
-              EBufSub (lhs', apply_op Sub rhs' rhs)
+              EBufSub (lhs', adjust (apply_op Sub rhs' rhs) (TInt SizeT))
           | EBufDiff (lhs', rhs') ->
               (* (lhs' - rhs') - rhs --> lhs' - (rhs' + rhs) *)
               EBufDiff (lhs', apply_op Add rhs' rhs)
@@ -652,7 +751,7 @@ let mk_binop lhs kind rhs =
  - are we trusting the type from clang when we shouldn't? (i.e., is it ok to call typ_from_clang) --
    this should generally be avoided, because it is not true that `(translate_expr e).typ =
    typ_from_clang e`. *)
-let rec translate_expr (env : env) (e : Clang.Ast.expr) : Krml.Ast.expr =
+let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.expr) : Krml.Ast.expr =
   if is_null e then
     with_type (TBuf (TAny, false)) EBufNull
   else
@@ -677,12 +776,12 @@ let rec translate_expr (env : env) (e : Clang.Ast.expr) : Krml.Ast.expr =
        be a struct initialization *)
     | CompoundLiteral { init = { desc = InitList l; _ }; _ } ->
         translate_fields env (typ_from_clang e) l
-    | UnaryOperator { kind = PostInc | PreInc; operand } ->
+    | UnaryOperator { kind = PostInc | PreInc as kind; operand } ->
         (* This is a special case for loop increments. The current Karamel
            extraction pipeline only supports a specific case of loops *)
         let o = translate_expr env operand in
         mark_mut_if_variable env o;
-        begin
+        let assignment =
           match o.typ with
           | TInt w ->
               mark_mut_if_variable env o;
@@ -696,16 +795,36 @@ let rec translate_expr (env : env) (e : Clang.Ast.expr) : Krml.Ast.expr =
               with_type TUnit
               @@ EAssign (o, Krml.Ast.with_type t_buf (EBufSub (o, Helpers.one SizeT)))
           | _ -> failwith "cannot increment this type"
-        end
-    | UnaryOperator { kind = PostDec | PreDec; operand } ->
+        in
+        if not must_return_value then
+          assignment
+        else if kind = PreInc then
+          with_type o.typ (ESequence [ assignment; o ])
+        else
+          with_type o.typ (ELet (Helpers.fresh_binder "old_value" o.typ,
+            o,
+            with_type o.typ (ESequence [ Krml.DeBruijn.lift 1 assignment; with_type o.typ (EBound 0) ])))
+
+    | UnaryOperator { kind = PostDec | PreDec as kind; operand } ->
         (* This is a special case for loop increments. The current Karamel
            extraction pipeline only supports a specific case of loops *)
         let o = translate_expr env operand in
         mark_mut_if_variable env o;
         let w = Helpers.assert_tint o.typ in
         (* We rewrite `name++` into `name := name + 1` *)
-        with_type TUnit
-        @@ EAssign (o, Krml.Ast.with_type o.typ (EApp (Helpers.mk_op K.Sub w, [ o; Helpers.one w ])))
+        let assignment = 
+          with_type TUnit
+          @@ EAssign (o, Krml.Ast.with_type o.typ (EApp (Helpers.mk_op K.Sub w, [ o; Helpers.one w ])))
+        in
+        if not must_return_value then
+          assignment
+        else if kind = PreDec then
+          with_type o.typ (ESequence [ assignment; o ])
+        else
+          with_type o.typ (ELet (Helpers.fresh_binder "old_value" o.typ,
+            o,
+            with_type o.typ (ESequence [ Krml.DeBruijn.lift 1 assignment; with_type o.typ (EBound 0) ])))
+
     | UnaryOperator { kind = Not; operand } ->
         (* Bitwise not: ~ syntax, operates on integers *)
         let o = translate_expr env operand in
@@ -732,20 +851,42 @@ let rec translate_expr (env : env) (e : Clang.Ast.expr) : Krml.Ast.expr =
     | UnaryOperator _ ->
         Format.printf "Trying to translate unary operator %a@." Clang.Expr.pp e;
         failwith "translate_expr: unary operator"
+
     | BinaryOperator { lhs; kind = Assign; rhs } ->
-        let lhs = translate_expr env lhs in
+        let rec find_extra_lhs lhss (rhs: expr) =
+          match rhs.desc with
+          | BinaryOperator { lhs; kind = Assign; rhs } ->
+              find_extra_lhs (lhs :: lhss) rhs
+          | _ ->
+              List.rev lhss, rhs
+        in
+        let lhs, rhs = find_extra_lhs [ lhs ] rhs in
+        let lhs = List.map (translate_expr env) lhs in
         let rhs = translate_expr env rhs in
-        with_type TUnit
-          begin
-            match lhs.node with
-            (* Special-case rewriting for buffer assignments *)
-            | EBufRead (base, index) ->
-                let t = Helpers.assert_tbuf_or_tarray base.typ in
-                EBufWrite (base, index, adjust rhs t)
-            | _ ->
-                mark_mut_if_variable env lhs;
-                EAssign (lhs, adjust rhs lhs.typ)
-          end
+        let assign_one lhs =
+          with_type TUnit
+            begin
+              match lhs.node with
+              (* Special-case rewriting for buffer assignments *)
+              | EBufRead (base, index) ->
+                  let t = Helpers.assert_tbuf_or_tarray base.typ in
+                  EBufWrite (base, index, adjust rhs t)
+              | _ ->
+                  mark_mut_if_variable env lhs;
+                  EAssign (lhs, adjust rhs lhs.typ)
+            end
+        in
+        let assignment =
+          if List.length lhs > 1 then
+            with_type TUnit (ESequence (List.map assign_one lhs))
+          else
+            assign_one (Krml.KList.one lhs)
+        in
+        if not must_return_value then
+          assignment
+        else
+          with_type (List.hd lhs).typ (ESequence [ assignment; List.hd lhs ])
+
     | BinaryOperator { lhs; kind; rhs } when is_assign_op kind ->
         (* FIXME this is not correct if the lhs is not a value -- consider, for instance:
           int x;
@@ -793,24 +934,29 @@ let rec translate_expr (env : env) (e : Clang.Ast.expr) : Krml.Ast.expr =
            This function has a fourth argument, corresponding to the number of bytes
            remaining in dst. We omit it during the translation *)
           | dst :: src :: len :: _ ->
-              (* TODO: The type returned by clangml for the arguments is void*.
-               However, clang-analyzer is able to find the correct type, so it should be possible to get the correct type through clangml
-
-               In the meantime, we extract it from the sizeof call
-            *)
-              let len, _ty =
-                match len.desc with
-                (* We recognize the case `len = lhs * sizeof (_)` *)
-                | BinaryOperator
-                    { lhs; kind = Mul; rhs = { desc = UnaryExpr { kind = SizeOf; argument }; _ } }
-                  ->
-                    let len = adjust (translate_expr env lhs) (TInt SizeT) in
-                    let ty = extract_sizeof_ty argument in
-                    len, ty
-                | _ -> failwith "ill-formed memcpy"
-              in
               let dst = translate_expr env dst in
               let src = translate_expr env src in
+              if Helpers.assert_tbuf_or_tarray dst.typ <> Helpers.assert_tbuf_or_tarray src.typ then
+                fatal_error "in this memcpy, source and destination types differ: memcpy(%a: %a, %a: %a, ...)"
+                  pexpr dst ptyp dst.typ
+                  pexpr src ptyp src.typ;
+              let len =
+                match len.desc, src.typ with
+                | BinaryOperator
+                    { lhs; kind = Mul; rhs = { desc = UnaryExpr { kind = SizeOf; argument }; _ } },
+                    _
+                  ->
+                    (* We recognize the case `len = lhs * sizeof (_)` *)
+                    let len = adjust (translate_expr env lhs) (TInt SizeT) in
+                    let ty = extract_sizeof_ty argument in
+                    assert (ty = Helpers.assert_tbuf_or_tarray dst.typ);
+                    len
+                | _, TBuf (TInt UInt8, _) ->
+                    (* Unless it's a UInt8 in which case we may omit the sizeof *)
+                    adjust (translate_expr env len) (TInt SizeT)
+                | _ ->
+                    fatal_error "ill-formed memcpy; type is %a" ptyp src.typ
+              in
               with_type TUnit @@ EBufBlit (src, Helpers.zerou32, dst, Helpers.zerou32, len)
           | _ -> failwith "memcpy does not have the right number of arguments"
         end
@@ -819,19 +965,25 @@ let rec translate_expr (env : env) (e : Clang.Ast.expr) : Krml.Ast.expr =
         begin
           match args with
           | dst :: v :: len :: _ ->
-              let len, ty =
-                match len.desc with
+              let dst = translate_expr env dst in
+              let len =
+                match len.desc, dst.typ with
                 (* We recognize the case `len = lhs * sizeof (_)` *)
                 | BinaryOperator
-                    { lhs; kind = Mul; rhs = { desc = UnaryExpr { kind = SizeOf; argument }; _ } }
+                    { lhs; kind = Mul; rhs = { desc = UnaryExpr { kind = SizeOf; argument }; _ } },
+                    _
                   ->
                     let len = adjust (translate_expr env lhs) (TInt SizeT) in
                     let ty = extract_sizeof_ty argument in
-                    len, ty
-                | _ -> failwith "ill-formed memcpy"
+                    assert (ty = Helpers.assert_tbuf_or_tarray dst.typ);
+                    len
+                | _, TBuf (TInt UInt8, _) ->
+                    (* Unless it's a UInt8 in which case we may omit the sizeof *)
+                    adjust (translate_expr env len) (TInt SizeT)
+                | _ ->
+                    failwith "ill-formed memset"
               in
-              let dst = translate_expr env dst in
-              let elt = adjust (translate_expr env v) ty in
+              let elt = adjust (translate_expr env v) (Helpers.assert_tbuf_or_tarray dst.typ) in
               with_type TUnit @@ EBufFill (dst, elt, len)
           | _ -> failwith "memset does not have the right number of arguments"
         end
@@ -859,11 +1011,13 @@ let rec translate_expr (env : env) (e : Clang.Ast.expr) : Krml.Ast.expr =
         let typ = translate_typ qual_type in
         let e = translate_expr env operand in
         with_type typ (ECast (e, typ))
+
     | ArraySubscript { base; index } ->
         let base = translate_expr env base in
-        let index = adjust (translate_expr env index) (TInt SizeT) in
+        let index = adjust (translate_expr env ~must_return_value:true index) (TInt SizeT) in
         (* Is this only called on rvalues? Otherwise, might need EBufWrite *)
         with_type (Helpers.assert_tbuf_or_tarray base.typ) (EBufRead (base, index))
+
     | ConditionalOperator { cond; then_branch; else_branch } ->
         let cond = translate_expr env cond in
         let else_branch = translate_expr env else_branch in
@@ -1143,7 +1297,7 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
           let _, b, e = translate_vardecl env vdecl in
           with_type TUnit (ELet (b, e, Helpers.eunit))
       | [ stmt ] -> translate_stmt env stmt.desc
-      | hd :: tl -> (
+      | hd :: tl -> begin
           match hd.desc, (List.hd tl).desc with
           (* Special case when we have a variable declaration followed by a
          memset: this likely corresponds to an array initialization *)
@@ -1182,8 +1336,13 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
               in
               translate_one_decl env ds
           | stmt, _ ->
-              let e2 = translate_stmt (add_var env ("_", TUnit)) (Compound tl) in
-              with_type e2.typ (ELet (Helpers.sequence_binding (), translate_stmt env stmt, e2)))
+              let s = translate_stmt env stmt in
+              let e2 = translate_stmt (add_var env ("_", s.typ)) (Compound tl) in
+              if s.typ = TUnit then
+                with_type e2.typ (ELet (Helpers.sequence_binding (), s, e2))
+              else
+                with_type e2.typ (ELet (Helpers.fresh_binder "_ignored_stmt" s.typ, s, e2))
+      end
     end
   | For { init; condition_variable; cond; inc; body } ->
       assert (condition_variable = None);
@@ -1235,7 +1394,13 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
         | None -> Helpers.eunit
         | Some el -> translate_stmt env el.desc
       in
-      with_type then_b.typ (EIfThenElse (cond, then_b, else_b))
+      let t =
+        match then_b.typ, else_b.typ with
+        | TAny, t -> t
+        | t, TAny -> t
+        | _ -> then_b.typ
+      in
+      with_type t (EIfThenElse (cond, then_b, else_b))
   | Switch { init; condition_variable; cond; body } ->
       (* C++ constructs *)
       assert (init = None);
@@ -1267,8 +1432,8 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
   | Label _ -> failwith "translate_stmt: label"
   | Goto _ -> failwith "translate_stmt: goto"
   | IndirectGoto _ -> failwith "translate_stmt: indirect goto"
-  | Continue -> with_type TAny EContinue
-  | Break -> with_type TAny EBreak
+  | Continue -> with_type TUnit EContinue
+  | Break -> with_type TUnit EBreak
   | Asm _ -> failwith "translate_stmt: asm"
   | Return eo ->
       with_type TAny
@@ -1276,7 +1441,8 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
         | None -> EReturn Helpers.eunit
         | Some e -> EReturn (adjust (translate_expr env e) env.ret_t))
   | Decl _ -> failwith "translate_stmt: decl"
-  | Expr e -> translate_expr env e
+  | Expr e ->
+      translate_expr env e
   | Try _ -> failwith "translate_stmt: try"
   | AttributedStmt _ -> failwith "translate_stmt: AttributedStmt"
   | UnknownStmt _ -> failwith "translate_stmt: UnknownStmt"
@@ -1405,6 +1571,7 @@ let decl_error_handler ?(ignored_dirs=[]) (decl : decl) default f =
       else begin
         Format.eprintf "Error: %s\n@." (Printexc.to_string e);
         Printexc.print_backtrace stderr;
+        Format.eprintf "%s\n@." (String.make 80 '-');
         default
       end
     end else
@@ -1416,27 +1583,21 @@ let compute_external_type (fdecl : function_decl) : binder list * typ =
   let ret_type = translate_typ fdecl.function_type.result in
   let binders = translate_params fdecl in
   let args_mut = Attributes.retrieve_mutability fdecl.attributes in
-  let binders =
+  let set_const t b =
+    match t with
+    | TBuf (t, _) -> TBuf (t, b)
+    | _ -> t
+  in
+  let binders, ret_type =
     match args_mut with
     | None ->
         (* No mutability was specified, but we are in an opaque definition:
            All arguments must be considered as read-only *)
-        List.map
-          (fun arg ->
-            match arg.typ with
-            | TBuf (t, _) -> { arg with typ = TBuf (t, true) }
-            | _ -> arg)
-          binders
-    | Some muts ->
-        List.map2
-          (fun mut arg ->
-            match arg.typ, mut with
-            (* In Ast, the flag set to true represents a constant, immutable array.
-           The mutability flag is the converse, so we need to take the negation *)
-            | TBuf (t, _), b -> { arg with typ = TBuf (t, not b) }
-            (* For all other types, we do not modify the mutability *)
-            | _ -> arg)
-          muts binders
+        List.map (fun arg -> { arg with typ = set_const arg.typ true }) binders, ret_type
+    | Some (muts, mut_ret) ->
+        (* In Ast, the flag set to true represents a constant, immutable array.
+         The mutability flag is the converse, so we need to take the negation *)
+        List.map2 (fun mut arg -> { arg with typ = set_const arg.typ (not mut) }) muts binders, set_const ret_type (not mut_ret)
   in
   binders, ret_type
 
@@ -1651,6 +1812,7 @@ let decl_is_better ~(old_decl:decl) (decl: decl) =
   match old_decl.desc, decl.desc with
   (* A definition is better than its prototype *)
   | Function { body = None; _ }, Function { body = Some _; _ } -> true
+  | Var { var_init = None; _ }, Var { var_init = Some _; _ } -> true
   (* A full struct is better than its forward declaration *)
   | RecordDecl { fields = []; _ }, RecordDecl { fields = _ :: _; _ } -> true
   | _ -> false

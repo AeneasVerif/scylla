@@ -1,4 +1,5 @@
 open Krml.Ast
+open Krml
 
 let remove_addrof_index =
   object (self)
@@ -35,6 +36,26 @@ let inline_immediate_vardef =
 
     end
 
+let materialize_casts =
+  object (_self)
+    inherit [_] map as super
+
+    method! visit_ECast ((), _ as env) e t_to =
+      match e.typ, t_to with
+      | (TArray (TInt w_from, _) | TBuf (TInt w_from, _)),
+        (TArray (TInt w_to, _) | TBuf (TInt w_to, _)) when w_from <> w_to ->
+          let is_const = match t_to with TBuf (_, false) -> false | _ -> true in
+          let is_mut = not is_const in
+          let t_from = TBuf (Helpers.assert_tbuf_or_tarray e.typ, is_const) in
+          let t_to = TBuf (Helpers.assert_tbuf_or_tarray t_to, is_const) in
+          let name = Printf.sprintf "scylla_%s_of_%s%s" (PrintMiniRust.string_of_width w_to)
+            (PrintMiniRust.string_of_width w_from) (if is_mut then "_mut" else "")
+          in
+          let scylla_cast = with_type (TArrow (t_from, t_to)) (EQualified (["scylla_glue"], name)) in
+          EApp (scylla_cast, [ e ])
+      | _ ->
+          super#visit_ECast env e t_to
+  end
 
 let simplify files =
   let files = remove_addrof_index#visit_files () files in
