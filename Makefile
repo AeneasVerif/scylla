@@ -60,7 +60,7 @@ regen-outputs: test-hacl
 	for f in rs/*.rs; do cp $$f out/hacl/src/; done
 
 .PHONY: test-hacl
-test-hacl:
+test-hacl: scylla
 	./scylla $(SCYLLA_OPTS) $(addprefix test/hacl/, $(HACL_SOURCES)) --output out/hacl/src/
 
 .PHONY: nix-magic
