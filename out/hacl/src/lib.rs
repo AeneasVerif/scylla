@@ -6,21 +6,23 @@ pub mod types;
 
 #[cfg(test)]
 pub mod test {
-    pub mod chacha20;
     pub mod bignum;
-    pub mod sha2;
+    pub mod chacha20;
     pub mod curve25519;
+    pub mod poly1305;
+    pub mod sha2;
 }
 
 pub mod hacl {
-    pub mod bignum_base;
     pub mod bignum;
+    pub mod bignum_base;
+    pub mod bignum25519_51;
     pub mod bignum4096;
     pub mod chacha20;
-    pub mod streaming_types;
-    pub mod hash_sha2;
     pub mod curve25519_51;
-    pub mod bignum25519_51;
+    pub mod hash_sha2;
+    pub mod mac_poly1305;
+    pub mod streaming_types;
 }
 
 pub mod lowstar {

@@ -52,7 +52,8 @@ HACL_SOURCES= \
 		Hacl_Chacha20.c \
 		internal/Hacl_Bignum_Base.h Hacl_Bignum.c Hacl_Bignum4096.c \
 		Hacl_Streaming_Types.h Hacl_Hash_SHA2.c \
-		internal/Hacl_Bignum25519_51.h Hacl_Curve25519_51.c
+		internal/Hacl_Bignum25519_51.h Hacl_Curve25519_51.c \
+		Hacl_MAC_Poly1305.c
 
 # We extract all of the tests into the same hacl directory
 .PHONY: regen-outputs
@@ -60,7 +61,7 @@ regen-outputs: test-hacl
 	for f in rs/*.rs; do cp $$f out/hacl/src/; done
 
 .PHONY: test-hacl
-test-hacl: scylla
+test-hacl: $(addprefix test/hacl/, $(HACL_SOURCES)) scylla
 	./scylla $(SCYLLA_OPTS) $(addprefix test/hacl/, $(HACL_SOURCES)) --output out/hacl/src/
 
 .PHONY: nix-magic
