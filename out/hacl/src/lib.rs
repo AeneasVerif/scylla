@@ -8,6 +8,7 @@ pub mod types;
 pub mod test {
     pub mod bignum;
     pub mod chacha20;
+    pub mod chacha20poly1305;
     pub mod curve25519;
     pub mod p256;
     pub mod poly1305;
@@ -15,6 +16,7 @@ pub mod test {
 }
 
 pub mod hacl {
+    pub mod aead_chacha20poly1305;
     pub mod bignum;
     pub mod bignum_base;
     pub mod bignum25519_51;

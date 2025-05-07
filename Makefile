@@ -54,7 +54,8 @@ HACL_SOURCES= \
 		Hacl_Streaming_Types.h Hacl_Hash_SHA2.c \
 		internal/Hacl_Bignum25519_51.h Hacl_Curve25519_51.c \
 		Hacl_MAC_Poly1305.c \
-		internal/Hacl_P256_PrecompTable.h Hacl_P256.c
+		internal/Hacl_P256_PrecompTable.h Hacl_P256.c \
+		Hacl_AEAD_Chacha20Poly1305.c
 
 # We extract all of the tests into the same hacl directory
 .PHONY: regen-outputs
