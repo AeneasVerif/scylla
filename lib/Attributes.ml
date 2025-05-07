@@ -80,7 +80,14 @@ let retrieve_mutability (attrs : attribute list) =
 let retrieve_alignment (attrs: attribute list) =
   List.find_map (fun (x: attribute) ->
     match x.desc with
-    | Clang__.Attributes.Aligned { alignment_expr; _ } -> Some alignment_expr
+    | Clang__.Attributes.Aligned { alignment_expr; _ } ->
+        begin match alignment_expr with
+        | { desc = IntegerLiteral n; _ } ->
+            Some (Clang.Ast.int_of_literal n)
+        | _ ->
+            Krml.KPrint.bprintf "Warning: alignment is not a constant, ignoring\n";
+            None
+        end
     | _ -> None
   ) attrs
 
