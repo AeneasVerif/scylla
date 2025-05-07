@@ -769,6 +769,14 @@ pub fn Hacl_Hash_SHA2_sha512_update_nblocks(len: u32, b: &[u8], st: &mut [u64])
   }
 }
 
+pub type Hacl_Hash_SHA2_state_t_224 = crate::hacl::streaming_types::Hacl_Streaming_MD_state_32;
+
+pub type Hacl_Hash_SHA2_state_t_256 = crate::hacl::streaming_types::Hacl_Streaming_MD_state_32;
+
+pub type Hacl_Hash_SHA2_state_t_384 = crate::hacl::streaming_types::Hacl_Streaming_MD_state_64;
+
+pub type Hacl_Hash_SHA2_state_t_512 = crate::hacl::streaming_types::Hacl_Streaming_MD_state_64;
+
 pub fn Hacl_Hash_SHA2_update_224(
   state: &mut [crate::hacl::streaming_types::Hacl_Streaming_MD_state_32],
   input: &[u8],
