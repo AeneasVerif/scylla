@@ -2,8 +2,7 @@ name: Build Scylla and run tests
 
 on:
   push:
-    branches:
-      - main
+    branches-ignore: [ '_**' ]
   pull_request:
 
 # Cancel previous versions of this job that are still running.
