@@ -1,3 +1,5 @@
+#![allow(non_upper_case_globals)]
+
 #[test]
 fn bignum_base() {
     // echo 'obase=16;123456789123456789' | bc
@@ -290,7 +292,7 @@ const test1_res: [u64; 64] = [
   13441964274290108391u64
 ];
 
-fn mod_exp_bytes_be_precomp(n_bytes: &mut [u8], a_bytes: &mut [u8], b_bits: u32, b_bytes: &mut [u8], res_bytes: &mut [u8]) {
+fn mod_exp_bytes_be_precomp(n_bytes: &[u8], a_bytes: &[u8], b_bits: u32, b_bytes: &[u8], res_bytes: &mut [u8]) {
   let mut res = [ 0u64; 64 ];
   let b_bytes_len = (b_bits - 1u32) / 8u32 + 1u32;
 
@@ -303,7 +305,7 @@ fn mod_exp_bytes_be_precomp(n_bytes: &mut [u8], a_bytes: &mut [u8], b_bits: u32,
   crate::hacl::bignum4096::Hacl_Bignum4096_bn_to_bytes_be(&res, res_bytes);
 }
 
-fn mod_exp_bytes_be(n_bytes: &mut [u8], a_bytes: &mut [u8], b_bits: u32, b_bytes: &mut [u8], res_bytes: &mut [u8]) {
+fn mod_exp_bytes_be(n_bytes: &[u8], a_bytes: &[u8], b_bits: u32, b_bytes: &[u8], res_bytes: &mut [u8]) {
   let mut res = [ 0u64; 64 ];
   let b_bytes_len = (b_bits - 1u32) / 8u32 + 1u32;
 
@@ -320,16 +322,16 @@ pub fn test_bignum () {
 
   // test bytes_be_precomp
   let mut res_bytes = [ 0u8; 512 ];
-  mod_exp_bytes_be_precomp(&mut test1_nBytes, &mut test1_aBytes, 4096, &mut test1_bBytes, &mut res_bytes);
+  mod_exp_bytes_be_precomp(&test1_nBytes, &test1_aBytes, 4096, &test1_bBytes, &mut res_bytes);
   assert_eq!(res_bytes, test1_resBytes);
 
   // test bytes_be
   let mut res_bytes = [ 0u8; 512 ];
-  mod_exp_bytes_be(&mut test1_nBytes, &mut test1_aBytes, 4096, &mut test1_bBytes, &mut res_bytes);
+  mod_exp_bytes_be(&test1_nBytes, &test1_aBytes, 4096, &test1_bBytes, &mut res_bytes);
   assert_eq!(res_bytes, test1_resBytes);
 
   // test mod_exp_vartime
   let mut res = [ 0u64; 64 ];
-  crate::hacl::bignum4096::Hacl_Bignum4096_mod_exp_vartime(&mut test1_n, &mut test1_a, 4096, &mut test1_b, &mut res);
+  crate::hacl::bignum4096::Hacl_Bignum4096_mod_exp_vartime(&test1_n, &test1_a, 4096, &test1_b, &mut res);
   assert_eq!(res, test1_res);
 }
