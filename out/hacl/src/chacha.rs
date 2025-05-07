@@ -3,6 +3,7 @@
 #![allow(non_camel_case_types)]
 #![allow(unused_assignments)]
 #![allow(unreachable_patterns)]
+#![allow(unused_mut)]
 
 pub const chacha20_constants: [u32; 4] =
     [1634760805u32, 857760878u32, 2036477234u32, 1797285236u32];
@@ -103,7 +104,7 @@ pub fn chacha20_init(ctx: &mut [u32], k: &[u8], n: &[u8], ctr: u32)
     let u: u32 = crate::lowstar_endianness::load32_le(bj.1);
     let r: u32 = u;
     let x: u32 = r;
-    let os: (&mut [u32], &mut [u32]) = uu____0.1.split_at_mut(0usize);
+    let os: (&mut [u32], &mut [u32]) = (uu____0.1).split_at_mut(0usize);
     os.1[i as usize] = x
   };
   ctx[12usize] = ctr;
@@ -114,7 +115,7 @@ pub fn chacha20_init(ctx: &mut [u32], k: &[u8], n: &[u8], ctr: u32)
     let u: u32 = crate::lowstar_endianness::load32_le(bj.1);
     let r: u32 = u;
     let x: u32 = r;
-    let os: (&mut [u32], &mut [u32]) = uu____1.1.split_at_mut(0usize);
+    let os: (&mut [u32], &mut [u32]) = (uu____1.1).split_at_mut(0usize);
     os.1[i as usize] = x
   }
 }

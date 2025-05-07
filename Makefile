@@ -58,7 +58,7 @@ test-bignum:
 
 .PHONY: test-%
 test-%: test/%.c $(wildcard test/include/*) scylla
-	./scylla $(SCYLLA_OPTS) $< --output out/hacl/src/
+	./scylla $(SCYLLA_OPTS) $< --output out/hacl/src/ --ignore_lib_errors
 
 .PHONY: nix-magic
 nix-magic:
