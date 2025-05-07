@@ -59,12 +59,9 @@ HACL_SOURCES= \
 regen-outputs: test-hacl
 	for f in rs/*.rs; do cp $$f out/hacl/src/; done
 
+.PHONY: test-hacl
 test-hacl:
 	./scylla $(SCYLLA_OPTS) $(addprefix test/hacl/, $(HACL_SOURCES)) --output out/hacl/src/
-
-.PHONY: test-%
-test-%: test/%.c $(wildcard test/include/*) scylla
-	./scylla $(SCYLLA_OPTS) $< --output out/hacl/src/ --ignore_lib_errors
 
 .PHONY: nix-magic
 nix-magic:
