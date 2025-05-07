@@ -35,7 +35,7 @@ const CIPHER1: [u8; 114 ] = [
 #[test]
 fn chacha20() {
     let mut out = [0u8; PLAINTEXT1.len()];
-    crate::chacha::chacha20_encrypt(out.len().try_into().unwrap(), &mut out, &PLAINTEXT1, &KEY1, &NONCE1, COUNTER1);
+    crate::hacl::chacha20::Hacl_Chacha20_chacha20_encrypt(out.len().try_into().unwrap(), &mut out, &PLAINTEXT1, &KEY1, &NONCE1, COUNTER1);
     assert_eq!(out, CIPHER1);
     println!("chacha20: success");
 }

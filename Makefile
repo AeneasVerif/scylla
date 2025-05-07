@@ -9,7 +9,7 @@ ifeq ($(shell uname -s),Darwin)
 endif
 
 # We try to figure out the best include paths, compiler options, etc. from the build system.
-SCYLLA_OPTS += --ccopts -DKRML_UNROLL_MAX=0,-I,test/include,-I,test/ --errors_as_warnings $(SCYLLA_SYSROOT_OPT) --ignore_lib_errors
+SCYLLA_OPTS += --ccopts -DKRML_UNROLL_MAX=0,-I,test/hacl/include,-I,test/hacl/ --errors_as_warnings $(SCYLLA_SYSROOT_OPT) --ignore_lib_errors
 
 .PHONY: all
 all: build format-check
@@ -48,19 +48,19 @@ $(SYMCRYPT_HOME)/rs/src/sha3.rs: $(SYMCRYPT_SOURCES)
 	./scylla $(SCYLLA_SYSROOT_OPT) --ccopts -DSYMCRYPT_IGNORE_PLATFORM,-I$(SYMCRYPT_HOME)/inc,-I$(SYMCRYPT_HOME)/build/inc,-std=gnu11,-DSCYLLA \
 	  --errors_as_warnings --output $(dir $@) --bundle symcrypt_internal $(SYMCRYPT_SOURCES)
 
+HACL_SOURCES= \
+		Hacl_Chacha20.c \
+		internal/Hacl_Bignum_Base.h Hacl_Bignum.c Hacl_Bignum4096.c \
+		Hacl_Streaming_Types.h internal/Hacl_Streaming_Types.h Hacl_Hash_SHA2.c \
+		internal/Hacl_Bignum25519_51.h Hacl_Curve25519_51.c
+
 # We extract all of the tests into the same hacl directory
 .PHONY: regen-outputs
-regen-outputs: test-chacha test-bignum_base test-bignum test-sha2 test-curve
+regen-outputs: test-hacl
 	for f in rs/*.rs; do cp $$f out/hacl/src/; done
 
-test-bignum:
-	./scylla $(SCYLLA_OPTS) test/internal/Hacl_Bignum_Base.h test/Hacl_Bignum.c test/Hacl_Bignum4096.c --output out/hacl/src/
-
-test-sha2:
-	./scylla $(SCYLLA_OPTS) test/Hacl_Streaming_Types.h test/internal/Hacl_Streaming_Types.h test/Hacl_Hash_SHA2.c --output out/hacl/src/
-
-test-curve:
-	./scylla $(SCYLLA_OPTS) test/internal/Hacl_Bignum25519_51.h test/Hacl_Curve25519_51.c --output out/hacl/src
+test-hacl:
+	./scylla $(SCYLLA_OPTS) $(addprefix test/hacl/, $(HACL_SOURCES)) --output out/hacl/src/
 
 .PHONY: test-%
 test-%: test/%.c $(wildcard test/include/*) scylla

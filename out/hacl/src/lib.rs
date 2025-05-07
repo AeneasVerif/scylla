@@ -18,6 +18,7 @@ pub mod hacl {
     pub mod bignum_base;
     pub mod bignum;
     pub mod bignum4096;
+    pub mod chacha20;
     pub mod streaming_types;
     pub mod hash_sha2;
     pub mod curve25519_51;
