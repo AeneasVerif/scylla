@@ -4,17 +4,17 @@
 #![allow(unused_assignments)]
 #![allow(unreachable_patterns)]
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 #[repr(C)]
 pub
-struct Hacl_Streaming_MD_state_32 <'a>
-{ pub block_state: &'a mut [u32], pub buf: &'a mut [u8], pub total_len: u64 }
+struct Hacl_Streaming_MD_state_32
+{ pub block_state: Box<[u32]>, pub buf: Box<[u8]>, pub total_len: u64 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 #[repr(C)]
 pub
-struct Hacl_Streaming_MD_state_64 <'a>
-{ pub block_state: &'a mut [u64], pub buf: &'a mut [u8], pub total_len: u64 }
+struct Hacl_Streaming_MD_state_64
+{ pub block_state: Box<[u64]>, pub buf: Box<[u8]>, pub total_len: u64 }
 
 pub type Hacl_Streaming_Types_error_code = u8;
 

@@ -5,19 +5,19 @@
 #![allow(unreachable_patterns)]
 
 pub fn Hacl_Hash_SHA2_copy_256 <'a>(
-  state: &'a [crate::hacl::streaming_types::Hacl_Streaming_MD_state_32 <'a>]
+  state: &'a [crate::hacl::streaming_types::Hacl_Streaming_MD_state_32]
 ) ->
-    &'a [crate::hacl::streaming_types::Hacl_Streaming_MD_state_32 <'a>]
+    Box<[crate::hacl::streaming_types::Hacl_Streaming_MD_state_32]>
 {
-  let block_state0: &[u32] = (state[0usize]).block_state;
-  let buf0: &[u8] = (state[0usize]).buf;
+  let block_state0: &[u32] = &(state[0usize]).block_state;
+  let buf0: &[u8] = &(state[0usize]).buf;
   let total_len0: u64 = (state[0usize]).total_len;
   let mut buf: Box<[u8]> = vec![0u8; 64usize].into_boxed_slice();
   ((&mut buf)[0usize..64usize]).copy_from_slice(&buf0[0usize..64usize]);
   let mut b: Box<[u32]> = vec![0u32; 8usize].into_boxed_slice();
   let block_state: crate::hacl::streaming_types::Hacl_Streaming_Types_optional_32 =
       crate::hacl::streaming_types::Hacl_Streaming_Types_optional_32 { tag: 1u8, v: &mut b };
-  if block_state.tag == 0u8 { return &[] };
+  if block_state.tag == 0u8 { return [].into() };
   if block_state.tag == 1u8
   {
     let block_state1: &mut [u32] = block_state.v;
@@ -26,15 +26,15 @@ pub fn Hacl_Hash_SHA2_copy_256 <'a>(
     let k_: u8 = 1u8;
     match k_
     {
-      0u8 => return &[],
+      0u8 => return [].into(),
       1u8 =>
         {
           let s: crate::hacl::streaming_types::Hacl_Streaming_MD_state_32 =
               crate::hacl::streaming_types::Hacl_Streaming_MD_state_32
-              { block_state: block_state2.1, buf: &mut buf, total_len: total_len0 };
+              { block_state: (*block_state2.1).into(), buf, total_len: total_len0 };
           let p: Box<[crate::hacl::streaming_types::Hacl_Streaming_MD_state_32]> =
               vec![s].into_boxed_slice();
-          return &p
+          return p
         },
       _ => panic!("")
     }
@@ -43,19 +43,19 @@ pub fn Hacl_Hash_SHA2_copy_256 <'a>(
 }
 
 pub fn Hacl_Hash_SHA2_copy_512 <'a>(
-  state: &'a [crate::hacl::streaming_types::Hacl_Streaming_MD_state_64 <'a>]
+  state: &'a [crate::hacl::streaming_types::Hacl_Streaming_MD_state_64]
 ) ->
-    &'a [crate::hacl::streaming_types::Hacl_Streaming_MD_state_64 <'a>]
+    Box<[crate::hacl::streaming_types::Hacl_Streaming_MD_state_64]>
 {
-  let block_state0: &[u64] = (state[0usize]).block_state;
-  let buf0: &[u8] = (state[0usize]).buf;
+  let block_state0: &[u64] = &(state[0usize]).block_state;
+  let buf0: &[u8] = &(state[0usize]).buf;
   let total_len0: u64 = (state[0usize]).total_len;
   let mut buf: Box<[u8]> = vec![0u8; 128usize].into_boxed_slice();
   ((&mut buf)[0usize..128usize]).copy_from_slice(&buf0[0usize..128usize]);
   let mut b: Box<[u64]> = vec![0u64; 8usize].into_boxed_slice();
   let block_state: crate::hacl::streaming_types::Hacl_Streaming_Types_optional_64 =
       crate::hacl::streaming_types::Hacl_Streaming_Types_optional_64 { tag: 1u8, v: &mut b };
-  if block_state.tag == 0u8 { return &[] };
+  if block_state.tag == 0u8 { return [].into() };
   if block_state.tag == 1u8
   {
     let block_state1: &mut [u64] = block_state.v;
@@ -64,15 +64,15 @@ pub fn Hacl_Hash_SHA2_copy_512 <'a>(
     let k_: u8 = 1u8;
     match k_
     {
-      0u8 => return &[],
+      0u8 => return [].into(),
       1u8 =>
         {
           let s: crate::hacl::streaming_types::Hacl_Streaming_MD_state_64 =
               crate::hacl::streaming_types::Hacl_Streaming_MD_state_64
-              { block_state: block_state2.1, buf: &mut buf, total_len: total_len0 };
+              { block_state: (*block_state2.1).into(), buf, total_len: total_len0 };
           let p: Box<[crate::hacl::streaming_types::Hacl_Streaming_MD_state_64]> =
               vec![s].into_boxed_slice();
-          return &p
+          return p
         },
       _ => panic!("")
     }
@@ -85,8 +85,8 @@ pub fn Hacl_Hash_SHA2_digest_224(
   output: &mut [u8]
 )
 {
-  let block_state: &[u32] = (state[0usize]).block_state;
-  let buf_: &[u8] = (state[0usize]).buf;
+  let block_state: &[u32] = &(state[0usize]).block_state;
+  let buf_: &[u8] = &(state[0usize]).buf;
   let total_len: u64 = (state[0usize]).total_len;
   let mut r: u32;
   if total_len.wrapping_rem(64u32 as u64) == 0u64 && total_len > 0u64
@@ -119,8 +119,8 @@ pub fn Hacl_Hash_SHA2_digest_256(
   output: &mut [u8]
 )
 {
-  let block_state: &[u32] = (state[0usize]).block_state;
-  let buf_: &[u8] = (state[0usize]).buf;
+  let block_state: &[u32] = &(state[0usize]).block_state;
+  let buf_: &[u8] = &(state[0usize]).buf;
   let total_len: u64 = (state[0usize]).total_len;
   let mut r: u32;
   if total_len.wrapping_rem(64u32 as u64) == 0u64 && total_len > 0u64
@@ -153,8 +153,8 @@ pub fn Hacl_Hash_SHA2_digest_384(
   output: &mut [u8]
 )
 {
-  let block_state: &[u64] = (state[0usize]).block_state;
-  let buf_: &[u8] = (state[0usize]).buf;
+  let block_state: &[u64] = &(state[0usize]).block_state;
+  let buf_: &[u8] = &(state[0usize]).buf;
   let total_len: u64 = (state[0usize]).total_len;
   let mut r: u32;
   if total_len.wrapping_rem(128u32 as u64) == 0u64 && total_len > 0u64
@@ -190,8 +190,8 @@ pub fn Hacl_Hash_SHA2_digest_512(
   output: &mut [u8]
 )
 {
-  let block_state: &[u64] = (state[0usize]).block_state;
-  let buf_: &[u8] = (state[0usize]).buf;
+  let block_state: &[u64] = &(state[0usize]).block_state;
+  let buf_: &[u8] = &(state[0usize]).buf;
   let total_len: u64 = (state[0usize]).total_len;
   let mut r: u32;
   if total_len.wrapping_rem(128u32 as u64) == 0u64 && total_len > 0u64
@@ -231,9 +231,9 @@ pub fn Hacl_Hash_SHA2_free_256(
   state: &[crate::hacl::streaming_types::Hacl_Streaming_MD_state_32]
 )
 {
-  let scrut: crate::hacl::streaming_types::Hacl_Streaming_MD_state_32 = state[0usize];
-  let buf: &[u8] = scrut.buf;
-  let block_state: &[u32] = scrut.block_state;
+  let scrut: &crate::hacl::streaming_types::Hacl_Streaming_MD_state_32 = &state[0usize];
+  let buf: &[u8] = &scrut.buf;
+  let block_state: &[u32] = &scrut.block_state;
   ()
 }
 
@@ -246,9 +246,9 @@ pub fn Hacl_Hash_SHA2_free_512(
   state: &[crate::hacl::streaming_types::Hacl_Streaming_MD_state_64]
 )
 {
-  let scrut: crate::hacl::streaming_types::Hacl_Streaming_MD_state_64 = state[0usize];
-  let buf: &[u8] = scrut.buf;
-  let block_state: &[u64] = scrut.block_state;
+  let scrut: &crate::hacl::streaming_types::Hacl_Streaming_MD_state_64 = &state[0usize];
+  let buf: &[u8] = &scrut.buf;
+  let block_state: &[u64] = &scrut.block_state;
   ()
 }
 
@@ -379,10 +379,10 @@ pub const Hacl_Hash_SHA2_k384_512: [u64; 80] =
         6902733635092675308u64, 7801388544844847127u64];
 
 pub fn Hacl_Hash_SHA2_malloc_224 <'a>() ->
-    Box<[crate::hacl::streaming_types::Hacl_Streaming_MD_state_32 <'a>]>
+    Box<[crate::hacl::streaming_types::Hacl_Streaming_MD_state_32]>
 {
-  let mut buf: Box<[u8]> = vec![0u8; 64usize].into_boxed_slice();
-  let buf1: (&mut [u8], &mut [u8]) = buf.split_at_mut(0usize);
+  let buf: Box<[u8]> = vec![0u8; 64usize].into_boxed_slice();
+  let buf1: (&[u8], &[u8]) = buf.split_at(0usize);
   let mut b: Box<[u32]> = vec![0u32; 8usize].into_boxed_slice();
   let block_state: crate::hacl::streaming_types::Hacl_Streaming_Types_optional_32 =
       crate::hacl::streaming_types::Hacl_Streaming_Types_optional_32 { tag: 1u8, v: &mut b };
@@ -400,7 +400,11 @@ pub fn Hacl_Hash_SHA2_malloc_224 <'a>() ->
           Hacl_Hash_SHA2_sha224_init(block_state2.1);
           let s: crate::hacl::streaming_types::Hacl_Streaming_MD_state_32 =
               crate::hacl::streaming_types::Hacl_Streaming_MD_state_32
-              { block_state: block_state2.1, buf: buf1.1, total_len: 0u32 as u64 };
+              {
+                block_state: (*block_state2.1).into(),
+                buf: (*buf1.1).into(),
+                total_len: 0u32 as u64
+              };
           let p: Box<[crate::hacl::streaming_types::Hacl_Streaming_MD_state_32]> =
               vec![s].into_boxed_slice();
           return p
@@ -412,10 +416,10 @@ pub fn Hacl_Hash_SHA2_malloc_224 <'a>() ->
 }
 
 pub fn Hacl_Hash_SHA2_malloc_256 <'a>() ->
-    Box<[crate::hacl::streaming_types::Hacl_Streaming_MD_state_32 <'a>]>
+    Box<[crate::hacl::streaming_types::Hacl_Streaming_MD_state_32]>
 {
-  let mut buf: Box<[u8]> = vec![0u8; 64usize].into_boxed_slice();
-  let buf1: (&mut [u8], &mut [u8]) = buf.split_at_mut(0usize);
+  let buf: Box<[u8]> = vec![0u8; 64usize].into_boxed_slice();
+  let buf1: (&[u8], &[u8]) = buf.split_at(0usize);
   let mut b: Box<[u32]> = vec![0u32; 8usize].into_boxed_slice();
   let block_state: crate::hacl::streaming_types::Hacl_Streaming_Types_optional_32 =
       crate::hacl::streaming_types::Hacl_Streaming_Types_optional_32 { tag: 1u8, v: &mut b };
@@ -433,7 +437,11 @@ pub fn Hacl_Hash_SHA2_malloc_256 <'a>() ->
           Hacl_Hash_SHA2_sha256_init(block_state2.1);
           let s: crate::hacl::streaming_types::Hacl_Streaming_MD_state_32 =
               crate::hacl::streaming_types::Hacl_Streaming_MD_state_32
-              { block_state: block_state2.1, buf: buf1.1, total_len: 0u32 as u64 };
+              {
+                block_state: (*block_state2.1).into(),
+                buf: (*buf1.1).into(),
+                total_len: 0u32 as u64
+              };
           let p: Box<[crate::hacl::streaming_types::Hacl_Streaming_MD_state_32]> =
               vec![s].into_boxed_slice();
           return p
@@ -445,10 +453,10 @@ pub fn Hacl_Hash_SHA2_malloc_256 <'a>() ->
 }
 
 pub fn Hacl_Hash_SHA2_malloc_384 <'a>() ->
-    Box<[crate::hacl::streaming_types::Hacl_Streaming_MD_state_64 <'a>]>
+    Box<[crate::hacl::streaming_types::Hacl_Streaming_MD_state_64]>
 {
-  let mut buf: Box<[u8]> = vec![0u8; 128usize].into_boxed_slice();
-  let buf1: (&mut [u8], &mut [u8]) = buf.split_at_mut(0usize);
+  let buf: Box<[u8]> = vec![0u8; 128usize].into_boxed_slice();
+  let buf1: (&[u8], &[u8]) = buf.split_at(0usize);
   let mut b: Box<[u64]> = vec![0u64; 8usize].into_boxed_slice();
   let block_state: crate::hacl::streaming_types::Hacl_Streaming_Types_optional_64 =
       crate::hacl::streaming_types::Hacl_Streaming_Types_optional_64 { tag: 1u8, v: &mut b };
@@ -466,7 +474,11 @@ pub fn Hacl_Hash_SHA2_malloc_384 <'a>() ->
           Hacl_Hash_SHA2_sha384_init(block_state2.1);
           let s: crate::hacl::streaming_types::Hacl_Streaming_MD_state_64 =
               crate::hacl::streaming_types::Hacl_Streaming_MD_state_64
-              { block_state: block_state2.1, buf: buf1.1, total_len: 0u32 as u64 };
+              {
+                block_state: (*block_state2.1).into(),
+                buf: (*buf1.1).into(),
+                total_len: 0u32 as u64
+              };
           let p: Box<[crate::hacl::streaming_types::Hacl_Streaming_MD_state_64]> =
               vec![s].into_boxed_slice();
           return p
@@ -478,10 +490,10 @@ pub fn Hacl_Hash_SHA2_malloc_384 <'a>() ->
 }
 
 pub fn Hacl_Hash_SHA2_malloc_512 <'a>() ->
-    Box<[crate::hacl::streaming_types::Hacl_Streaming_MD_state_64 <'a>]>
+    Box<[crate::hacl::streaming_types::Hacl_Streaming_MD_state_64]>
 {
-  let mut buf: Box<[u8]> = vec![0u8; 128usize].into_boxed_slice();
-  let buf1: (&mut [u8], &mut [u8]) = buf.split_at_mut(0usize);
+  let buf: Box<[u8]> = vec![0u8; 128usize].into_boxed_slice();
+  let buf1: (&[u8], &[u8]) = buf.split_at(0usize);
   let mut b: Box<[u64]> = vec![0u64; 8usize].into_boxed_slice();
   let block_state: crate::hacl::streaming_types::Hacl_Streaming_Types_optional_64 =
       crate::hacl::streaming_types::Hacl_Streaming_Types_optional_64 { tag: 1u8, v: &mut b };
@@ -499,7 +511,11 @@ pub fn Hacl_Hash_SHA2_malloc_512 <'a>() ->
           Hacl_Hash_SHA2_sha512_init(block_state2.1);
           let s: crate::hacl::streaming_types::Hacl_Streaming_MD_state_64 =
               crate::hacl::streaming_types::Hacl_Streaming_MD_state_64
-              { block_state: block_state2.1, buf: buf1.1, total_len: 0u32 as u64 };
+              {
+                block_state: (*block_state2.1).into(),
+                buf: (*buf1.1).into(),
+                total_len: 0u32 as u64
+              };
           let p: Box<[crate::hacl::streaming_types::Hacl_Streaming_MD_state_64]> =
               vec![s].into_boxed_slice();
           return p
@@ -514,7 +530,7 @@ pub fn Hacl_Hash_SHA2_reset_224(
   state: &mut [crate::hacl::streaming_types::Hacl_Streaming_MD_state_32]
 )
 {
-  let block_state: &mut [u32] = (state[0usize]).block_state;
+  let block_state: &mut [u32] = &mut (state[0usize]).block_state;
   Hacl_Hash_SHA2_sha224_init(block_state);
   let total_len: u64 = 0u32 as u64;
   (state[0usize]).total_len = total_len
@@ -524,7 +540,7 @@ pub fn Hacl_Hash_SHA2_reset_256(
   state: &mut [crate::hacl::streaming_types::Hacl_Streaming_MD_state_32]
 )
 {
-  let block_state: &mut [u32] = (state[0usize]).block_state;
+  let block_state: &mut [u32] = &mut (state[0usize]).block_state;
   Hacl_Hash_SHA2_sha256_init(block_state);
   let total_len: u64 = 0u32 as u64;
   (state[0usize]).total_len = total_len
@@ -534,7 +550,7 @@ pub fn Hacl_Hash_SHA2_reset_384(
   state: &mut [crate::hacl::streaming_types::Hacl_Streaming_MD_state_64]
 )
 {
-  let block_state: &mut [u64] = (state[0usize]).block_state;
+  let block_state: &mut [u64] = &mut (state[0usize]).block_state;
   Hacl_Hash_SHA2_sha384_init(block_state);
   let total_len: u64 = 0u32 as u64;
   (state[0usize]).total_len = total_len
@@ -544,7 +560,7 @@ pub fn Hacl_Hash_SHA2_reset_512(
   state: &mut [crate::hacl::streaming_types::Hacl_Streaming_MD_state_64]
 )
 {
-  let block_state: &mut [u64] = (state[0usize]).block_state;
+  let block_state: &mut [u64] = &mut (state[0usize]).block_state;
   Hacl_Hash_SHA2_sha512_init(block_state);
   let total_len: u64 = 0u32 as u64;
   (state[0usize]).total_len = total_len
@@ -1019,7 +1035,7 @@ pub fn Hacl_Hash_SHA2_update_512(
 ) ->
     u8
 {
-  let block_state: &mut [u32] = (state[0usize]).block_state;
+  let block_state: &mut [u32] = &mut (state[0usize]).block_state;
   let total_len: u64 = (state[0usize]).total_len;
   if chunk_len as u64 > 2305843009213693951u64.wrapping_sub(total_len) { return 3u8 };
   let mut sz: u32;
@@ -1029,7 +1045,7 @@ pub fn Hacl_Hash_SHA2_update_512(
   { sz = total_len.wrapping_rem(64u32 as u64) as u32 };
   if chunk_len <= 64u32.wrapping_sub(sz)
   {
-    let buf: &mut [u8] = (state[0usize]).buf;
+    let buf: &mut [u8] = &mut (state[0usize]).buf;
     let total_len1: u64 = (state[0usize]).total_len;
     let mut sz1: u32;
     if total_len1.wrapping_rem(64u32 as u64) == 0u64 && total_len1 > 0u64
@@ -1043,7 +1059,7 @@ pub fn Hacl_Hash_SHA2_update_512(
   }
   else if sz == 0u32
   {
-    let buf: &mut [u8] = (state[0usize]).buf;
+    let buf: &mut [u8] = &mut (state[0usize]).buf;
     let total_len1: u64 = (state[0usize]).total_len;
     let mut sz1: u32;
     if total_len1.wrapping_rem(64u32 as u64) == 0u64 && total_len1 > 0u64
@@ -1075,7 +1091,7 @@ pub fn Hacl_Hash_SHA2_update_512(
     let diff: u32 = 64u32.wrapping_sub(sz);
     let chunk1: (&[u8], &[u8]) = chunk.split_at(0usize);
     let chunk2: (&[u8], &[u8]) = (chunk1.1).split_at(diff as usize);
-    let buf: &mut [u8] = (state[0usize]).buf;
+    let buf: &mut [u8] = &mut (state[0usize]).buf;
     let total_len10: u64 = (state[0usize]).total_len;
     let mut sz10: u32;
     if total_len10.wrapping_rem(64u32 as u64) == 0u64 && total_len10 > 0u64
@@ -1086,7 +1102,7 @@ pub fn Hacl_Hash_SHA2_update_512(
     (buf2.1[0usize..diff as usize]).copy_from_slice(&chunk2.0[0usize..diff as usize]);
     let total_len2: u64 = total_len10.wrapping_add(diff as u64);
     (state[0usize]).total_len = total_len2;
-    let buf0: &mut [u8] = (state[0usize]).buf;
+    let buf0: &mut [u8] = &mut (state[0usize]).buf;
     let total_len1: u64 = (state[0usize]).total_len;
     let mut sz1: u32;
     if total_len1.wrapping_rem(64u32 as u64) == 0u64 && total_len1 > 0u64
@@ -1126,7 +1142,7 @@ pub fn Hacl_Hash_SHA2_update_512(
 ) ->
     u8
 {
-  let block_state: &mut [u64] = (state[0usize]).block_state;
+  let block_state: &mut [u64] = &mut (state[0usize]).block_state;
   let total_len: u64 = (state[0usize]).total_len;
   if chunk_len as u64 > 18446744073709551615u64.wrapping_sub(total_len) { return 3u8 };
   let mut sz: u32;
@@ -1136,7 +1152,7 @@ pub fn Hacl_Hash_SHA2_update_512(
   { sz = total_len.wrapping_rem(128u32 as u64) as u32 };
   if chunk_len <= 128u32.wrapping_sub(sz)
   {
-    let buf: &mut [u8] = (state[0usize]).buf;
+    let buf: &mut [u8] = &mut (state[0usize]).buf;
     let total_len1: u64 = (state[0usize]).total_len;
     let mut sz1: u32;
     if total_len1.wrapping_rem(128u32 as u64) == 0u64 && total_len1 > 0u64
@@ -1150,7 +1166,7 @@ pub fn Hacl_Hash_SHA2_update_512(
   }
   else if sz == 0u32
   {
-    let buf: &mut [u8] = (state[0usize]).buf;
+    let buf: &mut [u8] = &mut (state[0usize]).buf;
     let total_len1: u64 = (state[0usize]).total_len;
     let mut sz1: u32;
     if total_len1.wrapping_rem(128u32 as u64) == 0u64 && total_len1 > 0u64
@@ -1182,7 +1198,7 @@ pub fn Hacl_Hash_SHA2_update_512(
     let diff: u32 = 128u32.wrapping_sub(sz);
     let chunk1: (&[u8], &[u8]) = chunk.split_at(0usize);
     let chunk2: (&[u8], &[u8]) = (chunk1.1).split_at(diff as usize);
-    let buf: &mut [u8] = (state[0usize]).buf;
+    let buf: &mut [u8] = &mut (state[0usize]).buf;
     let total_len10: u64 = (state[0usize]).total_len;
     let mut sz10: u32;
     if total_len10.wrapping_rem(128u32 as u64) == 0u64 && total_len10 > 0u64
@@ -1193,7 +1209,7 @@ pub fn Hacl_Hash_SHA2_update_512(
     (buf2.1[0usize..diff as usize]).copy_from_slice(&chunk2.0[0usize..diff as usize]);
     let total_len2: u64 = total_len10.wrapping_add(diff as u64);
     (state[0usize]).total_len = total_len2;
-    let buf0: &mut [u8] = (state[0usize]).buf;
+    let buf0: &mut [u8] = &mut (state[0usize]).buf;
     let total_len1: u64 = (state[0usize]).total_len;
     let mut sz1: u32;
     if total_len1.wrapping_rem(128u32 as u64) == 0u64 && total_len1 > 0u64
