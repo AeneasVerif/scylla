@@ -7,7 +7,11 @@ pub mod fstar_uint128;
 pub mod types;
 
 #[cfg(test)]
-pub mod test;
+pub mod test {
+    pub mod chacha20;
+    pub mod bignum;
+    pub mod sha2;
+}
 
 pub mod hacl {
     pub mod bignum_base;
@@ -15,6 +19,8 @@ pub mod hacl {
     pub mod bignum4096;
     pub mod streaming_types;
     pub mod hash_sha2;
+    pub mod curve25519_51;
+    pub mod bignum25519_51;
 }
 
 pub mod lowstar {
