@@ -11,6 +11,7 @@ pub mod test {
     pub mod chacha20;
     pub mod bignum;
     pub mod sha2;
+    pub mod curve25519;
 }
 
 pub mod hacl {

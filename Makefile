@@ -50,7 +50,7 @@ $(SYMCRYPT_HOME)/rs/src/sha3.rs: $(SYMCRYPT_SOURCES)
 
 # We extract all of the tests into the same hacl directory
 .PHONY: regen-outputs
-regen-outputs: test-chacha test-bignum_base test-bignum test-sha2
+regen-outputs: test-chacha test-bignum_base test-bignum test-sha2 test-curve
 	for f in rs/*.rs; do cp $$f out/hacl/src/; done
 
 test-bignum:
@@ -58,6 +58,9 @@ test-bignum:
 
 test-sha2:
 	./scylla $(SCYLLA_OPTS) test/Hacl_Streaming_Types.h test/internal/Hacl_Streaming_Types.h test/Hacl_Hash_SHA2.c --output out/hacl/src/
+
+test-curve:
+	./scylla $(SCYLLA_OPTS) test/internal/Hacl_Bignum25519_51.h test/Hacl_Curve25519_51.c --output out/hacl/src
 
 .PHONY: test-%
 test-%: test/%.c $(wildcard test/include/*) scylla
