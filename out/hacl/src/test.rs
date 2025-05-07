@@ -562,108 +562,108 @@ pub fn test_sha2() {
     let expected = [ 0xad, 0xfd, 0xbc, 0x34, 0x8b, 0x94, 0x26, 0x7e, 0x97, 0x16, 0x02, 0xe3, 0x46, 0x4d, 0xd9, 0xdb, 0xaf, 0x94, 0x51, 0x52, 0xbf, 0xdb, 0x2d, 0xfb, 0xcd, 0x66, 0xb7, 0x3c, 0x51, 0x20, 0x03, 0xbb ];
     assert_eq!(output, expected);
 }
-//
-// #[test]
-// pub fn test_shas() {
-//
-//   // SHA-224
-//   let mut tag_224 = [0u8; 28];
-//   let mut state_224 = crate::hacl::hash_sha2::Hacl_Hash_SHA2_malloc_224();
-//   crate::hacl::hash_sha2::Hacl_Hash_SHA2_update_224(&mut state_224, &mut input1, input1.len() as u32);
-//   crate::hacl::hash_sha2::Hacl_Hash_SHA2_digest_224(&mut state_224, &mut tag_224);
-//   assert_eq!(tag_224, tag1_224);
-//
-//   let mut tag_224 = [0u8; 28];
-//   let mut state_224 = crate::hacl::hash_sha2::Hacl_Hash_SHA2_malloc_224();
-//   crate::hacl::hash_sha2::Hacl_Hash_SHA2_update_224(&mut state_224, &mut input2, input2.len() as u32);
-//   crate::hacl::hash_sha2::Hacl_Hash_SHA2_digest_224(&mut state_224, &mut tag_224);
-//   assert_eq!(tag_224, tag2_224);
-//
-//   let mut tag_224 = [0u8; 28];
-//   let mut state_224 = crate::hacl::hash_sha2::Hacl_Hash_SHA2_malloc_224();
-//   crate::hacl::hash_sha2::Hacl_Hash_SHA2_update_224(&mut state_224, &mut input3, input3.len() as u32);
-//   crate::hacl::hash_sha2::Hacl_Hash_SHA2_digest_224(&mut state_224, &mut tag_224);
-//   assert_eq!(tag_224, tag3_224);
-//
-//   let mut tag_224 = [0u8; 28];
-//   let mut state_224 = crate::hacl::hash_sha2::Hacl_Hash_SHA2_malloc_224();
-//   crate::hacl::hash_sha2::Hacl_Hash_SHA2_update_224(&mut state_224, &mut input4, input4.len() as u32);
-//   crate::hacl::hash_sha2::Hacl_Hash_SHA2_digest_224(&mut state_224, &mut tag_224);
-//   assert_eq!(tag_224, tag4_224);
-//
-//   // SHA-256
-//   let mut tag_256 = [0u8; 32];
-//   let mut state_256 = crate::hacl::hash_sha2::Hacl_Hash_SHA2_malloc_256();
-//   crate::hacl::hash_sha2::Hacl_Hash_SHA2_update_256(&mut state_256, &mut input1, input1.len() as u32);
-//   crate::hacl::hash_sha2::Hacl_Hash_SHA2_digest_256(&mut state_256, &mut tag_256);
-//   assert_eq!(tag_256, tag1_256);
-//
-//   let mut tag_256 = [0u8; 32];
-//   let mut state_256 = crate::hacl::hash_sha2::Hacl_Hash_SHA2_malloc_256();
-//   crate::hacl::hash_sha2::Hacl_Hash_SHA2_update_256(&mut state_256, &mut input2, input2.len() as u32);
-//   crate::hacl::hash_sha2::Hacl_Hash_SHA2_digest_256(&mut state_256, &mut tag_256);
-//   assert_eq!(tag_256, tag2_256);
-//
-//   let mut tag_256 = [0u8; 32];
-//   let mut state_256 = crate::hacl::hash_sha2::Hacl_Hash_SHA2_malloc_256();
-//   crate::hacl::hash_sha2::Hacl_Hash_SHA2_update_256(&mut state_256, &mut input3, input3.len() as u32);
-//   crate::hacl::hash_sha2::Hacl_Hash_SHA2_digest_256(&mut state_256, &mut tag_256);
-//   assert_eq!(tag_256, tag3_256);
-//
-//   let mut tag_256 = [0u8; 32];
-//   let mut state_256 = crate::hacl::hash_sha2::Hacl_Hash_SHA2_malloc_256();
-//   crate::hacl::hash_sha2::Hacl_Hash_SHA2_update_256(&mut state_256, &mut input4, input4.len() as u32);
-//   crate::hacl::hash_sha2::Hacl_Hash_SHA2_digest_256(&mut state_256, &mut tag_256);
-//   assert_eq!(tag_256, tag4_256);
-//
-//   // SHA-384
-//   let mut tag_384 = [0u8; 48];
-//   let mut state_384 = crate::hacl::hash_sha2::Hacl_Hash_SHA2_malloc_384();
-//   crate::hacl::hash_sha2::Hacl_Hash_SHA2_update_384(&mut state_384, &mut input1, input1.len() as u32);
-//   crate::hacl::hash_sha2::Hacl_Hash_SHA2_digest_384(&mut state_384, &mut tag_384);
-//   assert_eq!(tag_384, tag1_384);
-//
-//   let mut tag_384 = [0u8; 48];
-//   let mut state_384 = crate::hacl::hash_sha2::Hacl_Hash_SHA2_malloc_384();
-//   crate::hacl::hash_sha2::Hacl_Hash_SHA2_update_384(&mut state_384, &mut input2, input2.len() as u32);
-//   crate::hacl::hash_sha2::Hacl_Hash_SHA2_digest_384(&mut state_384, &mut tag_384);
-//   assert_eq!(tag_384, tag2_384);
-//
-//   let mut tag_384 = [0u8; 48];
-//   let mut state_384 = crate::hacl::hash_sha2::Hacl_Hash_SHA2_malloc_384();
-//   crate::hacl::hash_sha2::Hacl_Hash_SHA2_update_384(&mut state_384, &mut input3, input3.len() as u32);
-//   crate::hacl::hash_sha2::Hacl_Hash_SHA2_digest_384(&mut state_384, &mut tag_384);
-//   assert_eq!(tag_384, tag3_384);
-//
-//   let mut tag_384 = [0u8; 48];
-//   let mut state_384 = crate::hacl::hash_sha2::Hacl_Hash_SHA2_malloc_384();
-//   crate::hacl::hash_sha2::Hacl_Hash_SHA2_update_384(&mut state_384, &mut input4, input4.len() as u32);
-//   crate::hacl::hash_sha2::Hacl_Hash_SHA2_digest_384(&mut state_384, &mut tag_384);
-//   assert_eq!(tag_384, tag4_384);
-//
-//   // SHA-512
-//   let mut tag_512 = [0u8; 64];
-//   let mut state_512 = crate::hacl::hash_sha2::Hacl_Hash_SHA2_malloc_512();
-//   crate::hacl::hash_sha2::Hacl_Hash_SHA2_update_512(&mut state_512, &mut input1, input1.len() as u32);
-//   crate::hacl::hash_sha2::Hacl_Hash_SHA2_digest_512(&mut state_512, &mut tag_512);
-//   assert_eq!(tag_512, tag1_512);
-//
-//   let mut tag_512 = [0u8; 64];
-//   let mut state_512 = crate::hacl::hash_sha2::Hacl_Hash_SHA2_malloc_512();
-//   crate::hacl::hash_sha2::Hacl_Hash_SHA2_update_512(&mut state_512, &mut input2, input2.len() as u32);
-//   crate::hacl::hash_sha2::Hacl_Hash_SHA2_digest_512(&mut state_512, &mut tag_512);
-//   assert_eq!(tag_512, tag2_512);
-//
-//   let mut tag_512 = [0u8; 64];
-//   let mut state_512 = crate::hacl::hash_sha2::Hacl_Hash_SHA2_malloc_512();
-//   crate::hacl::hash_sha2::Hacl_Hash_SHA2_update_512(&mut state_512, &mut input3, input3.len() as u32);
-//   crate::hacl::hash_sha2::Hacl_Hash_SHA2_digest_512(&mut state_512, &mut tag_512);
-//   assert_eq!(tag_512, tag3_512);
-//
-//   let mut tag_512 = [0u8; 64];
-//   let mut state_512 = crate::hacl::hash_sha2::Hacl_Hash_SHA2_malloc_512();
-//   crate::hacl::hash_sha2::Hacl_Hash_SHA2_update_512(&mut state_512, &mut input4, input4.len() as u32);
-//   crate::hacl::hash_sha2::Hacl_Hash_SHA2_digest_512(&mut state_512, &mut tag_512);
-//   assert_eq!(tag_512, tag4_512);
-//
-// }
+
+#[test]
+pub fn test_shas() {
+
+  // SHA-224
+  let mut tag_224 = [0u8; 28];
+  let mut state_224 = crate::hacl::hash_sha2::Hacl_Hash_SHA2_malloc_224();
+  crate::hacl::hash_sha2::Hacl_Hash_SHA2_update_224(&mut state_224, &mut input1, input1.len() as u32);
+  crate::hacl::hash_sha2::Hacl_Hash_SHA2_digest_224(&mut state_224, &mut tag_224);
+  assert_eq!(tag_224, tag1_224);
+
+  let mut tag_224 = [0u8; 28];
+  let mut state_224 = crate::hacl::hash_sha2::Hacl_Hash_SHA2_malloc_224();
+  crate::hacl::hash_sha2::Hacl_Hash_SHA2_update_224(&mut state_224, &mut input2, input2.len() as u32);
+  crate::hacl::hash_sha2::Hacl_Hash_SHA2_digest_224(&mut state_224, &mut tag_224);
+  assert_eq!(tag_224, tag2_224);
+
+  let mut tag_224 = [0u8; 28];
+  let mut state_224 = crate::hacl::hash_sha2::Hacl_Hash_SHA2_malloc_224();
+  crate::hacl::hash_sha2::Hacl_Hash_SHA2_update_224(&mut state_224, &mut input3, input3.len() as u32);
+  crate::hacl::hash_sha2::Hacl_Hash_SHA2_digest_224(&mut state_224, &mut tag_224);
+  assert_eq!(tag_224, tag3_224);
+
+  let mut tag_224 = [0u8; 28];
+  let mut state_224 = crate::hacl::hash_sha2::Hacl_Hash_SHA2_malloc_224();
+  crate::hacl::hash_sha2::Hacl_Hash_SHA2_update_224(&mut state_224, &mut input4, input4.len() as u32);
+  crate::hacl::hash_sha2::Hacl_Hash_SHA2_digest_224(&mut state_224, &mut tag_224);
+  assert_eq!(tag_224, tag4_224);
+
+  // SHA-256
+  let mut tag_256 = [0u8; 32];
+  let mut state_256 = crate::hacl::hash_sha2::Hacl_Hash_SHA2_malloc_256();
+  crate::hacl::hash_sha2::Hacl_Hash_SHA2_update_256(&mut state_256, &mut input1, input1.len() as u32);
+  crate::hacl::hash_sha2::Hacl_Hash_SHA2_digest_256(&mut state_256, &mut tag_256);
+  assert_eq!(tag_256, tag1_256);
+
+  let mut tag_256 = [0u8; 32];
+  let mut state_256 = crate::hacl::hash_sha2::Hacl_Hash_SHA2_malloc_256();
+  crate::hacl::hash_sha2::Hacl_Hash_SHA2_update_256(&mut state_256, &mut input2, input2.len() as u32);
+  crate::hacl::hash_sha2::Hacl_Hash_SHA2_digest_256(&mut state_256, &mut tag_256);
+  assert_eq!(tag_256, tag2_256);
+
+  let mut tag_256 = [0u8; 32];
+  let mut state_256 = crate::hacl::hash_sha2::Hacl_Hash_SHA2_malloc_256();
+  crate::hacl::hash_sha2::Hacl_Hash_SHA2_update_256(&mut state_256, &mut input3, input3.len() as u32);
+  crate::hacl::hash_sha2::Hacl_Hash_SHA2_digest_256(&mut state_256, &mut tag_256);
+  assert_eq!(tag_256, tag3_256);
+
+  let mut tag_256 = [0u8; 32];
+  let mut state_256 = crate::hacl::hash_sha2::Hacl_Hash_SHA2_malloc_256();
+  crate::hacl::hash_sha2::Hacl_Hash_SHA2_update_256(&mut state_256, &mut input4, input4.len() as u32);
+  crate::hacl::hash_sha2::Hacl_Hash_SHA2_digest_256(&mut state_256, &mut tag_256);
+  assert_eq!(tag_256, tag4_256);
+
+  // SHA-384
+  let mut tag_384 = [0u8; 48];
+  let mut state_384 = crate::hacl::hash_sha2::Hacl_Hash_SHA2_malloc_384();
+  crate::hacl::hash_sha2::Hacl_Hash_SHA2_update_384(&mut state_384, &mut input1, input1.len() as u32);
+  crate::hacl::hash_sha2::Hacl_Hash_SHA2_digest_384(&mut state_384, &mut tag_384);
+  assert_eq!(tag_384, tag1_384);
+
+  let mut tag_384 = [0u8; 48];
+  let mut state_384 = crate::hacl::hash_sha2::Hacl_Hash_SHA2_malloc_384();
+  crate::hacl::hash_sha2::Hacl_Hash_SHA2_update_384(&mut state_384, &mut input2, input2.len() as u32);
+  crate::hacl::hash_sha2::Hacl_Hash_SHA2_digest_384(&mut state_384, &mut tag_384);
+  assert_eq!(tag_384, tag2_384);
+
+  let mut tag_384 = [0u8; 48];
+  let mut state_384 = crate::hacl::hash_sha2::Hacl_Hash_SHA2_malloc_384();
+  crate::hacl::hash_sha2::Hacl_Hash_SHA2_update_384(&mut state_384, &mut input3, input3.len() as u32);
+  crate::hacl::hash_sha2::Hacl_Hash_SHA2_digest_384(&mut state_384, &mut tag_384);
+  assert_eq!(tag_384, tag3_384);
+
+  let mut tag_384 = [0u8; 48];
+  let mut state_384 = crate::hacl::hash_sha2::Hacl_Hash_SHA2_malloc_384();
+  crate::hacl::hash_sha2::Hacl_Hash_SHA2_update_384(&mut state_384, &mut input4, input4.len() as u32);
+  crate::hacl::hash_sha2::Hacl_Hash_SHA2_digest_384(&mut state_384, &mut tag_384);
+  assert_eq!(tag_384, tag4_384);
+
+  // SHA-512
+  let mut tag_512 = [0u8; 64];
+  let mut state_512 = crate::hacl::hash_sha2::Hacl_Hash_SHA2_malloc_512();
+  crate::hacl::hash_sha2::Hacl_Hash_SHA2_update_512(&mut state_512, &mut input1, input1.len() as u32);
+  crate::hacl::hash_sha2::Hacl_Hash_SHA2_digest_512(&mut state_512, &mut tag_512);
+  assert_eq!(tag_512, tag1_512);
+
+  let mut tag_512 = [0u8; 64];
+  let mut state_512 = crate::hacl::hash_sha2::Hacl_Hash_SHA2_malloc_512();
+  crate::hacl::hash_sha2::Hacl_Hash_SHA2_update_512(&mut state_512, &mut input2, input2.len() as u32);
+  crate::hacl::hash_sha2::Hacl_Hash_SHA2_digest_512(&mut state_512, &mut tag_512);
+  assert_eq!(tag_512, tag2_512);
+
+  let mut tag_512 = [0u8; 64];
+  let mut state_512 = crate::hacl::hash_sha2::Hacl_Hash_SHA2_malloc_512();
+  crate::hacl::hash_sha2::Hacl_Hash_SHA2_update_512(&mut state_512, &mut input3, input3.len() as u32);
+  crate::hacl::hash_sha2::Hacl_Hash_SHA2_digest_512(&mut state_512, &mut tag_512);
+  assert_eq!(tag_512, tag3_512);
+
+  let mut tag_512 = [0u8; 64];
+  let mut state_512 = crate::hacl::hash_sha2::Hacl_Hash_SHA2_malloc_512();
+  crate::hacl::hash_sha2::Hacl_Hash_SHA2_update_512(&mut state_512, &mut input4, input4.len() as u32);
+  crate::hacl::hash_sha2::Hacl_Hash_SHA2_digest_512(&mut state_512, &mut tag_512);
+  assert_eq!(tag_512, tag4_512);
+
+}
