@@ -51,7 +51,7 @@ $(SYMCRYPT_HOME)/rs/src/sha3.rs: $(SYMCRYPT_SOURCES)
 HACL_SOURCES= \
 		Hacl_Chacha20.c \
 		internal/Hacl_Bignum_Base.h Hacl_Bignum.c Hacl_Bignum4096.c \
-		Hacl_Streaming_Types.h internal/Hacl_Streaming_Types.h Hacl_Hash_SHA2.c \
+		Hacl_Streaming_Types.h Hacl_Hash_SHA2.c \
 		internal/Hacl_Bignum25519_51.h Hacl_Curve25519_51.c
 
 # We extract all of the tests into the same hacl directory
