@@ -56,7 +56,9 @@ typedef struct Hacl_Streaming_Types_optional_64_s
 }
 Hacl_Streaming_Types_optional_64;
 
-typedef struct Hacl_Streaming_MD_state_32_s
+typedef struct
+__attribute__((annotate("scylla_box")))
+Hacl_Streaming_MD_state_32_s
 {
   uint32_t *block_state;
   uint8_t *buf;
@@ -64,7 +66,9 @@ typedef struct Hacl_Streaming_MD_state_32_s
 }
 Hacl_Streaming_MD_state_32;
 
-typedef struct Hacl_Streaming_MD_state_64_s
+typedef struct
+__attribute__((annotate("scylla_box")))
+Hacl_Streaming_MD_state_64_s
 {
   uint64_t *block_state;
   uint8_t *buf;
