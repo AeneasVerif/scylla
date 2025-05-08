@@ -12,8 +12,9 @@ ifeq ($(shell uname -n),arm64)
   PQCRYPTO_ARCH_ARG=ARCH=ARM
 endif
 
-SYMCRYPT_HOME ?= ../SymCrypt
-PQCRYPTO_HOME ?= ../PQCrypto-LWEKE
+SYMCRYPT_HOME 	?= ../SymCrypt
+BZIP2_HOME 	?= ../bzip2
+PQCRYPTO_HOME 	?= ../PQCrypto-LWEKE
 
 # We try to figure out the best include paths, compiler options, etc. from the build system.
 SCYLLA_OPTS += --ccopts -DKRML_UNROLL_MAX=0,-I,test/hacl/include,-I,test/hacl/ --errors_as_warnings $(SCYLLA_SYSROOT_OPT) --ignore_lib_errors
@@ -35,8 +36,11 @@ build: lib/DataModel.ml
 scylla: build
 
 .PHONY: test
-test: regen-outputs test-symcrypt test-pqcrypto
+test: regen-outputs test-symcrypt test-pqcrypto test-bzip2
 	cd out/hacl && cargo test
+
+# SYMCRYPT
+# --------
 
 # Approximation -- but we are not doing the whole gcc -MM dance
 SYMCRYPT_SOURCES=$(wildcard $(addprefix $(SYMCRYPT_HOME)/,inc/symcrypt_internal.h lib/sha3.c lib/sha3_*.c lib/shake.c))
@@ -55,10 +59,35 @@ $(SYMCRYPT_HOME)/rs/src/sha3.rs: $(SYMCRYPT_SOURCES)
 	./scylla $(SCYLLA_SYSROOT_OPT) --ccopts -DSYMCRYPT_IGNORE_PLATFORM,-I$(SYMCRYPT_HOME)/inc,-I$(SYMCRYPT_HOME)/build/inc,-std=gnu11,-DSCYLLA \
 	  --errors_as_warnings --output $(dir $@) --bundle symcrypt_internal $(SYMCRYPT_SOURCES)
 
+# FRODO
+# -----
 
 .PHONY: test-pqcrypto
 test-pqcrypto:
 	$(MAKE) -C $(PQCRYPTO_HOME)/FrodoKEM $(PQCRYPTO_ARCH_ARG) OPT_LEVEL=FAST_GENERIC USE_OPENSSL=FALSE tests-rs
+
+# BZIP2
+# -----
+
+BZLIB_OBJS = $(addprefix $(BZIP2_HOME)/build/CMakeFiles/,bzip2.dir/bzip2.c.o bz2_ObjLib.dir/decompress.c.o bz2_ObjLib.dir/bzlib.c.o)
+
+.PHONY: test-bzip2
+test-bzip2: $(BZIP2_HOME)/bzip2-rs/target/release/libbzip2_rs.a build-bzip2
+	$(CC) $(BZLIB_OBJS) $< -o $(BZIP2_HOME)/build/bzip2
+	cd $(BZIP2_HOME)/build && RUST_BACKTRACE=1 ctest -V
+
+.PHONY: build-bzip2
+build-bzip2:
+	cd $(BZIP2_HOME) && mkdir -p build && cd build && cmake .. && cmake --build .
+
+# One rule in two steps because otherwise it's a mess GNU Make can't expression one recipe -
+# multiple productions
+$(BZIP2_HOME)/bzip2-rs/target/release/libbzip2_rs.a: $(wildcard $(BZIP2_HOME)/*.c $(BZIP2_HOME)/*.h)
+	./scylla --ccopts -I$(BZIP2_HOME),-DSCYLLA --errors_as_warnings --ignore_lib_errors --bundle bzlib_private $(addprefix $(BZIP2_HOME)/,scylla_glue.h bzlib_private.h blocksort.c huffman.c crctable.c randtable.c compress.c) --output $(BZIP2_HOME)/bzip2-rs/src/
+	cd $(BZIP2_HOME)/bzip2-rs && cargo build --release
+
+# HACL
+# ----
 
 HACL_SOURCES= \
 		Hacl_Chacha20.c \
@@ -77,6 +106,7 @@ regen-outputs: test-hacl
 .PHONY: test-hacl
 test-hacl: $(addprefix test/hacl/, $(HACL_SOURCES)) scylla
 	./scylla $(SCYLLA_OPTS) $(addprefix test/hacl/, $(HACL_SOURCES)) --output out/hacl/src/
+
 
 .PHONY: nix-magic
 nix-magic:

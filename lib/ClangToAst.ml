@@ -55,6 +55,9 @@ let deriving_traits: string list LidMap.t ref =
 let attributes_map: string list LidMap.t ref =
   ref LidMap.empty
 
+let exposed_globals: LidSet.t ref =
+  ref LidSet.empty
+
 (* add_to_list is only available starting from OCaml 5.1 *)
 let add_to_list x data m =
   let add = function
@@ -1639,9 +1642,9 @@ let translate_decl (decl : decl) =
         let typ = translate_typ vdecl.var_type in
         (* TODO: Flags *)
         let flags = [] in
-        (* TODO: What is the int for? JP: number of type parameters in the case of polymorphic
-           constants. *)
-        Some (DGlobal (flags, lid, 0, typ, e))
+        if Attributes.has_expose_attr vdecl.attributes then
+          exposed_globals := LidSet.add lid !exposed_globals;
+        Some (DGlobal (flags, lid, 0 (* no polymorphic constant *), typ, e))
   | RecordDecl _ ->
       None
   | TypedefDecl { name; _ } ->
