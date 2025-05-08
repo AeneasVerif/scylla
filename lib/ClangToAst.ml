@@ -1287,6 +1287,13 @@ let translate_vardecl_malloc (env : env) (vdecl : var_decl_desc) (s : stmt_desc)
     Helpers.fresh_binder vname typ,
     Krml.Ast.with_type typ (EBufCreate (Krml.Common.Heap, init_val, Helpers.oneu32)) )
 
+let maybe_align attributes (b: binder) =
+  match Attributes.retrieve_alignment attributes with
+  | Some n ->
+      { b with node = { b.node with meta = Align n :: b.node.meta } }
+  | None ->
+      b
+
 (* Same as translate_expr: we try to avoid relying on Clang-provided type information as much as
    possible *)
 let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
@@ -1298,7 +1305,7 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
       | [] -> Helpers.eunit
       | [ { desc = Decl [ { desc = Var vdecl; _ } ]; _ } ] ->
           let _, b, e = translate_vardecl env vdecl in
-          with_type TUnit (ELet (b, e, Helpers.eunit))
+          with_type TUnit (ELet (maybe_align vdecl.attributes b, e, Helpers.eunit))
       | [ stmt ] -> translate_stmt env stmt.desc
       | hd :: tl -> begin
           match hd.desc, (List.hd tl).desc with
@@ -1308,7 +1315,7 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
             when is_memset callee ->
               let env', b, e = translate_vardecl_with_memset env vdecl args in
               let e2 = translate_stmt env' (Compound (List.tl tl)) in
-              with_type e2.typ (ELet (b, e, e2))
+              with_type e2.typ (ELet (maybe_align vdecl.attributes b, e, e2))
           (* Special case when we have a malloc followed by an initializer
          for the corresponding pointer: we rewrite this into a heap array
          initialization *)
@@ -1316,7 +1323,7 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
             when is_malloc_vdecl vdecl && is_malloc_initializer vdecl stmt ->
               let env', b, e = translate_vardecl_malloc env vdecl stmt in
               let e2 = translate_stmt env' (Compound (List.tl tl)) in
-              with_type e2.typ (ELet (b, e, e2))
+              with_type e2.typ (ELet (maybe_align vdecl.attributes b, e, e2))
           (* Regular variable declaration case *)
           | Decl ds, _ ->
               let rec translate_one_decl env (decls: decl list) =
@@ -1331,7 +1338,7 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
                       else
                         b
                     in
-                    with_type e2.typ (ELet (b, adjust e b.typ, e2))
+                    with_type e2.typ (ELet (maybe_align vdecl.attributes b, adjust e b.typ, e2))
                 | _ :: _ ->
                     failwith "This decl is not a var declaration"
                 | [] ->
@@ -1760,11 +1767,8 @@ let prepopulate_type_maps (ignored_dirs: string list) (decls: deduplicated_decls
 
                     (* Carry alignment down to Rust *)
                     begin match Attributes.retrieve_alignment attributes with
-                    | Some { desc = IntegerLiteral n; _ } ->
-                        let n = Clang.Ast.int_of_literal n in
+                    | Some n ->
                         attributes_map := add_to_list_lid lid (Printf.sprintf "repr(align(%d))" n) !attributes_map
-                    | Some _ ->
-                        Krml.KPrint.bprintf "Warning: alignment for %a is not a constant, ignoring\n" plid lid
                     | None ->
                         ()
                     end;

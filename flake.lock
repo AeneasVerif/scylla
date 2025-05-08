@@ -23,11 +23,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1746556053,
-        "narHash": "sha256-rxYUfyM+EaCRsc92SgKZGZe+OClUFxudn/HGktM0P24=",
+        "lastModified": 1746651591,
+        "narHash": "sha256-oTQoapSVVissvjEiFQuffYs2ZRs8oCuektj/ILXus6U=",
         "owner": "fstarlang",
         "repo": "fstar",
-        "rev": "c1dc7af6110b324ab1a5040a0dcd0ad05d82e1fc",
+        "rev": "f3f8859e804e64c9db65ead146c56a21f3e6b2e8",
         "type": "github"
       },
       "original": {
@@ -49,11 +49,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1746638531,
-        "narHash": "sha256-Jim7eWeBZBxXzOfAbuWQarUdRahqsRw0G5y6niBxWKU=",
+        "lastModified": 1746662109,
+        "narHash": "sha256-H6DVf4w5x9N/fDY9Rz77Ds6iBEz6AYa7OLCpkQ71qnA=",
         "owner": "FStarLang",
         "repo": "karamel",
-        "rev": "87f0e98b267aa26068a3495a304d0adb99beacf4",
+        "rev": "8a8ae7f8686fe61e768f60b1cf4a5d6f319411fe",
         "type": "github"
       },
       "original": {
@@ -110,11 +110,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1746585402,
-        "narHash": "sha256-Pf+ufu6bYNA1+KQKHnGMNEfTwpD9ZIcAeLoE2yPWIP0=",
+        "lastModified": 1746671794,
+        "narHash": "sha256-V+mpk2frYIEm85iYf+KPDmCGG3zBRAEhbv0E3lHdG2U=",
         "owner": "oxalica",
         "repo": "rust-overlay",
-        "rev": "72dd969389583664f87aa348b3458f2813693617",
+        "rev": "ceec434b8741c66bb8df5db70d7e629a9d9c598f",
         "type": "github"
       },
       "original": {

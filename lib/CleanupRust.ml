@@ -9,8 +9,8 @@ let is_scalar (x: typ) =
   | Constant _ | Unit -> true
   | _ -> false
 
-let add_defaults = object
-  inherit [_] map_expr as self
+let add_defaults = object(self)
+  inherit [_] map_expr
 
   method! visit_Let () b e1 e2 =
     let e1 =

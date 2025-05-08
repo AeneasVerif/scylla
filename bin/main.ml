@@ -91,13 +91,16 @@ Supported options:|}
   (* Makes debugging the checker messages horrible, otherwise *)
   let files = Krml.Simplify.let_to_sequence#visit_files () files in
 
-  if Krml.Options.debug "ClangToAst" then begin
+  let debug_ast files =
     Format.printf "@.%!";
     Format.eprintf "@.%!";
     Krml.(Print.print PPrint.(PrintAst.print_files files ^^ hardline));
     Format.printf "@.%!";
     Format.eprintf "@.%!"
-  end;
+  in
+
+  if Krml.Options.debug "ClangToAst" then
+    debug_ast files;
 
   let had_errors, files = Krml.Checker.check_everything ~warn:true files in
   if had_errors then
@@ -115,6 +118,9 @@ Supported options:|}
   let had_errors, files = Krml.Checker.check_everything ~warn:true files in
   if had_errors then
     fatal_error "%s:%d: input Ast is ill-typed (after optimizations), aborting" __FILE__ __LINE__;
+
+  if Krml.Options.debug "AstOptim" then
+    debug_ast files;
 
   (* Addition of derives has to be done this way because we have a map from Ast lids to the derives
      we want, and if we try to do this after AstToMiniRust then we have Rust names that we do not
