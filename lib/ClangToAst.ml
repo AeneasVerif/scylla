@@ -1101,14 +1101,41 @@ and translate_field_expr env (e : expr) field_name =
   | _ ->
       Some field_name, translate_expr env e
 
-and translate_fields env t es =
-  let field_names = match LidMap.find (Helpers.assert_tlid t) !type_def_map with
-    | lazy (Flat fields) -> List.map (fun x -> Option.get (fst x)) fields
-    | _ -> failwith "impossible"
+and translate_variant env branches (tag: expr) (e: expr) =
+  let tag = match tag.desc with
+    | DesignatedInit { init = { desc = IntegerLiteral n; _}; _ } -> Clang.Ast.int_of_literal n
+    | _ ->
+        Format.eprintf "Expected integer literal for tagged union tag, got %a\n@." Clang.Expr.pp tag;
+        failwith "Could not translate tagged union expression"
   in
-  if List.length field_names <> List.length es then
-    fatal_error "TODO: partial initializers (%s but %d initialiers)" (String.concat ", " field_names) (List.length es);
-  Krml.Ast.with_type t (EFlat (List.map2 (translate_field_expr env) es field_names))
+  if tag >= List.length branches then
+    fatal_error "tag is greater than number of variants";
+  let name, _ = List.nth branches tag in
+  match e.desc with
+    | InitList [{ desc = DesignatedInit { designators = [FieldDesignator f]; init }; _ }] ->
+        if f <> name then
+          failwith "incorrect variant type for tagged union";
+        let e = translate_expr env init in
+        ECons (name, [e])
+    | _ -> failwith "Incorrect expression for tagged union"
+
+
+and translate_fields env t es =
+   match LidMap.find (Helpers.assert_tlid t) !type_def_map with
+    | lazy (Flat fields) ->
+        let field_names = List.map (fun x -> Option.get (fst x)) fields in
+        if List.length field_names <> List.length es then
+          fatal_error "TODO: partial initializers (%s but %d initialiers)" (String.concat ", " field_names) (List.length es);
+        Krml.Ast.with_type t (EFlat (List.map2 (translate_field_expr env) es field_names))
+    | lazy (Variant branches) ->
+        begin match es with
+        | [tag; e] -> Krml.Ast.with_type t (translate_variant env branches tag e)
+        | _ ->
+          fatal_error "Expected two arguments for tagged union initializer";
+        end
+
+    | _ -> failwith "impossible"
+
 
 (* Create a default value associated to a given type [typ] *)
 let create_default_value typ =
