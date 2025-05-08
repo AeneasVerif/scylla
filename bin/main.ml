@@ -129,6 +129,8 @@ Supported options:|}
     boxed_types;
     derives = Krml.Idents.LidMap.map (fun x -> List.map (fun x -> Krml.MiniRust.Custom x) x) !Scylla.ClangToAst.deriving_traits;
     attributes = !Scylla.ClangToAst.attributes_map;
+    static = !Scylla.ClangToAst.exposed_globals;
+    no_mangle = !Scylla.ClangToAst.exposed_globals;
   } in
   let files = Krml.OptimizeMiniRust.cleanup_minirust files in
   let files = Krml.OptimizeMiniRust.infer_mut_borrows files in
