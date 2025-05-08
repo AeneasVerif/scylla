@@ -1528,6 +1528,7 @@ let translate_fundecl (fdecl : function_decl) =
       (* Krml.KPrint.bprintf "Resulting decl %a\n" Krml.PrintAst.pdecl decl; *)
       Some decl
 
+
 (* Translate a field declaration inside a struct type declaration *)
 let translate_field (decl : decl) =
   match decl.desc with
@@ -1540,6 +1541,19 @@ let translate_field (decl : decl) =
       (* TODO: do not mark all fields as mutable by default? *)
       Some name, (translate_typ qual_type, true)
   | _ -> failwith "Struct declarations should only contain fields"
+
+(* Translate a union field to a variant *)
+let translate_variant (decl: decl) : Krml.Ast.branch_t =
+  let name, t_mut = translate_field decl in
+  Option.get name, [("v", t_mut)]
+
+(* Translate a union field into variant branches *)
+let translate_field_union (decl: decl) =
+  match decl.desc with
+  | RecordDecl {keyword = Union; fields; _} ->
+      let branches = List.map translate_variant fields in
+      Variant branches
+  | _ -> failwith "Second field in tagged union is not an union"
 
 let name_of_decl (decl : decl) : string =
   match decl.desc with
@@ -1747,6 +1761,15 @@ let prepopulate_type_maps (ignored_dirs: string list) (decls: deduplicated_decls
             Some
               (lazy
                 ( match StringMap.find (get_id_name name) decls with
+                | { desc = RecordDecl { fields; attributes; _ }; _ }, _
+                      when Attributes.has_adt_attr attributes ->
+                    begin match fields with
+                    | [tag; union] ->
+                        let _tag = translate_field tag in
+                        let variant = translate_field_union union in
+                        variant
+                    | _ -> failwith "Tagged union translation to an ADT assumes that the structs contains two field: the tag, and the union"
+                    end
                 | { desc = RecordDecl { fields; attributes; _ }; _ }, _ ->
                     let fields = List.map translate_field fields in
 

@@ -19,6 +19,13 @@ let default_attr = "scylla_default"
    be translated to `Box`es instead of borrows *)
 let box_attr = "scylla_box"
 
+(* An attribute to specify that a tagged union should be translated
+   to a Rust algebraic data type. We assume that the corresponding struct
+   consists of an integer field (the tag), followed by the union, and that
+   the tag ranges from 0 to the number of constructor, and matches the
+   order of the union cases. *)
+let adt_attr = "scylla_adt"
+
 (* We check for the presence of the [opaque_attr] attribute. We require it to
    be exactly the annotation *)
 let has_opaque_attr' (attr : attribute) =
@@ -36,6 +43,15 @@ let has_box_attr' (attr : attribute) =
   | _ -> false
 
 let has_box_attr (attrs : attribute list) = List.exists has_box_attr' attrs
+
+(* We check for the presence of the [adt_attr] attribute. We require it
+   to be exactly the annotation *)
+let has_adt_attr' (attr : attribute) =
+  match attr.desc with
+  | Clang__.Attributes.Annotate s -> String.equal s.annotation adt_attr
+  | _ -> false
+
+let has_adt_attr (attrs : attribute list) = List.exists has_adt_attr' attrs
 
 let retrieve_mutability' (attr : attribute) =
   match attr.desc with
