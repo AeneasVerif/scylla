@@ -8,6 +8,13 @@ ifeq ($(shell uname -s),Darwin)
   endif
 endif
 
+ifeq ($(shell uname -n),arm64)
+  PQCRYPTO_ARCH_ARG=ARCH=ARM
+endif
+
+SYMCRYPT_HOME ?= ../SymCrypt
+PQCRYPTO_HOME ?= ../PQCrypto-LWEKE
+
 # We try to figure out the best include paths, compiler options, etc. from the build system.
 SCYLLA_OPTS += --ccopts -DKRML_UNROLL_MAX=0,-I,test/hacl/include,-I,test/hacl/ --errors_as_warnings $(SCYLLA_SYSROOT_OPT) --ignore_lib_errors
 
@@ -28,7 +35,7 @@ build: lib/DataModel.ml
 scylla: build
 
 .PHONY: test
-test: regen-outputs test-symcrypt
+test: regen-outputs test-symcrypt test-pqcrypto
 	cd out/hacl && cargo test
 
 # Approximation -- but we are not doing the whole gcc -MM dance
@@ -47,6 +54,11 @@ $(SYMCRYPT_HOME)/rs/src/sha3.rs: $(SYMCRYPT_SOURCES)
 	[ x"$(SYMCRYPT_HOME)" != x ] # Error out because $$SYMCRYPT_HOME is empty
 	./scylla $(SCYLLA_SYSROOT_OPT) --ccopts -DSYMCRYPT_IGNORE_PLATFORM,-I$(SYMCRYPT_HOME)/inc,-I$(SYMCRYPT_HOME)/build/inc,-std=gnu11,-DSCYLLA \
 	  --errors_as_warnings --output $(dir $@) --bundle symcrypt_internal $(SYMCRYPT_SOURCES)
+
+
+.PHONY: test-pqcrypto
+test-pqcrypto:
+	$(MAKE) -C $(PQCRYPTO_HOME)/FrodoKEM $(PQCRYPTO_ARCH_ARG) OPT_LEVEL=FAST_GENERIC USE_OPENSSL=FALSE tests-rs
 
 HACL_SOURCES= \
 		Hacl_Chacha20.c \
