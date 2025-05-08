@@ -761,6 +761,9 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
         | TInt w as t ->
             let signed = K.is_signed w in
             with_type t (EConstant (w, Clang.Ast.string_of_integer_literal ~signed n))
+        | TBool ->
+            let signed = false in
+            with_type TBool (EConstant (Bool, Clang.Ast.string_of_integer_literal ~signed n))
         | t -> fatal_error "integer literal does not have an int type, it has %a" ptyp t
       end
     | FloatingLiteral _ -> failwith "translate_expr: floating literal"
@@ -812,7 +815,7 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
         mark_mut_if_variable env o;
         let w = Helpers.assert_tint o.typ in
         (* We rewrite `name++` into `name := name + 1` *)
-        let assignment = 
+        let assignment =
           with_type TUnit
           @@ EAssign (o, Krml.Ast.with_type o.typ (EApp (Helpers.mk_op K.Sub w, [ o; Helpers.one w ])))
         in

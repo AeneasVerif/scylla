@@ -16,7 +16,7 @@ SYMCRYPT_HOME ?= ../SymCrypt
 PQCRYPTO_HOME ?= ../PQCrypto-LWEKE
 
 # We try to figure out the best include paths, compiler options, etc. from the build system.
-SCYLLA_OPTS += --ccopts -DKRML_UNROLL_MAX=0,-I,test/include,-I,test/ --errors_as_warnings $(SCYLLA_SYSROOT_OPT)
+SCYLLA_OPTS += --ccopts -DKRML_UNROLL_MAX=0,-I,test/hacl/include,-I,test/hacl/ --errors_as_warnings $(SCYLLA_SYSROOT_OPT) --ignore_lib_errors
 
 .PHONY: all
 all: build format-check
@@ -55,21 +55,28 @@ $(SYMCRYPT_HOME)/rs/src/sha3.rs: $(SYMCRYPT_SOURCES)
 	./scylla $(SCYLLA_SYSROOT_OPT) --ccopts -DSYMCRYPT_IGNORE_PLATFORM,-I$(SYMCRYPT_HOME)/inc,-I$(SYMCRYPT_HOME)/build/inc,-std=gnu11,-DSCYLLA \
 	  --errors_as_warnings --output $(dir $@) --bundle symcrypt_internal $(SYMCRYPT_SOURCES)
 
+
 .PHONY: test-pqcrypto
 test-pqcrypto:
 	$(MAKE) -C $(PQCRYPTO_HOME)/FrodoKEM $(PQCRYPTO_ARCH_ARG) OPT_LEVEL=FAST_GENERIC USE_OPENSSL=FALSE tests-rs
 
+HACL_SOURCES= \
+		Hacl_Chacha20.c \
+		internal/Hacl_Bignum_Base.h Hacl_Bignum.c Hacl_Bignum4096.c \
+		Hacl_Streaming_Types.h Hacl_Hash_SHA2.c \
+		internal/Hacl_Bignum25519_51.h Hacl_Curve25519_51.c \
+		Hacl_MAC_Poly1305.c \
+		internal/Hacl_P256_PrecompTable.h Hacl_P256.c \
+		Hacl_AEAD_Chacha20Poly1305.c
+
 # We extract all of the tests into the same hacl directory
 .PHONY: regen-outputs
-regen-outputs: test-chacha test-bignum_base test-bignum
+regen-outputs: test-hacl
 	for f in rs/*.rs; do cp $$f out/hacl/src/; done
 
-test-bignum:
-	./scylla $(SCYLLA_OPTS) test/internal/Hacl_Bignum_Base.h test/Hacl_Bignum.c test/Hacl_Bignum4096.c --output out/hacl/src/
-
-.PHONY: test-%
-test-%: test/%.c $(wildcard test/include/*) scylla
-	./scylla $(SCYLLA_OPTS) $< --output out/hacl/src/ --ignore_lib_errors
+.PHONY: test-hacl
+test-hacl: $(addprefix test/hacl/, $(HACL_SOURCES)) scylla
+	./scylla $(SCYLLA_OPTS) $(addprefix test/hacl/, $(HACL_SOURCES)) --output out/hacl/src/
 
 .PHONY: nix-magic
 nix-magic:
