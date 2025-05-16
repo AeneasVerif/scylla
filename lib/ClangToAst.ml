@@ -1498,6 +1498,40 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
   | If { cond = { desc = BinaryOperator { lhs; kind = NE; rhs }; _ }; then_branch; _ }
     when has_pointer_type lhs && is_null rhs -> translate_stmt env then_branch.desc
 
+  (* We recognize here patterns of the shape `if x.tag == i`, when x is
+     a variable whose type `typ` was annotated with the scylla_adt attribute.
+     This type was previously checked to be a tagged union, with shape
+     ```
+     { int tag;
+       union {
+        t0 case0;
+        t1 case1;
+        ...
+        tn casen;
+      }
+    }
+    ```
+
+    and translated to the ADT
+    ```
+    case0 { v: t0 },
+    case1 { v: t1 },
+    ...
+    casen { v : tn }
+    ```
+
+    We translate the if/then/else to
+    `match x with | casei { v } -> then_branch | _ -> else_branch`,
+
+    Inside the then_branch, we will track that the tagged union x is currently
+    in the `casei` state, and will replace all occurences of x.casei
+    by the variable v, which is the payload of the casei constructor.
+    All occurences of x.casej where j is different from i will raise
+    an error.
+
+    Inside the else branch, we have no information about the state of the
+    tagged union, and will therefore raise an error for any x.casej access.
+  *)
   | If { cond; then_branch; else_branch; _ } when is_tag_check env cond ->
       let var, variant, varname = deconstruct_tag_check env cond in
 
