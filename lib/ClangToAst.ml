@@ -72,16 +72,22 @@ let add_to_list_lid x data m =
 
 (* ENVIRONMENTS *)
 
+(* For a given tagged union variable, we store the case (variant name) it is currently
+  in, as well as the variable corresponding to the constructor contents pattern *)
+type tagged_case = { case: string; var: string }
+
 type env = {
   (* Variables in the context, with their types, and a reference to tell whether they end up being
-     mutated as some point. *)
-  vars : (string * typ * bool ref) list;
+     mutated as some point.
+    The last reference is used if the variable is a tagged union, to store information about its current state.
+  *)
+  vars : (string * typ * bool ref * tagged_case option ref) list;
   (* Expected return typ of the function *)
   ret_t : typ;
 }
 
 let empty_env = { vars = []; ret_t = TAny }
-let add_var env (x, t) = { env with vars = (x, t, ref false) :: env.vars }
+let add_var env (x, t) = { env with vars = (x, t, ref false, ref None) :: env.vars }
 
 let add_binders env binders =
   List.fold_left
@@ -92,22 +98,22 @@ let add_binders env binders =
 
 (* TODO: Handle fully qualified names/namespaces/different files. *)
 let find_var env name =
-  let exception Found of int * typ * bool ref in
+  let exception Found of int * typ * bool ref * tagged_case option ref in
   try
     List.iteri
-      (fun i (name', t, mut) ->
+      (fun i (name', t, mut, case) ->
         if name = name' then
-          raise (Found (i, t, mut)))
+          raise (Found (i, t, mut, case)))
       env.vars;
     raise Not_found
   with
-  | Found (i, t, mut) -> with_type t (EBound i), mut
+  | Found (i, t, mut, case) -> with_type t (EBound i), mut, case
   | Not_found -> (
       try
         let path = StringMap.find name !name_map in
         let t = StringMap.find name !global_type_map in
         (* FIXME handle mutable globals *)
-        with_type t (EQualified ([ path ], name)), ref false
+        with_type t (EQualified ([ path ], name)), ref false, ref None
       with Not_found ->
         Printf.eprintf "Could not find variable %s\n" name;
         raise Not_found)
@@ -348,7 +354,7 @@ let translate_typ t = normalize_type (translate_typ t)
 let translate_typ_name t = normalize_type (translate_typ_name t)
 let find_var env name =
   match find_var env name with
-  | { node = EQualified _; _ } as e, mut -> { e with typ = normalize_type e.typ }, mut
+  | { node = EQualified _; _ } as e, mut, case -> { e with typ = normalize_type e.typ }, mut, case
   | e -> e
 
 (* Indicate that we synthesize the type of an expression based on the information provided by
@@ -583,9 +589,14 @@ let adjust e t =
         fatal_error "Could not convert expression %a: %a to have type %a" pexpr e ptyp e.typ ptyp t;
       e
 
+let fst4 (a, _, _, _) = a
+let snd4 (_, b, _, _) = b
+let thd4 (_, _, c, _) = c
+let fth4 (_, _, _, d) = d
+
 let mark_mut_if_variable env e =
   match e.node with
-  | EBound i -> thd3 (List.nth env.vars i) := true
+  | EBound i -> thd4 (List.nth env.vars i) := true
   | _ -> ()
 
 (* A function that behaves like compare, but implements C's notion of rank
@@ -921,7 +932,7 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
         let rhs = translate_expr env rhs in
         mk_binop lhs kind rhs
     | DeclRef { name; _ } ->
-        let e, _ = get_id_name name |> find_var env in
+        let e, _, _ = get_id_name name |> find_var env in
         (* Krml.KPrint.bprintf "%a: %a\n" pexpr e ptyp e.typ; *)
         e
     | Call { callee; args } when is_scylla_reset callee -> begin
@@ -1170,7 +1181,7 @@ let deconstruct_tag_check env (cond : expr) = match cond.desc with
        kind = EQ;
        rhs = {desc = IntegerLiteral (Int n); _}
      } ->
-       let e, _ = get_id_name name |> find_var env in
+       let e, _, _ = get_id_name name |> find_var env in
        e, n
   | _ -> failwith "not a tag_check"
 
@@ -1229,7 +1240,7 @@ let translate_vardecl (env : env) (vdecl : var_decl_desc) : env * binder * Krml.
       | _ -> failwith "calloc is expected to have two arguments"
     end
   | Some { desc = DeclRef { name; _ }; _ } ->
-      let var, _ = get_id_name name |> find_var env in
+      let var, _, _ = get_id_name name |> find_var env in
       let e =
         match typ with
         (* If we have a statement of the shape `let x = y` where y is a pointer,
@@ -1390,7 +1401,7 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
                     (* TODO: analysis that figures out what needs to be mut *)
                     let e2 = translate_one_decl env decls in
                     let b =
-                      if !(thd3 (List.hd env.vars)) then
+                      if !(thd4 (List.hd env.vars)) then
                         Helpers.mark_mut b
                       else
                         b
@@ -1631,7 +1642,7 @@ let translate_fundecl (fdecl : function_decl) =
       let lid = Option.get (lid_of_name name) in
       let binders =
         List.map2
-          (fun b (_, _, m) -> { b with node = { b.node with mut = !m } })
+          (fun b (_, _, m, _) -> { b with node = { b.node with mut = !m } })
           binders (List.rev env.vars)
       in
 
