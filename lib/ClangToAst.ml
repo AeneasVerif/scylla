@@ -1169,14 +1169,21 @@ and translate_fields env t es =
 
     | _ -> failwith "impossible"
 
-let is_tag_check (cond : expr) = match cond.desc with
+let is_tag_check env (cond : expr) = match cond.desc with
   | BinaryOperator {
-    lhs = { desc = Member {base = Some {desc = DeclRef _; _}; arrow = false; field = FieldName { desc; _}}; _} ;
+    lhs = { desc = Member {base = Some {desc = DeclRef {name; _}; _}; arrow = false; field = FieldName { desc; _}}; _} ;
        kind = EQ;
        rhs = {desc = IntegerLiteral _; _}
      } ->
       (* We assume that the tag field will always be called "tag" *)
-       get_id_name desc.name = "tag"
+       get_id_name desc.name = "tag" && (
+      (* And we check whether the variable has been registered as a tagged union *)
+         let var, _, _ = get_id_name name |> find_var env in
+         let lid = Helpers.assert_tlid var.typ in
+         match LidMap.find_opt lid !type_def_map with
+         | Some (lazy (Variant _)) -> true
+         | _ -> false
+      )
   | _ -> false
 
 let deconstruct_tag_check env (cond : expr) = match cond.desc with
@@ -1466,7 +1473,7 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
   | If { cond = { desc = BinaryOperator { lhs; kind = NE; rhs }; _ }; then_branch; _ }
     when has_pointer_type lhs && is_null rhs -> translate_stmt env then_branch.desc
 
-  | If { cond; then_branch; else_branch; _ } when is_tag_check cond ->
+  | If { cond; then_branch; else_branch; _ } when is_tag_check env cond ->
       let var, variant, case_ref = deconstruct_tag_check env cond in
 
       let lid = Helpers.assert_tlid var.typ in
