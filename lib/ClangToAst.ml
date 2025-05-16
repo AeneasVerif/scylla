@@ -79,18 +79,20 @@ let add_to_list_lid x data m =
   in, as well as the variable corresponding to the constructor contents pattern *)
 type tagged_case = { case: string; var: string }
 
+(* A variable in the context. It contains its name, type, a reference to tell
+   whether they end up being mutated at some point, and meta information about
+   whether they are a tagged union, and if so their current state *)
+type env_var = { name: string; t: typ; mut: bool ref; case: tagged_case option ref }
+
 type env = {
-  (* Variables in the context, with their types, and a reference to tell whether they end up being
-     mutated as some point.
-    The last reference is used if the variable is a tagged union, to store information about its current state.
-  *)
-  vars : (string * typ * bool ref * tagged_case option ref) list;
+  (* Variables in the context *)
+  vars : env_var list;
   (* Expected return typ of the function *)
   ret_t : typ;
 }
 
 let empty_env = { vars = []; ret_t = TAny }
-let add_var env (x, t) = { env with vars = (x, t, ref false, ref None) :: env.vars }
+let add_var env (x, t) = { env with vars = { name = x; t; mut = ref false; case = ref None} :: env.vars }
 
 let add_binders env binders =
   List.fold_left
@@ -104,7 +106,7 @@ let find_var env name =
   let exception Found of int * typ * bool ref * tagged_case option ref in
   try
     List.iteri
-      (fun i (name', t, mut, case) ->
+      (fun i { name = name'; t; mut; case } ->
         if name = name' then
           raise (Found (i, t, mut, case)))
       env.vars;
@@ -592,14 +594,9 @@ let adjust e t =
         fatal_error "Could not convert expression %a: %a to have type %a" pexpr e ptyp e.typ ptyp t;
       e
 
-let fst4 (a, _, _, _) = a
-let snd4 (_, b, _, _) = b
-let thd4 (_, _, c, _) = c
-let fth4 (_, _, _, d) = d
-
 let mark_mut_if_variable env e =
   match e.node with
-  | EBound i -> thd4 (List.nth env.vars i) := true
+  | EBound i -> (List.nth env.vars i).mut := true
   | _ -> ()
 
 (* A function that behaves like compare, but implements C's notion of rank
@@ -1078,7 +1075,7 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
               match snd branch with
               | [_] ->
                   let var = match base.node with | EBound n -> List.nth env.vars n | _ -> failwith "Tagged union access is only supported on a variable" in
-                  begin match !(fth4 var) with
+                  begin match !(var.case) with
                   | Some { case; var } when case = f ->
                       let e, _, _ = find_var env var in
                       e
@@ -1422,7 +1419,7 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
                     (* TODO: analysis that figures out what needs to be mut *)
                     let e2 = translate_one_decl env decls in
                     let b =
-                      if !(thd4 (List.hd env.vars)) then
+                      if !((List.hd env.vars).mut) then
                         Helpers.mark_mut b
                       else
                         b
@@ -1670,7 +1667,8 @@ let translate_fundecl (fdecl : function_decl) =
       let lid = Option.get (lid_of_name name) in
       let binders =
         List.map2
-          (fun b (_, _, m, _) -> { b with node = { b.node with mut = !m } })
+          (fun (b : binder) { mut ; _ } ->
+              let m = !mut in { b with node = { b.node with mut = m } })
           binders (List.rev env.vars)
       in
 
