@@ -82,7 +82,7 @@ type tagged_case = { case: string; var: string }
 (* A variable in the context. It contains its name, type, a reference to tell
    whether they end up being mutated at some point, and meta information about
    whether they are a tagged union, and if so their current state *)
-type env_var = { name: string; t: typ; mut: bool ref; case: tagged_case option ref }
+type env_var = { name: string; t: typ; mut: bool ref; case: tagged_case option }
 
 type env = {
   (* Variables in the context *)
@@ -92,7 +92,17 @@ type env = {
 }
 
 let empty_env = { vars = []; ret_t = TAny }
-let add_var env (x, t) = { env with vars = { name = x; t; mut = ref false; case = ref None} :: env.vars }
+let add_var env (x, t) = { env with vars = { name = x; t; mut = ref false; case = None} :: env.vars }
+
+(* Refines the `case` field corresponding to the variable `x`.
+   This updates the first variable `x` in the vars context, corresponding
+   to the currently live `x` *)
+let refine_var_case env x case =
+  let rec aux = function
+    | [] -> fatal_error "Did not find variable %s in list" x
+    | hd :: tl when hd.name = x -> { hd with case } :: tl
+    | hd :: tl -> hd :: aux tl
+  in {env with vars = aux env.vars }
 
 let add_binders env binders =
   List.fold_left
@@ -103,7 +113,7 @@ let add_binders env binders =
 
 (* TODO: Handle fully qualified names/namespaces/different files. *)
 let find_var env name =
-  let exception Found of int * typ * bool ref * tagged_case option ref in
+  let exception Found of int * typ * bool ref * tagged_case option in
   try
     List.iteri
       (fun i { name = name'; t; mut; case } ->
@@ -118,7 +128,7 @@ let find_var env name =
         let path = StringMap.find name !name_map in
         let t = StringMap.find name !global_type_map in
         (* FIXME handle mutable globals *)
-        with_type t (EQualified ([ path ], name)), ref false, ref None
+        with_type t (EQualified ([ path ], name)), ref false, None
       with Not_found ->
         Printf.eprintf "Could not find variable %s\n" name;
         raise Not_found)
@@ -1075,7 +1085,7 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
               match snd branch with
               | [_] ->
                   let var = match base.node with | EBound n -> List.nth env.vars n | _ -> failwith "Tagged union access is only supported on a variable" in
-                  begin match !(var.case) with
+                  begin match var.case with
                   | Some { case; var } when case = f ->
                       let e, _, _ = find_var env var in
                       e
@@ -1192,8 +1202,9 @@ let deconstruct_tag_check env (cond : expr) = match cond.desc with
        kind = EQ;
        rhs = {desc = IntegerLiteral (Int n); _}
      } ->
-       let e, _, case_ref = get_id_name name |> find_var env in
-       e, n, case_ref
+       let name = get_id_name name in
+       let e, _, _ = find_var env name in
+       e, n, name
   | _ -> failwith "not a tag_check"
 
 (* Create a default value associated to a given type [typ] *)
@@ -1481,7 +1492,7 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
     when has_pointer_type lhs && is_null rhs -> translate_stmt env then_branch.desc
 
   | If { cond; then_branch; else_branch; _ } when is_tag_check env cond ->
-      let var, variant, case_ref = deconstruct_tag_check env cond in
+      let var, variant, varname = deconstruct_tag_check env cond in
 
       let lid = Helpers.assert_tlid var.typ in
       let case, fs = match LidMap.find_opt lid !type_def_map with
@@ -1509,15 +1520,13 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
       *)
       let env_binder_name = binder.node.name ^ "!!" ^ show_atom_t binder.node.atom in
       let new_env = add_var env (env_binder_name, case_t) in
+      let new_env = refine_var_case new_env varname (Some {case; var = env_binder_name}) in
 
       (* We only change the state of the tagged union case to translate the if branch,
          which is the one where we checked the tag of the variable *)
       (* TODO: Should we sanity-check that old is None? As, if we are already in
          a tagged union case, there is no need for rechecking the tag? *)
-      let old = !case_ref in
-      case_ref := Some { case; var = env_binder_name };
       let then_e = translate_stmt new_env then_branch.desc in
-      case_ref := old;
 
       let else_e = match else_branch with
         | None -> Helpers.eunit
