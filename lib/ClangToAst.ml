@@ -1207,6 +1207,13 @@ let deconstruct_tag_check env (cond : expr) = match cond.desc with
        e, n, name
   | _ -> failwith "not a tag_check"
 
+(* Assuming that [lid] corresponds to a tagged union type, which was
+   therefore translated to a variant type, retrieves the branch
+   corresponding to the [n]-th constructor (starting count at 0) *)
+let lookup_nth_branch lid n = match LidMap.find_opt lid !type_def_map with
+  | Some (lazy (Variant branches)) -> List.nth branches n
+  | _ -> fatal_error "Expected a tagged union expression"
+
 (* Create a default value associated to a given type [typ] *)
 let create_default_value typ =
   match typ with
@@ -1495,15 +1502,9 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
       let var, variant, varname = deconstruct_tag_check env cond in
 
       let lid = Helpers.assert_tlid var.typ in
-      let case, fs = match LidMap.find_opt lid !type_def_map with
-        | Some (lazy (Variant branches)) -> List.nth branches variant
-        | _ -> fatal_error "Expected a tagged union expression"
-      in
+      let case, fs = lookup_nth_branch lid variant in
 
-      let name, case_t = match fs with
-        | [(n, (t, _))] -> n, t
-        | _ -> failwith "Tagged union case has more than one field"
-      in
+      let name, (case_t, _) = Krml.KList.one fs in
 
       let binder = Helpers.fresh_binder name case_t in
       let pat = Krml.Ast.with_type case_t (PBound 0) in
