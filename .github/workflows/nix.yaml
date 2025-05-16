@@ -27,6 +27,22 @@ jobs:
           submodules: true
           ref: protz/scylla
 
+      - name: Clone frodo
+        uses: actions/checkout@v4
+        with:
+          repository: msprotz/PQCrypto-LWEKE
+          path: pqcrypto-lweke
+          submodules: true
+          ref: master
+
+      - name: Clone bzip2
+        uses: actions/checkout@v4
+        with:
+          repository: msprotz/bzip2
+          path: bzip2
+          submodules: true
+          ref: master
+
       - name: Build symcrypt
         working-directory: symcrypt
         run: |
@@ -36,6 +52,8 @@ jobs:
         working-directory: scylla
         run: |
           export SYMCRYPT_HOME=$GITHUB_WORKSPACE/symcrypt
+          export PQCRYPTO_HOME=$GITHUB_WORKSPACE/pqcrypto-lweke
+          export BZIP2_HOME=$GITHUB_WORKSPACE/bzip2
           nix develop --command make test
 
       - name: Check output

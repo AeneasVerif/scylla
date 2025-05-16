@@ -91,13 +91,16 @@ Supported options:|}
   (* Makes debugging the checker messages horrible, otherwise *)
   let files = Krml.Simplify.let_to_sequence#visit_files () files in
 
-  if Krml.Options.debug "ClangToAst" then begin
+  let debug_ast files =
     Format.printf "@.%!";
     Format.eprintf "@.%!";
     Krml.(Print.print PPrint.(PrintAst.print_files files ^^ hardline));
     Format.printf "@.%!";
     Format.eprintf "@.%!"
-  end;
+  in
+
+  if Krml.Options.debug "ClangToAst" then
+    debug_ast files;
 
   let had_errors, files = Krml.Checker.check_everything ~warn:true files in
   if had_errors then
@@ -116,6 +119,9 @@ Supported options:|}
   if had_errors then
     fatal_error "%s:%d: input Ast is ill-typed (after optimizations), aborting" __FILE__ __LINE__;
 
+  if Krml.Options.debug "AstOptim" then
+    debug_ast files;
+
   (* Addition of derives has to be done this way because we have a map from Ast lids to the derives
      we want, and if we try to do this after AstToMiniRust then we have Rust names that we do not
      know how to match with Ast names. *)
@@ -123,6 +129,8 @@ Supported options:|}
     boxed_types;
     derives = Krml.Idents.LidMap.map (fun x -> List.map (fun x -> Krml.MiniRust.Custom x) x) !Scylla.ClangToAst.deriving_traits;
     attributes = !Scylla.ClangToAst.attributes_map;
+    static = !Scylla.ClangToAst.exposed_globals;
+    no_mangle = !Scylla.ClangToAst.exposed_globals;
   } in
   let files = Krml.OptimizeMiniRust.cleanup_minirust files in
   let files = Krml.OptimizeMiniRust.infer_mut_borrows files in

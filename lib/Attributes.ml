@@ -26,32 +26,29 @@ let box_attr = "scylla_box"
    order of the union cases. *)
 let adt_attr = "scylla_adt"
 
+(* Expose directly as a C FFI function or global, with #[no_mangle] and the like *)
+let expose_attr = "scylla_expose"
+
+let has a (attrs : attribute list) =
+  List.exists (fun (attr: attribute) ->
+    match attr.desc with
+    | Clang__.Attributes.Annotate s -> String.equal s.annotation a
+    | _ -> false
+  ) attrs
+
 (* We check for the presence of the [opaque_attr] attribute. We require it to
    be exactly the annotation *)
-let has_opaque_attr' (attr : attribute) =
-  match attr.desc with
-  | Clang__.Attributes.Annotate s -> String.equal s.annotation opaque_attr
-  | _ -> false
-
-let has_opaque_attr (attrs : attribute list) = List.exists has_opaque_attr' attrs
+let has_opaque_attr = has opaque_attr
 
 (* We check for the presence of the [box_attr] attribute. We require it to
    be exactly the annotation *)
-let has_box_attr' (attr : attribute) =
-  match attr.desc with
-  | Clang__.Attributes.Annotate s -> String.equal s.annotation box_attr
-  | _ -> false
+let has_box_attr = has box_attr
 
-let has_box_attr (attrs : attribute list) = List.exists has_box_attr' attrs
+let has_expose_attr = has expose_attr
 
 (* We check for the presence of the [adt_attr] attribute. We require it
    to be exactly the annotation *)
-let has_adt_attr' (attr : attribute) =
-  match attr.desc with
-  | Clang__.Attributes.Annotate s -> String.equal s.annotation adt_attr
-  | _ -> false
-
-let has_adt_attr (attrs : attribute list) = List.exists has_adt_attr' attrs
+let has_adt_attr = has adt_attr
 
 let retrieve_mutability' (attr : attribute) =
   match attr.desc with
@@ -96,7 +93,14 @@ let retrieve_mutability (attrs : attribute list) =
 let retrieve_alignment (attrs: attribute list) =
   List.find_map (fun (x: attribute) ->
     match x.desc with
-    | Clang__.Attributes.Aligned { alignment_expr; _ } -> Some alignment_expr
+    | Clang__.Attributes.Aligned { alignment_expr; _ } ->
+        begin match alignment_expr with
+        | { desc = IntegerLiteral n; _ } ->
+            Some (Clang.Ast.int_of_literal n)
+        | _ ->
+            Krml.KPrint.bprintf "Warning: alignment is not a constant, ignoring\n";
+            None
+        end
     | _ -> None
   ) attrs
 
