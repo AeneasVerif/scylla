@@ -1073,10 +1073,14 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
 
               begin
               match snd branch with
-              | [(_id, (t, _))] ->
-                  (* TODO: Fix this. Should not be EBound, but retrieved in environment,
-                     and should be checked to be in the correct tagged union case *)
-                  Krml.Ast.with_type t (EBound 0)
+              | [_] ->
+                  let var = match base.node with | EBound n -> List.nth env.vars n | _ -> failwith "Tagged union access is only supported on a variable" in
+                  begin match !(fth4 var) with
+                  | Some { case; var } when case = f ->
+                      let e, _, _ = find_var env var in
+                      e
+                  | _ -> failwith "Tagged union variable is not in the correct case"
+                  end
               | _ -> failwith "More than one field in tagged union case"
               end
           | Some (lazy (Flat fields)) ->
