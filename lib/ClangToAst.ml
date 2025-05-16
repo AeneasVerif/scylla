@@ -1453,17 +1453,6 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
 
   | If { cond; then_branch; else_branch; _ } when is_tag_check cond ->
       let var, variant = deconstruct_tag_check env cond in
-      let then_e = translate_stmt env then_branch.desc in
-      let else_e = match else_branch with
-        | None -> Helpers.eunit
-        | Some el -> translate_stmt env el.desc
-      in
-      let t =
-        match then_e.typ, else_e.typ with
-        | TAny, t -> t
-        | t, TAny -> t
-        | _ -> then_e.typ
-      in
 
       let lid = Helpers.assert_tlid var.typ in
       let case, fs = match LidMap.find_opt lid !type_def_map with
@@ -1478,8 +1467,34 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
 
       let binder = Helpers.fresh_binder name case_t in
       let pat = Krml.Ast.with_type case_t (PBound 0) in
-      (* TODO: Where/How to add the binder, and link it to the variable *)
+      (* We need to add the new binder to the environment before translating
+         the branches.
+         We also need to be able to later retrieve the content of the variant
+         constructor when accessing the corresponding field.
+         To do so, we store in the environment a variable called v!!{atom},
+         where {atom} is replaced by the binder's atom.
+         We then update the environment for `var` to store that it is a tagged
+         union in case `case`, and that the corresponding content is ``v!!{atom}`.
+         Importantly, `v!!{atom}` is not a valid variable name, and therefore does
+         not conflict with existing variables.
+      *)
+      let env_binder_name = binder.node.name ^ "!!" ^ show_atom_t binder.node.atom in
+      let new_env = add_var env (env_binder_name, case_t) in
       (* TODO: Store that var is in case variant *)
+
+      let then_e = translate_stmt new_env then_branch.desc in
+      let else_e = match else_branch with
+        | None -> Helpers.eunit
+        (* We translate the else branch with the old environment, without
+           adding a binder for the pattern *)
+        | Some el -> translate_stmt env el.desc
+      in
+      let t =
+        match then_e.typ, else_e.typ with
+        | TAny, t -> t
+        | t, TAny -> t
+        | _ -> then_e.typ
+      in
 
       let then_branch = [binder], Krml.Ast.with_type t (PCons (case, [pat])), then_e in
       let else_branch = [], Krml.Ast.with_type t PWild, else_e in
