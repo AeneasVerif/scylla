@@ -1030,6 +1030,7 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
         in
         with_type else_branch.typ (EIfThenElse (cond, then_branch, else_branch))
     | Paren _ -> failwith "translate_expr: paren"
+
     | Member { base; arrow; field } ->
         let base =
           match base with
@@ -1038,41 +1039,58 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
         in
         let base = translate_expr env base in
 
+        let lid =
+          Helpers.assert_tlid
+            (if arrow then
+               Helpers.assert_tbuf base.typ
+             else
+               base.typ)
+        in
+
         let f =
           match field with
           | FieldName { desc; _ } -> get_id_name desc.name
-          | _ -> failwith "member node: only field accesses supported"
+        | _ -> failwith "member node: only field accesses supported"
         in
 
-        let field_t =
-          let lid =
-            Helpers.assert_tlid
-              (if arrow then
-                 Helpers.assert_tbuf base.typ
-               else
-                 base.typ)
-          in
-          match LidMap.find_opt lid !type_def_map with
+        begin match LidMap.find_opt lid !type_def_map with
+          | Some (lazy (Variant branches)) ->
+              let branch = match List.find_opt (fun b -> fst b = f) branches with
+                | Some b -> b
+                | None -> fatal_error "Field %s of %a not found in tagged union" f plid lid
+              in
+
+              begin
+              match snd branch with
+              | [(_id, (t, _))] ->
+                  (* TODO: Fix this. Should not be EBound, but retrieved in environment,
+                     and should be checked to be in the correct tagged union case *)
+                  Krml.Ast.with_type t (EBound 0)
+              | _ -> failwith "More than one field in tagged union case"
+              end
           | Some (lazy (Flat fields)) ->
-              if List.mem_assoc (Some f) fields then
-                fst (List.assoc (Some f) fields)
-              else
-                fatal_error "Field %s of %a not found in struct def (available fields are: %s)"
-                  f plid lid
-                  (String.concat ", " (List.map (fun (f, _) -> Option.value ~default:"<noname>" f) fields))
-          | Some _ -> fatal_error "Taking a field of %a which is not a struct" plid lid
-          | None -> fatal_error "Taking a field of %a which is not in the map" plid lid
-        in
 
-        if not arrow then
-          (* base.f *)
-          with_type field_t (EField (base, f))
-        else
-          (* base->f *)
-          let deref_base =
-            Helpers.(with_type (assert_tbuf base.typ) (EBufRead (base, Helpers.zero_usize)))
-          in
-          with_type field_t (EField (deref_base, f))
+              let field_t =
+                if List.mem_assoc (Some f) fields then
+                  fst (List.assoc (Some f) fields)
+                else
+                  fatal_error "Field %s of %a not found in struct def (available fields are: %s)"
+                    f plid lid
+                    (String.concat ", " (List.map (fun (f, _) -> Option.value ~default:"<noname>" f) fields))
+              in
+              if not arrow then
+                (* base.f *)
+                with_type field_t (EField (base, f))
+              else
+                (* base->f *)
+                let deref_base =
+                  Helpers.(with_type (assert_tbuf base.typ) (EBufRead (base, Helpers.zero_usize)))
+                in
+                with_type field_t (EField (deref_base, f))
+
+            | Some _ -> fatal_error "Taking a field of %a which is not a struct nor a tagged union" plid lid
+            | None -> fatal_error "Taking a field of %a which is not in the map" plid lid
+        end
     | UnaryExpr { kind = SizeOf; argument = ArgumentType t; _ } -> begin
         match translate_typ t with
         | TInt w -> Helpers.mk_sizet (Krml.Constant.bytes_of_width w)
@@ -1136,6 +1154,25 @@ and translate_fields env t es =
 
     | _ -> failwith "impossible"
 
+let is_tag_check (cond : expr) = match cond.desc with
+  | BinaryOperator {
+    lhs = { desc = Member {base = Some {desc = DeclRef _; _}; arrow = false; field = FieldName { desc; _}}; _} ;
+       kind = EQ;
+       rhs = {desc = IntegerLiteral _; _}
+     } ->
+      (* We assume that the tag field will always be called "tag" *)
+       get_id_name desc.name = "tag"
+  | _ -> false
+
+let deconstruct_tag_check env (cond : expr) = match cond.desc with
+  | BinaryOperator {
+    lhs = { desc = Member {base = Some {desc = DeclRef {name; _}; _}; _}; _} ;
+       kind = EQ;
+       rhs = {desc = IntegerLiteral (Int n); _}
+     } ->
+       let e, _ = get_id_name name |> find_var env in
+       e, n
+  | _ -> failwith "not a tag_check"
 
 (* Create a default value associated to a given type [typ] *)
 let create_default_value typ =
@@ -1413,6 +1450,41 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
     end
   | If { cond = { desc = BinaryOperator { lhs; kind = NE; rhs }; _ }; then_branch; _ }
     when has_pointer_type lhs && is_null rhs -> translate_stmt env then_branch.desc
+
+  | If { cond; then_branch; else_branch; _ } when is_tag_check cond ->
+      let var, variant = deconstruct_tag_check env cond in
+      let then_e = translate_stmt env then_branch.desc in
+      let else_e = match else_branch with
+        | None -> Helpers.eunit
+        | Some el -> translate_stmt env el.desc
+      in
+      let t =
+        match then_e.typ, else_e.typ with
+        | TAny, t -> t
+        | t, TAny -> t
+        | _ -> then_e.typ
+      in
+
+      let lid = Helpers.assert_tlid var.typ in
+      let case, fs = match LidMap.find_opt lid !type_def_map with
+        | Some (lazy (Variant branches)) -> List.nth branches variant
+        | _ -> fatal_error "Expected a tagged union expression"
+      in
+
+      let name, case_t = match fs with
+        | [(n, (t, _))] -> n, t
+        | _ -> failwith "Tagged union case has more than one field"
+      in
+
+      let binder = Helpers.fresh_binder name case_t in
+      let pat = Krml.Ast.with_type case_t (PBound 0) in
+      (* TODO: Where/How to add the binder, and link it to the variable *)
+      (* TODO: Store that var is in case variant *)
+
+      let then_branch = [binder], Krml.Ast.with_type t (PCons (case, [pat])), then_e in
+      let else_branch = [], Krml.Ast.with_type t PWild, else_e in
+      Krml.Ast.with_type t (EMatch (Unchecked, var, [then_branch; else_branch]))
+
   | If { init; condition_variable; cond; then_branch; else_branch } ->
       (* These two fields should be specific to C++ *)
       assert (init = None);
@@ -1792,7 +1864,10 @@ let prepopulate_type_maps (ignored_dirs: string list) (decls: deduplicated_decls
                       when Attributes.has_adt_attr attributes ->
                     begin match fields with
                     | [tag; union] ->
-                        let _tag = translate_field tag in
+                        let name, (ty, _) = translate_field tag in
+                        if name <> Some "tag" then
+                          failwith "Tag of tagged union must be called tag";
+                        begin match ty with | TInt _ -> () | _ -> failwith "tag must be an integer" end;
                         let variant = translate_field_union union in
                         variant
                     | _ -> failwith "Tagged union translation to an ADT assumes that the structs contains two field: the tag, and the union"
