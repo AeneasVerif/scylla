@@ -75,16 +75,22 @@ let add_to_list_lid x data m =
 
 (* ENVIRONMENTS *)
 
+(* For a given tagged union variable, we store the case (variant name) it is currently
+  in, as well as the variable corresponding to the constructor contents pattern *)
+type tagged_case = { case: string; var: string }
+
 type env = {
   (* Variables in the context, with their types, and a reference to tell whether they end up being
-     mutated as some point. *)
-  vars : (string * typ * bool ref) list;
+     mutated as some point.
+    The last reference is used if the variable is a tagged union, to store information about its current state.
+  *)
+  vars : (string * typ * bool ref * tagged_case option ref) list;
   (* Expected return typ of the function *)
   ret_t : typ;
 }
 
 let empty_env = { vars = []; ret_t = TAny }
-let add_var env (x, t) = { env with vars = (x, t, ref false) :: env.vars }
+let add_var env (x, t) = { env with vars = (x, t, ref false, ref None) :: env.vars }
 
 let add_binders env binders =
   List.fold_left
@@ -95,22 +101,22 @@ let add_binders env binders =
 
 (* TODO: Handle fully qualified names/namespaces/different files. *)
 let find_var env name =
-  let exception Found of int * typ * bool ref in
+  let exception Found of int * typ * bool ref * tagged_case option ref in
   try
     List.iteri
-      (fun i (name', t, mut) ->
+      (fun i (name', t, mut, case) ->
         if name = name' then
-          raise (Found (i, t, mut)))
+          raise (Found (i, t, mut, case)))
       env.vars;
     raise Not_found
   with
-  | Found (i, t, mut) -> with_type t (EBound i), mut
+  | Found (i, t, mut, case) -> with_type t (EBound i), mut, case
   | Not_found -> (
       try
         let path = StringMap.find name !name_map in
         let t = StringMap.find name !global_type_map in
         (* FIXME handle mutable globals *)
-        with_type t (EQualified ([ path ], name)), ref false
+        with_type t (EQualified ([ path ], name)), ref false, ref None
       with Not_found ->
         Printf.eprintf "Could not find variable %s\n" name;
         raise Not_found)
@@ -351,7 +357,7 @@ let translate_typ t = normalize_type (translate_typ t)
 let translate_typ_name t = normalize_type (translate_typ_name t)
 let find_var env name =
   match find_var env name with
-  | { node = EQualified _; _ } as e, mut -> { e with typ = normalize_type e.typ }, mut
+  | { node = EQualified _; _ } as e, mut, case -> { e with typ = normalize_type e.typ }, mut, case
   | e -> e
 
 (* Indicate that we synthesize the type of an expression based on the information provided by
@@ -586,9 +592,14 @@ let adjust e t =
         fatal_error "Could not convert expression %a: %a to have type %a" pexpr e ptyp e.typ ptyp t;
       e
 
+let fst4 (a, _, _, _) = a
+let snd4 (_, b, _, _) = b
+let thd4 (_, _, c, _) = c
+let fth4 (_, _, _, d) = d
+
 let mark_mut_if_variable env e =
   match e.node with
-  | EBound i -> thd3 (List.nth env.vars i) := true
+  | EBound i -> thd4 (List.nth env.vars i) := true
   | _ -> ()
 
 (* A function that behaves like compare, but implements C's notion of rank
@@ -924,7 +935,7 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
         let rhs = translate_expr env rhs in
         mk_binop lhs kind rhs
     | DeclRef { name; _ } ->
-        let e, _ = get_id_name name |> find_var env in
+        let e, _, _ = get_id_name name |> find_var env in
         (* Krml.KPrint.bprintf "%a: %a\n" pexpr e ptyp e.typ; *)
         e
     | Call { callee; args } when is_scylla_reset callee -> begin
@@ -1033,6 +1044,7 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
         in
         with_type else_branch.typ (EIfThenElse (cond, then_branch, else_branch))
     | Paren _ -> failwith "translate_expr: paren"
+
     | Member { base; arrow; field } ->
         let base =
           match base with
@@ -1041,41 +1053,62 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
         in
         let base = translate_expr env base in
 
+        let lid =
+          Helpers.assert_tlid
+            (if arrow then
+               Helpers.assert_tbuf base.typ
+             else
+               base.typ)
+        in
+
         let f =
           match field with
           | FieldName { desc; _ } -> get_id_name desc.name
-          | _ -> failwith "member node: only field accesses supported"
+        | _ -> failwith "member node: only field accesses supported"
         in
 
-        let field_t =
-          let lid =
-            Helpers.assert_tlid
-              (if arrow then
-                 Helpers.assert_tbuf base.typ
-               else
-                 base.typ)
-          in
-          match LidMap.find_opt lid !type_def_map with
+        begin match LidMap.find_opt lid !type_def_map with
+          | Some (lazy (Variant branches)) ->
+              let branch = match List.find_opt (fun b -> fst b = f) branches with
+                | Some b -> b
+                | None -> fatal_error "Field %s of %a not found in tagged union" f plid lid
+              in
+
+              begin
+              match snd branch with
+              | [_] ->
+                  let var = match base.node with | EBound n -> List.nth env.vars n | _ -> failwith "Tagged union access is only supported on a variable" in
+                  begin match !(fth4 var) with
+                  | Some { case; var } when case = f ->
+                      let e, _, _ = find_var env var in
+                      e
+                  | _ -> failwith "Tagged union variable is not in the correct case"
+                  end
+              | _ -> failwith "More than one field in tagged union case"
+              end
           | Some (lazy (Flat fields)) ->
-              if List.mem_assoc (Some f) fields then
-                fst (List.assoc (Some f) fields)
-              else
-                fatal_error "Field %s of %a not found in struct def (available fields are: %s)"
-                  f plid lid
-                  (String.concat ", " (List.map (fun (f, _) -> Option.value ~default:"<noname>" f) fields))
-          | Some _ -> fatal_error "Taking a field of %a which is not a struct" plid lid
-          | None -> fatal_error "Taking a field of %a which is not in the map" plid lid
-        in
 
-        if not arrow then
-          (* base.f *)
-          with_type field_t (EField (base, f))
-        else
-          (* base->f *)
-          let deref_base =
-            Helpers.(with_type (assert_tbuf base.typ) (EBufRead (base, Helpers.zero_usize)))
-          in
-          with_type field_t (EField (deref_base, f))
+              let field_t =
+                if List.mem_assoc (Some f) fields then
+                  fst (List.assoc (Some f) fields)
+                else
+                  fatal_error "Field %s of %a not found in struct def (available fields are: %s)"
+                    f plid lid
+                    (String.concat ", " (List.map (fun (f, _) -> Option.value ~default:"<noname>" f) fields))
+              in
+              if not arrow then
+                (* base.f *)
+                with_type field_t (EField (base, f))
+              else
+                (* base->f *)
+                let deref_base =
+                  Helpers.(with_type (assert_tbuf base.typ) (EBufRead (base, Helpers.zero_usize)))
+                in
+                with_type field_t (EField (deref_base, f))
+
+            | Some _ -> fatal_error "Taking a field of %a which is not a struct nor a tagged union" plid lid
+            | None -> fatal_error "Taking a field of %a which is not in the map" plid lid
+        end
     | UnaryExpr { kind = SizeOf; argument = ArgumentType t; _ } -> begin
         match translate_typ t with
         | TInt w -> Helpers.mk_sizet (Krml.Constant.bytes_of_width w)
@@ -1104,14 +1137,67 @@ and translate_field_expr env (e : expr) field_name =
   | _ ->
       Some field_name, translate_expr env e
 
-and translate_fields env t es =
-  let field_names = match LidMap.find (Helpers.assert_tlid t) !type_def_map with
-    | lazy (Flat fields) -> List.map (fun x -> Option.get (fst x)) fields
-    | _ -> failwith "impossible"
+and translate_variant env branches (tag: expr) (e: expr) =
+  let tag = match tag.desc with
+    | DesignatedInit { init = { desc = IntegerLiteral n; _}; _ } -> Clang.Ast.int_of_literal n
+    | _ ->
+        Format.eprintf "Expected integer literal for tagged union tag, got %a\n@." Clang.Expr.pp tag;
+        failwith "Could not translate tagged union expression"
   in
-  if List.length field_names <> List.length es then
-    fatal_error "TODO: partial initializers (%s but %d initialiers)" (String.concat ", " field_names) (List.length es);
-  Krml.Ast.with_type t (EFlat (List.map2 (translate_field_expr env) es field_names))
+  if tag >= List.length branches then
+    fatal_error "tag is greater than number of variants";
+  let name, _ = List.nth branches tag in
+  match e.desc with
+    | InitList [{ desc = DesignatedInit { designators = [FieldDesignator f]; init }; _ }] ->
+        if f <> name then
+          failwith "incorrect variant type for tagged union";
+        let e = translate_expr env init in
+        ECons (name, [e])
+    | _ -> failwith "Incorrect expression for tagged union"
+
+
+and translate_fields env t es =
+   match LidMap.find (Helpers.assert_tlid t) !type_def_map with
+    | lazy (Flat fields) ->
+        let field_names = List.map (fun x -> Option.get (fst x)) fields in
+        if List.length field_names <> List.length es then
+          fatal_error "TODO: partial initializers (%s but %d initialiers)" (String.concat ", " field_names) (List.length es);
+        Krml.Ast.with_type t (EFlat (List.map2 (translate_field_expr env) es field_names))
+    | lazy (Variant branches) ->
+        begin match es with
+        | [tag; e] -> Krml.Ast.with_type t (translate_variant env branches tag e)
+        | _ ->
+          fatal_error "Expected two arguments for tagged union initializer";
+        end
+
+    | _ -> failwith "impossible"
+
+let is_tag_check env (cond : expr) = match cond.desc with
+  | BinaryOperator {
+    lhs = { desc = Member {base = Some {desc = DeclRef {name; _}; _}; arrow = false; field = FieldName { desc; _}}; _} ;
+       kind = EQ;
+       rhs = {desc = IntegerLiteral _; _}
+     } ->
+      (* We assume that the tag field will always be called "tag" *)
+       get_id_name desc.name = "tag" && (
+      (* And we check whether the variable has been registered as a tagged union *)
+         let var, _, _ = get_id_name name |> find_var env in
+         let lid = Helpers.assert_tlid var.typ in
+         match LidMap.find_opt lid !type_def_map with
+         | Some (lazy (Variant _)) -> true
+         | _ -> false
+      )
+  | _ -> false
+
+let deconstruct_tag_check env (cond : expr) = match cond.desc with
+  | BinaryOperator {
+    lhs = { desc = Member {base = Some {desc = DeclRef {name; _}; _}; _}; _} ;
+       kind = EQ;
+       rhs = {desc = IntegerLiteral (Int n); _}
+     } ->
+       let e, _, case_ref = get_id_name name |> find_var env in
+       e, n, case_ref
+  | _ -> failwith "not a tag_check"
 
 (* Create a default value associated to a given type [typ] *)
 let create_default_value typ =
@@ -1168,7 +1254,7 @@ let translate_vardecl (env : env) (vdecl : var_decl_desc) : env * binder * Krml.
       | _ -> failwith "calloc is expected to have two arguments"
     end
   | Some { desc = DeclRef { name; _ }; _ } ->
-      let var, _ = get_id_name name |> find_var env in
+      let var, _, _ = get_id_name name |> find_var env in
       let e =
         match typ with
         (* If we have a statement of the shape `let x = y` where y is a pointer,
@@ -1336,7 +1422,7 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
                     (* TODO: analysis that figures out what needs to be mut *)
                     let e2 = translate_one_decl env decls in
                     let b =
-                      if !(thd3 (List.hd env.vars)) then
+                      if !(thd4 (List.hd env.vars)) then
                         Helpers.mark_mut b
                       else
                         b
@@ -1396,6 +1482,63 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
     end
   | If { cond = { desc = BinaryOperator { lhs; kind = NE; rhs }; _ }; then_branch; _ }
     when has_pointer_type lhs && is_null rhs -> translate_stmt env then_branch.desc
+
+  | If { cond; then_branch; else_branch; _ } when is_tag_check env cond ->
+      let var, variant, case_ref = deconstruct_tag_check env cond in
+
+      let lid = Helpers.assert_tlid var.typ in
+      let case, fs = match LidMap.find_opt lid !type_def_map with
+        | Some (lazy (Variant branches)) -> List.nth branches variant
+        | _ -> fatal_error "Expected a tagged union expression"
+      in
+
+      let name, case_t = match fs with
+        | [(n, (t, _))] -> n, t
+        | _ -> failwith "Tagged union case has more than one field"
+      in
+
+      let binder = Helpers.fresh_binder name case_t in
+      let pat = Krml.Ast.with_type case_t (PBound 0) in
+      (* We need to add the new binder to the environment before translating
+         the branches.
+         We also need to be able to later retrieve the content of the variant
+         constructor when accessing the corresponding field.
+         To do so, we store in the environment a variable called v!!{atom},
+         where {atom} is replaced by the binder's atom.
+         We then update the environment for `var` to store that it is a tagged
+         union in case `case`, and that the corresponding content is ``v!!{atom}`.
+         Importantly, `v!!{atom}` is not a valid variable name, and therefore does
+         not conflict with existing variables.
+      *)
+      let env_binder_name = binder.node.name ^ "!!" ^ show_atom_t binder.node.atom in
+      let new_env = add_var env (env_binder_name, case_t) in
+
+      (* We only change the state of the tagged union case to translate the if branch,
+         which is the one where we checked the tag of the variable *)
+      (* TODO: Should we sanity-check that old is None? As, if we are already in
+         a tagged union case, there is no need for rechecking the tag? *)
+      let old = !case_ref in
+      case_ref := Some { case; var = env_binder_name };
+      let then_e = translate_stmt new_env then_branch.desc in
+      case_ref := old;
+
+      let else_e = match else_branch with
+        | None -> Helpers.eunit
+        (* We translate the else branch with the old environment, without
+           adding a binder for the pattern *)
+        | Some el -> translate_stmt env el.desc
+      in
+      let t =
+        match then_e.typ, else_e.typ with
+        | TAny, t -> t
+        | t, TAny -> t
+        | _ -> then_e.typ
+      in
+
+      let then_branch = [binder], Krml.Ast.with_type t (PCons (case, [pat])), then_e in
+      let else_branch = [], Krml.Ast.with_type t PWild, else_e in
+      Krml.Ast.with_type t (EMatch (Unchecked, var, [then_branch; else_branch]))
+
   | If { init; condition_variable; cond; then_branch; else_branch } ->
       (* These two fields should be specific to C++ *)
       assert (init = None);
@@ -1527,7 +1670,7 @@ let translate_fundecl (fdecl : function_decl) =
       let lid = Option.get (lid_of_name name) in
       let binders =
         List.map2
-          (fun b (_, _, m) -> { b with node = { b.node with mut = !m } })
+          (fun b (_, _, m, _) -> { b with node = { b.node with mut = !m } })
           binders (List.rev env.vars)
       in
 
@@ -1537,6 +1680,7 @@ let translate_fundecl (fdecl : function_decl) =
       let decl = Krml.Ast.(DFunction (None, flags, 0, 0, ret_type, lid, binders, body)) in
       (* Krml.KPrint.bprintf "Resulting decl %a\n" Krml.PrintAst.pdecl decl; *)
       Some decl
+
 
 (* Translate a field declaration inside a struct type declaration *)
 let translate_field (decl : decl) =
@@ -1550,6 +1694,19 @@ let translate_field (decl : decl) =
       (* TODO: do not mark all fields as mutable by default? *)
       Some name, (translate_typ qual_type, true)
   | _ -> failwith "Struct declarations should only contain fields"
+
+(* Translate a union field to a variant *)
+let translate_variant (decl: decl) : Krml.Ast.branch_t =
+  let name, t_mut = translate_field decl in
+  Option.get name, [("v", t_mut)]
+
+(* Translate a union field into variant branches *)
+let translate_field_union (decl: decl) =
+  match decl.desc with
+  | RecordDecl {keyword = Union; fields; _} ->
+      let branches = List.map translate_variant fields in
+      Variant branches
+  | _ -> failwith "Second field in tagged union is not an union"
 
 let name_of_decl (decl : decl) : string =
   match decl.desc with
@@ -1757,6 +1914,18 @@ let prepopulate_type_maps (ignored_dirs: string list) (decls: deduplicated_decls
             Some
               (lazy
                 ( match StringMap.find (get_id_name name) decls with
+                | { desc = RecordDecl { fields; attributes; _ }; _ }, _
+                      when Attributes.has_adt_attr attributes ->
+                    begin match fields with
+                    | [tag; union] ->
+                        let name, (ty, _) = translate_field tag in
+                        if name <> Some "tag" then
+                          failwith "Tag of tagged union must be called tag";
+                        begin match ty with | TInt _ -> () | _ -> failwith "tag must be an integer" end;
+                        let variant = translate_field_union union in
+                        variant
+                    | _ -> failwith "Tagged union translation to an ADT assumes that the structs contains two field: the tag, and the union"
+                    end
                 | { desc = RecordDecl { fields; attributes; _ }; _ }, _ ->
                     let fields = List.map translate_field fields in
 
