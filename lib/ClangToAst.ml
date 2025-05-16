@@ -1181,8 +1181,8 @@ let deconstruct_tag_check env (cond : expr) = match cond.desc with
        kind = EQ;
        rhs = {desc = IntegerLiteral (Int n); _}
      } ->
-       let e, _, _ = get_id_name name |> find_var env in
-       e, n
+       let e, _, case_ref = get_id_name name |> find_var env in
+       e, n, case_ref
   | _ -> failwith "not a tag_check"
 
 (* Create a default value associated to a given type [typ] *)
@@ -1463,7 +1463,7 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
     when has_pointer_type lhs && is_null rhs -> translate_stmt env then_branch.desc
 
   | If { cond; then_branch; else_branch; _ } when is_tag_check cond ->
-      let var, variant = deconstruct_tag_check env cond in
+      let var, variant, case_ref = deconstruct_tag_check env cond in
 
       let lid = Helpers.assert_tlid var.typ in
       let case, fs = match LidMap.find_opt lid !type_def_map with
@@ -1491,9 +1491,16 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
       *)
       let env_binder_name = binder.node.name ^ "!!" ^ show_atom_t binder.node.atom in
       let new_env = add_var env (env_binder_name, case_t) in
-      (* TODO: Store that var is in case variant *)
 
+      (* We only change the state of the tagged union case to translate the if branch,
+         which is the one where we checked the tag of the variable *)
+      (* TODO: Should we sanity-check that old is None? As, if we are already in
+         a tagged union case, there is no need for rechecking the tag? *)
+      let old = !case_ref in
+      case_ref := Some { case; var = env_binder_name };
       let then_e = translate_stmt new_env then_branch.desc in
+      case_ref := old;
+
       let else_e = match else_branch with
         | None -> Helpers.eunit
         (* We translate the else branch with the old environment, without
