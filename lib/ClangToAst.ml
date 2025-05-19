@@ -1775,12 +1775,17 @@ let translate_variant (decl: decl) : Krml.Ast.branch_t =
   let name, t_mut = translate_field decl in
   Option.get name, [("v", t_mut)]
 
-(* Translate a union field into variant branches *)
-let translate_field_union (decl: decl) =
+(* Translate a union field into variant branches.
+   [empty_ctr_names] corresponds to a list of additional
+   constructors with no payload, appended at the end of the
+   datatype.
+ *)
+let translate_field_union (decl: decl) (empty_ctr_names: string list) =
   match decl.desc with
   | RecordDecl {keyword = Union; fields; _} ->
       let branches = List.map translate_variant fields in
-      branches
+      let empty_ctrs = List.map (fun s -> s, []) empty_ctr_names in
+      branches @ empty_ctrs
   | _ -> failwith "Second field in tagged union is not an union"
 
 let name_of_decl (decl : decl) : string =
@@ -2002,7 +2007,8 @@ let prepopulate_type_maps (ignored_dirs: string list) (decls: deduplicated_decls
                         if name <> Some "tag" then
                           failwith "Tag of tagged union must be called tag";
                         begin match ty with | TInt _ -> () | _ -> failwith "tag must be an integer" end;
-                        let variant = translate_field_union union in
+                        let empty_ctr_names = Attributes.retrieve_empty_variants attributes in
+                        let variant = translate_field_union union empty_ctr_names in
                         variant
                     | _ -> failwith "Tagged union translation to an ADT assumes that the structs contains two field: the tag, and the union"
                     )))
