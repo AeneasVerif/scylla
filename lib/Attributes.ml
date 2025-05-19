@@ -26,6 +26,13 @@ let box_attr = "scylla_box"
    order of the union cases. *)
 let adt_attr = "scylla_adt"
 
+(* When translating a tagged union into an ADT, we can also specify
+   additional constructors with an empty payload (which are therefore
+   not part of the C tagged union cases) using this attribute.
+   The constructor(s) will be appended at the end of the translated
+   tagged union cases *)
+let empty_variant_attr = "scylla_empty_variant"
+
 (* Expose directly as a C FFI function or global, with #[no_mangle] and the like *)
 let expose_attr = "scylla_expose"
 
@@ -49,6 +56,27 @@ let has_expose_attr = has expose_attr
 (* We check for the presence of the [adt_attr] attribute. We require it
    to be exactly the annotation *)
 let has_adt_attr = has adt_attr
+
+(* If the [adt_attr] attribute is specified on a structure,
+   we can also specify `scylla_empty_variant(name)`, which
+   will append a variant with no payload with constructor
+   name {name} at the end of the constructor list *)
+let retrieve_empty_variant (attr: attribute) =
+  match attr.desc with
+  | Clang__.Attributes.Annotate s ->
+      if String.starts_with ~prefix:empty_variant_attr s.annotation then
+        (* Syntax: scylla_empty_variant (constructor_name) *)
+        let after_open_paren = String.index s.annotation '(' + 1 in
+        let close_paren = String.index s.annotation ')' in
+        (* We extract the substring corresponding to the constructor name *)
+        let ctr_name = String.sub s.annotation after_open_paren (close_paren - after_open_paren) in
+        Some ctr_name
+      else None
+  | _ -> None
+
+(* Collects all specified empty variants *)
+let retrieve_empty_variants (attrs : attribute list) =
+  List.filter_map retrieve_empty_variant attrs
 
 let retrieve_mutability' (attr : attribute) =
   match attr.desc with
