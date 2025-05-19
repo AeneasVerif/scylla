@@ -1571,47 +1571,71 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
       let lid = Helpers.assert_tlid var.typ in
       let case, fs = lookup_nth_branch lid variant in
 
-      let name, (case_t, _) = Krml.KList.one fs in
+      begin match fs with
+      | [] ->
+          (* This case corresponds to a constructor with an empty payload,
+             specified through the [empty_variant_attr] attribute *)
+          let then_e = translate_stmt env then_branch.desc in
+          let else_e = match else_branch with
+            | None -> Helpers.eunit
+            (* We translate the else branch with the old environment, without
+               adding a binder for the pattern *)
+            | Some el -> translate_stmt env el.desc
+          in
+          let t =
+            match then_e.typ, else_e.typ with
+            | TAny, t -> t
+            | t, TAny -> t
+            | _ -> then_e.typ
+          in
 
-      let binder = Helpers.fresh_binder name case_t in
-      let pat = Krml.Ast.with_type case_t (PBound 0) in
-      (* We need to add the new binder to the environment before translating
-         the branches.
-         We also need to be able to later retrieve the content of the variant
-         constructor when accessing the corresponding field.
-         To do so, we store in the environment a variable called v!!{atom},
-         where {atom} is replaced by the binder's atom.
-         We then update the environment for `var` to store that it is a tagged
-         union in case `case`, and that the corresponding content is ``v!!{atom}`.
-         Importantly, `v!!{atom}` is not a valid variable name, and therefore does
-         not conflict with existing variables.
-      *)
-      let env_binder_name = binder.node.name ^ "!!" ^ show_atom_t binder.node.atom in
-      let new_env = add_var env (env_binder_name, case_t) in
-      let new_env = refine_var_case new_env varname (Some {case; var = env_binder_name}) in
+          let then_branch = [], Krml.Ast.with_type t (PCons (case, [])), then_e in
+          let else_branch = [], Krml.Ast.with_type t PWild, else_e in
+          Krml.Ast.with_type t (EMatch (Unchecked, var, [then_branch; else_branch]))
 
-      (* We only change the state of the tagged union case to translate the if branch,
-         which is the one where we checked the tag of the variable *)
-      (* TODO: Should we sanity-check that old is None? As, if we are already in
-         a tagged union case, there is no need for rechecking the tag? *)
-      let then_e = translate_stmt new_env then_branch.desc in
+      | [(name, (case_t, _))] ->
+          let binder = Helpers.fresh_binder name case_t in
+          let pat = Krml.Ast.with_type case_t (PBound 0) in
+          (* We need to add the new binder to the environment before translating
+             the branches.
+             We also need to be able to later retrieve the content of the variant
+             constructor when accessing the corresponding field.
+             To do so, we store in the environment a variable called v!!{atom},
+             where {atom} is replaced by the binder's atom.
+             We then update the environment for `var` to store that it is a tagged
+             union in case `case`, and that the corresponding content is ``v!!{atom}`.
+             Importantly, `v!!{atom}` is not a valid variable name, and therefore does
+             not conflict with existing variables.
+          *)
+          let env_binder_name = binder.node.name ^ "!!" ^ show_atom_t binder.node.atom in
+          let new_env = add_var env (env_binder_name, case_t) in
+          let new_env = refine_var_case new_env varname (Some {case; var = env_binder_name}) in
 
-      let else_e = match else_branch with
-        | None -> Helpers.eunit
-        (* We translate the else branch with the old environment, without
-           adding a binder for the pattern *)
-        | Some el -> translate_stmt env el.desc
-      in
-      let t =
-        match then_e.typ, else_e.typ with
-        | TAny, t -> t
-        | t, TAny -> t
-        | _ -> then_e.typ
-      in
+          (* We only change the state of the tagged union case to translate the if branch,
+             which is the one where we checked the tag of the variable *)
+          (* TODO: Should we sanity-check that old is None? As, if we are already in
+             a tagged union case, there is no need for rechecking the tag? *)
+          let then_e = translate_stmt new_env then_branch.desc in
 
-      let then_branch = [binder], Krml.Ast.with_type t (PCons (case, [pat])), then_e in
-      let else_branch = [], Krml.Ast.with_type t PWild, else_e in
-      Krml.Ast.with_type t (EMatch (Unchecked, var, [then_branch; else_branch]))
+          let else_e = match else_branch with
+            | None -> Helpers.eunit
+            (* We translate the else branch with the old environment, without
+               adding a binder for the pattern *)
+            | Some el -> translate_stmt env el.desc
+          in
+          let t =
+            match then_e.typ, else_e.typ with
+            | TAny, t -> t
+            | t, TAny -> t
+            | _ -> then_e.typ
+          in
+
+          let then_branch = [binder], Krml.Ast.with_type t (PCons (case, [pat])), then_e in
+          let else_branch = [], Krml.Ast.with_type t PWild, else_e in
+          Krml.Ast.with_type t (EMatch (Unchecked, var, [then_branch; else_branch]))
+
+      | _ -> failwith "Tagged union variant has more than one value in payload"
+      end
 
   | If { init; condition_variable; cond; then_branch; else_branch } ->
       (* These two fields should be specific to C++ *)
