@@ -39,13 +39,43 @@ let elaborated_map = ref ElaboratedMap.empty
    that internal pointers should be translated to Boxes instead of borrows *)
 let boxed_types = ref LidSet.empty
 
+(* The values of type_def_map below used to be of type lazy AST.type_def.
+    However, when pattern-matching on lazy values, OCaml will force the evaluation,
+    even if the resulting value does not correspond the pattern.
+    This leads to issues in type normalization when writing, e.g.,
+    ```
+    match find ... !type_def_map with
+    | (lazy (Abbrev t)) -> normalize_type t
+    | _ -> t
+    ```
+
+    If the stored value is instead, e.g., a `lazy (Flat fields)`, the pattern-matching
+    will nevertheless force the evaluation, leading to cycles when translating mutually
+    recursive structs.
+
+   To avoid forcing the evaluation in unwanted cases during pattern-matching, we therefore
+   redefine AST's `type_def` to contain lazy values: this allows us to pattern-match on
+   the constructor, and to only force the execution of the payload when needed.
+*)
+type type_def_lazy =
+  | CVariant of Krml.Ast.branches_t Lazy.t
+  | CFlat of Krml.Ast.fields_t_opt Lazy.t
+  | CAbbrev of Krml.Ast.typ Lazy.t
+  | CEnum of (lident * Krml.Ast.z option) list Lazy.t
+
+let force_type_def_lazy (t: type_def_lazy) : Krml.Ast.type_def = match t with
+  | CVariant branches -> Variant (Lazy.force branches)
+  | CFlat fields -> Flat (Lazy.force fields)
+  | CAbbrev t -> Abbrev (Lazy.force t)
+  | CEnum l -> Enum (Lazy.force l)
+
 (* A map from type names to their underlying implementation (abbreviation, struct, etc.).
    It is needed to retrieve the type of, e.g., constants when the expected type is an alias to an
    integer type -- also allows not generating code that relies on type abbreviations being in scope
    in order to type-check -- every synthesized type goes through `normalize_type` which inlines
    abbreviations away. Finally, it also allows resolving proper type information for field
    operations. *)
-let type_def_map = ref LidMap.empty
+let type_def_map : type_def_lazy LidMap.t ref  = ref LidMap.empty
 
 (* A map from top-level declaration to additional traits that they ought to derive *)
 let deriving_traits: string list LidMap.t ref =
@@ -357,7 +387,7 @@ let rec normalize_type t =
       | exception Not_found ->
           (* Krml.KPrint.bprintf "Not in the abbrev map: %a\n" Krml.PrintAst.Ops.plid lid; *)
           t
-      | (lazy (Abbrev t)) -> normalize_type t
+      | CAbbrev lazy_t -> normalize_type (Lazy.force lazy_t)
       | _ -> t
     end
   | TBuf (t, c) -> TBuf (normalize_type t, c)
@@ -1075,8 +1105,8 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
         in
 
         begin match LidMap.find_opt lid !type_def_map with
-          | Some (lazy (Variant branches)) ->
-              let branch = match List.find_opt (fun b -> fst b = f) branches with
+          | Some (CVariant lazy_branches) ->
+              let branch = match List.find_opt (fun b -> fst b = f) (Lazy.force lazy_branches) with
                 | Some b -> b
                 | None -> fatal_error "Field %s of %a not found in tagged union" f plid lid
               in
@@ -1093,8 +1123,9 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
                   end
               | _ -> failwith "More than one field in tagged union case"
               end
-          | Some (lazy (Flat fields)) ->
+          | Some (CFlat lazy_fields) ->
 
+              let fields = Lazy.force lazy_fields in
               let field_t =
                 if List.mem_assoc (Some f) fields then
                   fst (List.assoc (Some f) fields)
@@ -1165,12 +1196,14 @@ and translate_variant env branches (tag: expr) (e: expr) =
 
 and translate_fields env t es =
    match LidMap.find (Helpers.assert_tlid t) !type_def_map with
-    | lazy (Flat fields) ->
+    | CFlat lazy_fields ->
+        let fields = Lazy.force lazy_fields in
         let field_names = List.map (fun x -> Option.get (fst x)) fields in
         if List.length field_names <> List.length es then
           fatal_error "TODO: partial initializers (%s but %d initialiers)" (String.concat ", " field_names) (List.length es);
         Krml.Ast.with_type t (EFlat (List.map2 (translate_field_expr env) es field_names))
-    | lazy (Variant branches) ->
+    | CVariant lazy_branches ->
+        let branches = Lazy.force lazy_branches in
         begin match es with
         | [tag; e] -> Krml.Ast.with_type t (translate_variant env branches tag e)
         | _ ->
@@ -1191,7 +1224,7 @@ let is_tag_check env (cond : expr) = match cond.desc with
          let var, _, _ = get_id_name name |> find_var env in
          let lid = Helpers.assert_tlid var.typ in
          match LidMap.find_opt lid !type_def_map with
-         | Some (lazy (Variant _)) -> true
+         | Some (CVariant _) -> true
          | _ -> false
       )
   | _ -> false
@@ -1211,7 +1244,7 @@ let deconstruct_tag_check env (cond : expr) = match cond.desc with
    therefore translated to a variant type, retrieves the branch
    corresponding to the [n]-th constructor (starting count at 0) *)
 let lookup_nth_branch lid n = match LidMap.find_opt lid !type_def_map with
-  | Some (lazy (Variant branches)) -> List.nth branches n
+  | Some (CVariant lazy_branches) -> List.nth (Lazy.force lazy_branches) n
   | _ -> fatal_error "Expected a tagged union expression"
 
 (* Create a default value associated to a given type [typ] *)
@@ -1747,7 +1780,7 @@ let translate_field_union (decl: decl) =
   match decl.desc with
   | RecordDecl {keyword = Union; fields; _} ->
       let branches = List.map translate_variant fields in
-      Variant branches
+      branches
   | _ -> failwith "Second field in tagged union is not an union"
 
 let name_of_decl (decl : decl) : string =
@@ -1850,7 +1883,7 @@ let translate_decl (decl : decl) =
       let lid = Option.get (lid_of_name name) in
       begin
         match LidMap.find_opt lid !type_def_map with
-        | Some def -> Some (DType (lid, [], 0, 0, Lazy.force def))
+        | Some def -> Some (DType (lid, [], 0, 0, force_type_def_lazy def))
         | None -> None
       end
   | _ -> raise Unsupported
@@ -1953,12 +1986,17 @@ let prepopulate_type_maps (ignored_dirs: string list) (decls: deduplicated_decls
             assert ((get_id_name name) <> "");
             elaborated_map := ElaboratedMap.add (name, `Struct) lid !elaborated_map;
 
-            Some
-              (lazy
-                ( match StringMap.find (get_id_name name) decls with
+            (* This function executes as part of `fill_type_maps`, which is
+                performed after declarations have been grouped and deduplicated.
+                In particular, the `decls` map has been entirely filled, so we
+                can safely perform a lookup outside of the lazy block; we only
+                need the lazy for the translation of type definitions, e.g.,
+                when a struct field refers to another type.
+            *)
+            (match StringMap.find (get_id_name name) decls with
                 | { desc = RecordDecl { fields; attributes; _ }; _ }, _
                       when Attributes.has_adt_attr attributes ->
-                    begin match fields with
+                    Some (CVariant (lazy (match fields with
                     | [tag; union] ->
                         let name, (ty, _) = translate_field tag in
                         if name <> Some "tag" then
@@ -1967,46 +2005,42 @@ let prepopulate_type_maps (ignored_dirs: string list) (decls: deduplicated_decls
                         let variant = translate_field_union union in
                         variant
                     | _ -> failwith "Tagged union translation to an ADT assumes that the structs contains two field: the tag, and the union"
-                    end
+                    )))
                 | { desc = RecordDecl { fields; attributes; _ }; _ }, _ ->
-                    let fields = List.map translate_field fields in
+                    Some (CFlat (lazy (
+                      let fields = List.map translate_field fields in
 
-                    if Attributes.has_box_attr attributes then
-                      boxed_types := LidSet.add lid !boxed_types;
+                      if Attributes.has_box_attr attributes then
+                        boxed_types := LidSet.add lid !boxed_types;
 
-                    (* By default, we compile C structs to Rust structs with a C layout. This could
-                       be changed, for instance, either with a command-line flag, or by defining a
-                       new attribute __attribute__((annotate("scylla_c_layout"))) *)
-                    attributes_map := add_to_list_lid lid (Printf.sprintf "repr(C)") !attributes_map;
+                      (* By default, we compile C structs to Rust structs with a C layout. This could
+                         be changed, for instance, either with a command-line flag, or by defining a
+                         new attribute __attribute__((annotate("scylla_c_layout"))) *)
+                      attributes_map := add_to_list_lid lid (Printf.sprintf "repr(C)") !attributes_map;
 
-                    (* Carry alignment down to Rust *)
-                    begin match Attributes.retrieve_alignment attributes with
-                    | Some n ->
-                        attributes_map := add_to_list_lid lid (Printf.sprintf "repr(align(%d))" n) !attributes_map
-                    | None ->
-                        ()
-                    end;
+                      (* Carry alignment down to Rust *)
+                      begin match Attributes.retrieve_alignment attributes with
+                      | Some n ->
+                          attributes_map := add_to_list_lid lid (Printf.sprintf "repr(align(%d))" n) !attributes_map
+                      | None ->
+                          ()
+                      end;
 
-                    Flat fields
+                      fields
+                    )))
                 | _ ->
                     fatal_error "unknown struct definition: %s" (get_id_name name)
-                ))
+                )
         | Pointer t ->
-            Some
+            Some (CAbbrev
               (lazy
                 (let ty = translate_typ t in
-                 Abbrev (TBuf (ty, t.const))))
+                  (TBuf (ty, t.const)))))
         | BuiltinType t ->
-            Some
-              (lazy
-                (let ty = translate_builtin_typ t in
-                 Abbrev ty))
+            Some (CAbbrev (lazy (translate_builtin_typ t)))
         | Typedef { name; _ } ->
-            Some
-              (lazy
-                (let name = get_id_name name in
-                 let ty = translate_typ_name name in
-                 Abbrev ty))
+            Some (CAbbrev (lazy
+                (get_id_name name |> translate_typ_name)))
         | _ ->
             (* Unsupported *)
             (* Krml.KPrint.bprintf "%a is unsupported\n" plid lid; *)
