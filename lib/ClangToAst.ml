@@ -1190,12 +1190,17 @@ and translate_variant env branches (tag: expr) (e: expr option) =
   | None -> ECons (name, [])
   | Some e ->
       match e.desc with
-        | InitList [{ desc = DesignatedInit { designators = [FieldDesignator f]; init }; _ }] ->
+        | InitList [{ desc = DesignatedInit { designators = [FieldDesignator f]; init }; _ }]
+        (* Not sure why this case is needed, but there seems to occassionally be an empty FieldDesignator inserted
+           during parsing, and the designatedInit is not encapsulated in an InitList *)
+        | DesignatedInit { designators = [FieldDesignator ""; FieldDesignator f]; init }->
             if f <> name then
               failwith "incorrect variant type for tagged union";
             let e = translate_expr env init in
             ECons (name, [e])
-        | _ -> failwith "Incorrect expression for tagged union"
+        | _ ->
+            Format.eprintf "Expected initializer, got %a\n@." Clang.Expr.pp e;
+            failwith "Incorrect expression for tagged union"
 
 
 and translate_fields env t es =
