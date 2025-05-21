@@ -39,6 +39,10 @@ let elaborated_map = ref ElaboratedMap.empty
    that internal pointers should be translated to Boxes instead of borrows *)
 let boxed_types = ref LidSet.empty
 
+(* A map from types that are annotated with `scylla_tuple` to their
+   corresponding Ast tuple type definition. *)
+let tuple_types : typ LidMap.t ref = ref LidMap.empty
+
 (* The values of type_def_map below used to be of type lazy AST.type_def.
     However, when pattern-matching on lazy values, OCaml will force the evaluation,
     even if the resulting value does not correspond the pattern.
@@ -67,11 +71,13 @@ type type_def_lazy =
   | CAbbrev of Krml.Ast.typ Lazy.t
   | CEnum of (lident * Krml.Ast.z option) list Lazy.t
 
-let force_type_def_lazy (t: type_def_lazy) : Krml.Ast.type_def = match t with
+let force_type_def_lazy lid (t: type_def_lazy) : Krml.Ast.type_def = match t with
   | CVariant branches -> Variant (Lazy.force branches)
   | CFlat fields -> Flat (Lazy.force fields)
   | CTuple fields ->
-      Abbrev (TTuple (List.map (fun (_, (t, _)) -> t) (Lazy.force fields)))
+      let typ = TTuple (List.map (fun (_, (t, _)) -> t) (Lazy.force fields)) in
+      tuple_types := LidMap.add lid typ !tuple_types;
+      Abbrev typ
   | CAbbrev t -> Abbrev (Lazy.force t)
   | CEnum l -> Enum (Lazy.force l)
 
@@ -1962,7 +1968,7 @@ let translate_decl (decl : decl) =
       let lid = Option.get (lid_of_name name) in
       begin
         match LidMap.find_opt lid !type_def_map with
-        | Some def -> Some (DType (lid, [], 0, 0, force_type_def_lazy def))
+        | Some def -> Some (DType (lid, [], 0, 0, force_type_def_lazy lid def))
         | None -> None
       end
   | _ -> raise Unsupported
@@ -2224,7 +2230,7 @@ let fill_type_maps (ignored_dirs : string list) (decls: deduplicated_decls) =
 (* Final pass. Actually emit definitions. *)
 let translate_compil_units (ast : grouped_decls) (command_line_args : string list) =
   let file_args = List.map stem_of_file command_line_args in
-  !boxed_types, List.map (fun (file, decls) ->
+  !boxed_types, !tuple_types, List.map (fun (file, decls) ->
     if List.mem file file_args then
       file, List.filter_map translate_decl decls
     else

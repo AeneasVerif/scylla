@@ -57,6 +57,16 @@ let materialize_casts =
           super#visit_ECast env e t_to
   end
 
+let inline_tuple_types tuple_types =
+  object (_self)
+    inherit [_] map
+
+    method! visit_TQualified _ t =
+      match ClangToAst.LidMap.find_opt t tuple_types with
+      | Some t -> t
+      | None -> TQualified t
+  end
+
 let simplify files =
   let files = remove_addrof_index#visit_files () files in
   inline_immediate_vardef#visit_files () files

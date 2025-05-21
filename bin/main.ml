@@ -84,7 +84,8 @@ Supported options:|}
   let lib_dirs = get_sdkroot () @ Clang.default_include_directories () in
   let files = Scylla.ClangToAst.split_into_files lib_dirs deduped_files in
   Scylla.ClangToAst.fill_type_maps (if !Scylla.Options.ignore_lib_errors then lib_dirs else []) deduped_files;
-  let boxed_types, files = Scylla.ClangToAst.translate_compil_units files command_line_args in
+  let boxed_types, tuple_types, files = Scylla.ClangToAst.translate_compil_units files command_line_args in
+  let files = (Scylla.Simplify.inline_tuple_types tuple_types)#visit_files () files in
 
   let files = Krml.Builtin.lowstar_ignore :: files in
 
