@@ -87,7 +87,10 @@ Supported options:|}
   let boxed_types, tuple_types, files = Scylla.ClangToAst.translate_compil_units files command_line_args in
   let files = (Scylla.Simplify.inline_tuple_types tuple_types)#visit_files () files in
 
-  let files = Krml.Builtin.lowstar_ignore :: files in
+  let pulse_builtin = "Pulse_Lib_Slice",
+    [ Krml.Builtin.mk_val ~nvars:1 [ "Pulse"; "Lib"; "Slice" ] "len" Krml.Ast.(TArrow (TBound 0, TInt SizeT)) ] in
+
+  let files = pulse_builtin :: Krml.Builtin.lowstar_ignore :: files in
 
   (* Makes debugging the checker messages horrible, otherwise *)
   let files = Krml.Simplify.let_to_sequence#visit_files () files in

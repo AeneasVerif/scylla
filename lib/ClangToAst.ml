@@ -1181,8 +1181,21 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
                 let tuple_branch = [binder], Krml.Ast.with_type field_t tuple_pat, Krml.Ast.with_type field_t (EBound 0) in
                 Krml.Ast.with_type field_t (EMatch (Unchecked, base, [tuple_branch]))
 
+            | Some (CSlice t) ->
+                let t = Lazy.force t in
+                if arrow then
+                  fatal_error "Arrow access on slice struct not supported";
+                if f = "elt" then
+                  failwith "Support accessing element"
+                else if f = "len" then
+                  let len_fn = Krml.Ast.with_type TAny (EQualified (["Pulse"; "Lib"; "Slice"], "len")) in
+                  let len_call = Krml.Ast.with_type TAny (ETApp (len_fn, [], [], [TBuf (t, false)])) in
+                  Krml.Ast.with_type (TInt K.SizeT) (EApp (len_call, [base]))
+                else
+                  fatal_error "Field %s of slice %a is not elt or len" f plid lid
 
-            | Some _ -> fatal_error "Taking a field of %a which is not a struct nor a tagged union" plid lid
+
+            | Some _ -> fatal_error "Taking a field of %a which is not a struct, tuple, slice, nor a tagged union" plid lid
             | None -> fatal_error "Taking a field of %a which is not in the map" plid lid
         end
     | UnaryExpr { kind = SizeOf; argument = ArgumentType t; _ } -> begin
