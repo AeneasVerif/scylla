@@ -828,7 +828,7 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
         failwith "FIXME: reinstante this case and understand why it was needed"
     (* We handled above the case of array initialization, this should
        be a struct initialization *)
-    | CompoundLiteral { init = { desc = InitList l; _ }; _ } ->
+    | CompoundLiteral { init = { desc = InitList l; _ }; _ } | InitList l ->
         translate_fields env (typ_from_clang e) l
     | UnaryOperator { kind = PostInc | PreInc as kind; operand } ->
         (* This is a special case for loop increments. The current Karamel
@@ -1175,7 +1175,7 @@ and translate_field_expr env (e : expr) field_name =
   | _ ->
       Some field_name, translate_expr env e
 
-and translate_variant env branches (tag: expr) (e: expr) =
+and translate_variant env branches (tag: expr) (e: expr option) =
   let tag = match tag.desc with
     | DesignatedInit { init = { desc = IntegerLiteral n; _}; _ } -> Clang.Ast.int_of_literal n
     | _ ->
@@ -1185,13 +1185,22 @@ and translate_variant env branches (tag: expr) (e: expr) =
   if tag >= List.length branches then
     fatal_error "tag is greater than number of variants";
   let name, _ = List.nth branches tag in
-  match e.desc with
-    | InitList [{ desc = DesignatedInit { designators = [FieldDesignator f]; init }; _ }] ->
-        if f <> name then
-          failwith "incorrect variant type for tagged union";
-        let e = translate_expr env init in
-        ECons (name, [e])
-    | _ -> failwith "Incorrect expression for tagged union"
+  match e with
+  (* This is the case of an empty variant *)
+  | None -> ECons (name, [])
+  | Some e ->
+      match e.desc with
+        | InitList [{ desc = DesignatedInit { designators = [FieldDesignator f]; init }; _ }]
+        (* Not sure why this case is needed, but there seems to occassionally be an empty FieldDesignator inserted
+           during parsing, and the designatedInit is not encapsulated in an InitList *)
+        | DesignatedInit { designators = [FieldDesignator ""; FieldDesignator f]; init }->
+            if f <> name then
+              failwith "incorrect variant type for tagged union";
+            let e = translate_expr env init in
+            ECons (name, [e])
+        | _ ->
+            Format.eprintf "Expected initializer, got %a\n@." Clang.Expr.pp e;
+            failwith "Incorrect expression for tagged union"
 
 
 and translate_fields env t es =
@@ -1205,7 +1214,8 @@ and translate_fields env t es =
     | CVariant lazy_branches ->
         let branches = Lazy.force lazy_branches in
         begin match es with
-        | [tag; e] -> Krml.Ast.with_type t (translate_variant env branches tag e)
+        | [tag] -> Krml.Ast.with_type t (translate_variant env branches tag None)
+        | [tag; e] -> Krml.Ast.with_type t (translate_variant env branches tag (Some e))
         | _ ->
           fatal_error "Expected two arguments for tagged union initializer";
         end
