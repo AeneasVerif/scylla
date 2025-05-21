@@ -68,6 +68,7 @@ type type_def_lazy =
      were a struct: This allows us to replace field access by the correct
      tuple access, depending on the numbering of the branches *)
   | CTuple of Krml.Ast.fields_t_opt Lazy.t
+  (* A slice of elements of type t. In C, this is a pointer type t* *)
   | CSlice of Krml.Ast.typ Lazy.t
   | CAbbrev of Krml.Ast.typ Lazy.t
   | CEnum of (lident * Krml.Ast.z option) list Lazy.t
@@ -649,7 +650,8 @@ let adjust e t =
   (* Special handling for slice types *)
   | _, TBuf (t, _), TQualified lid | _, TQualified lid, TBuf (t, _) ->
       begin match LidMap.find_opt lid !type_def_map with
-      | Some (CSlice (lazy t')) when t = t' ->
+      (* The second case of the when is to handle null pointers *)
+      | Some (CSlice (lazy t')) when t = t' || t = TAny ->
           (* Nothing to do, this will be erased at a later phase *)
           e
       | _ ->
@@ -1293,6 +1295,13 @@ and translate_fields env t es =
            fields matches the initializers *)
         let fields = List.map2 (translate_field_expr env) es field_names in
         Krml.Ast.with_type t (ETuple (List.map snd fields))
+
+    | CSlice _ ->
+        if List.length es <> 2 then
+          fatal_error "Expected two initializers for slice type for fields elt and len";
+        (* Ensuring the right order and names of initializers *)
+        let fields = List.map2 (translate_field_expr env) es ["elt"; "len"] in
+        snd (List.hd fields)
 
     | _ -> failwith "impossible"
 
