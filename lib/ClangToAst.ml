@@ -39,6 +39,10 @@ let elaborated_map = ref ElaboratedMap.empty
    that internal pointers should be translated to Boxes instead of borrows *)
 let boxed_types = ref LidSet.empty
 
+(* A map from types that are annotated with `scylla_tuple` to their
+   corresponding Ast tuple type definition. *)
+let tuple_types : typ LidMap.t ref = ref LidMap.empty
+
 (* The values of type_def_map below used to be of type lazy AST.type_def.
     However, when pattern-matching on lazy values, OCaml will force the evaluation,
     even if the resulting value does not correspond the pattern.
@@ -60,12 +64,20 @@ let boxed_types = ref LidSet.empty
 type type_def_lazy =
   | CVariant of Krml.Ast.branches_t Lazy.t
   | CFlat of Krml.Ast.fields_t_opt Lazy.t
+  (* For the translation, we preserve the list of fields as if the tuple
+     were a struct: This allows us to replace field access by the correct
+     tuple access, depending on the numbering of the branches *)
+  | CTuple of Krml.Ast.fields_t_opt Lazy.t
   | CAbbrev of Krml.Ast.typ Lazy.t
   | CEnum of (lident * Krml.Ast.z option) list Lazy.t
 
-let force_type_def_lazy (t: type_def_lazy) : Krml.Ast.type_def = match t with
+let force_type_def_lazy lid (t: type_def_lazy) : Krml.Ast.type_def = match t with
   | CVariant branches -> Variant (Lazy.force branches)
   | CFlat fields -> Flat (Lazy.force fields)
+  | CTuple fields ->
+      let typ = TTuple (List.map (fun (_, (t, _)) -> t) (Lazy.force fields)) in
+      tuple_types := LidMap.add lid typ !tuple_types;
+      Abbrev typ
   | CAbbrev t -> Abbrev (Lazy.force t)
   | CEnum l -> Enum (Lazy.force l)
 
@@ -393,6 +405,7 @@ let rec normalize_type t =
   | TBuf (t, c) -> TBuf (normalize_type t, c)
   | TArray (t, c) -> TArray (normalize_type t, c)
   | TArrow (t1, t2) -> TArrow (normalize_type t1, normalize_type t2)
+  | TTuple ts -> TTuple (List.map normalize_type ts)
   | _ -> t
 
 let translate_typ t = normalize_type (translate_typ t)
@@ -1144,6 +1157,29 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
                 in
                 with_type field_t (EField (deref_base, f))
 
+            | Some (CTuple lazy_fields) ->
+                if arrow then
+                  fatal_error "Arrow access on tuple struct not supported";
+                let fields = Lazy.force lazy_fields in
+                let field_t =
+                  if List.mem_assoc (Some f) fields then
+                    fst (List.assoc (Some f) fields)
+                  else
+                    fatal_error "Field %s of %a not found in struct def (available fields are: %s)"
+                      f plid lid
+                      (String.concat ", " (List.map (fun (f, _) -> Option.value ~default:"<noname>" f) fields))
+                in
+                (* Retrieve the position of the field in the tuple *)
+                let idx = Krml.KList.index (fun x -> fst x = (Some f)) fields in
+
+                let binder = Helpers.fresh_binder "v" field_t in
+                let tuple_pat = PTuple (
+                  List.mapi (fun i (_, (t, _)) -> Krml.Ast.with_type t (if i = idx then PBound 0 else PWild)) fields)
+                in
+                let tuple_branch = [binder], Krml.Ast.with_type field_t tuple_pat, Krml.Ast.with_type field_t (EBound 0) in
+                Krml.Ast.with_type field_t (EMatch (Unchecked, base, [tuple_branch]))
+
+
             | Some _ -> fatal_error "Taking a field of %a which is not a struct nor a tagged union" plid lid
             | None -> fatal_error "Taking a field of %a which is not in the map" plid lid
         end
@@ -1209,7 +1245,7 @@ and translate_fields env t es =
         let fields = Lazy.force lazy_fields in
         let field_names = List.map (fun x -> Option.get (fst x)) fields in
         if List.length field_names <> List.length es then
-          fatal_error "TODO: partial initializers (%s but %d initialiers)" (String.concat ", " field_names) (List.length es);
+          fatal_error "TODO: partial initializers (%s but %d initializers)" (String.concat ", " field_names) (List.length es);
         Krml.Ast.with_type t (EFlat (List.map2 (translate_field_expr env) es field_names))
     | CVariant lazy_branches ->
         let branches = Lazy.force lazy_branches in
@@ -1219,6 +1255,16 @@ and translate_fields env t es =
         | _ ->
           fatal_error "Expected two arguments for tagged union initializer";
         end
+
+    | CTuple lazy_fields ->
+        let fields = Lazy.force lazy_fields in
+        let field_names = List.map (fun x -> Option.get (fst x)) fields in
+        if List.length field_names <> List.length es then
+          fatal_error "TODO: partial initializers (%s but %d initializers)" (String.concat ", " field_names) (List.length es);
+        (* We go through translate_field_expr to ensure that the order of the
+           fields matches the initializers *)
+        let fields = List.map2 (translate_field_expr env) es field_names in
+        Krml.Ast.with_type t (ETuple (List.map snd fields))
 
     | _ -> failwith "impossible"
 
@@ -1922,7 +1968,7 @@ let translate_decl (decl : decl) =
       let lid = Option.get (lid_of_name name) in
       begin
         match LidMap.find_opt lid !type_def_map with
-        | Some def -> Some (DType (lid, [], 0, 0, force_type_def_lazy def))
+        | Some def -> Some (DType (lid, [], 0, 0, force_type_def_lazy lid def))
         | None -> None
       end
   | _ -> raise Unsupported
@@ -2033,6 +2079,9 @@ let prepopulate_type_maps (ignored_dirs: string list) (decls: deduplicated_decls
                 when a struct field refers to another type.
             *)
             (match StringMap.find (get_id_name name) decls with
+                | { desc = RecordDecl { fields; attributes; _ }; _ }, _
+                      when Attributes.has_tuple_attr attributes ->
+                    Some (CTuple (lazy (List.map translate_field fields)))
                 | { desc = RecordDecl { fields; attributes; _ }; _ }, _
                       when Attributes.has_adt_attr attributes ->
                     Some (CVariant (lazy (match fields with
@@ -2181,7 +2230,7 @@ let fill_type_maps (ignored_dirs : string list) (decls: deduplicated_decls) =
 (* Final pass. Actually emit definitions. *)
 let translate_compil_units (ast : grouped_decls) (command_line_args : string list) =
   let file_args = List.map stem_of_file command_line_args in
-  !boxed_types, List.map (fun (file, decls) ->
+  !boxed_types, !tuple_types, List.map (fun (file, decls) ->
     if List.mem file file_args then
       file, List.filter_map translate_decl decls
     else

@@ -33,6 +33,9 @@ let adt_attr = "scylla_adt"
    tagged union cases *)
 let empty_variant_attr = "scylla_empty_variant"
 
+(* Translate a given type to a tuple instead of a struct *)
+let tuple_attr = "scylla_tuple"
+
 (* Expose directly as a C FFI function or global, with #[no_mangle] and the like *)
 let expose_attr = "scylla_expose"
 
@@ -51,11 +54,13 @@ let has_opaque_attr = has opaque_attr
    be exactly the annotation *)
 let has_box_attr = has box_attr
 
-let has_expose_attr = has expose_attr
-
 (* We check for the presence of the [adt_attr] attribute. We require it
    to be exactly the annotation *)
 let has_adt_attr = has adt_attr
+
+let has_tuple_attr = has tuple_attr
+
+let has_expose_attr = has expose_attr
 
 (* If the [adt_attr] attribute is specified on a structure,
    we can also specify `scylla_empty_variant(name)`, which
