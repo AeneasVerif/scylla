@@ -440,6 +440,15 @@ let assert_tbuf_or_tarray t = match t with
   end
   | _ -> Helpers.assert_tbuf_or_tarray t
 
+let is_tbuf_tarray_tslice t =
+  match t with
+  | TQualified lid -> begin
+      match LidMap.find lid !type_def_map with
+      | CSlice _ -> true
+      | _ -> false
+    end
+  | TBuf _ | TArray _ -> true
+  | _ -> false
 
 (* HELPERS *)
 
@@ -799,7 +808,7 @@ let mk_binop lhs kind rhs =
 
   (* In case of pointer arithmetic, we need to perform a rewriting into EBufSub/Diff *)
   match lhs.typ, kind with
-  | (TBuf _ | TArray _), Clang.Add ->
+  | t, Clang.Add when is_tbuf_tarray_tslice t ->
       with_type lhs.typ
         begin
           match lhs.node with
@@ -821,7 +830,7 @@ let mk_binop lhs kind rhs =
               EBufSub (lhs', adjust (apply_op Sub rhs rhs') (TInt SizeT))
           | _ -> EBufSub (lhs, adjust rhs (TInt SizeT))
         end
-  | (TBuf _ | TArray _), Sub ->
+  | t, Sub when is_tbuf_tarray_tslice t ->
       with_type lhs.typ
         begin
           match lhs.node with
