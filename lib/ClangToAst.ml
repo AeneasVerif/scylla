@@ -68,6 +68,7 @@ type type_def_lazy =
      were a struct: This allows us to replace field access by the correct
      tuple access, depending on the numbering of the branches *)
   | CTuple of Krml.Ast.fields_t_opt Lazy.t
+  | CSlice of Krml.Ast.typ Lazy.t
   | CAbbrev of Krml.Ast.typ Lazy.t
   | CEnum of (lident * Krml.Ast.z option) list Lazy.t
 
@@ -78,6 +79,7 @@ let force_type_def_lazy lid (t: type_def_lazy) : Krml.Ast.type_def = match t wit
       let typ = TTuple (List.map (fun (_, (t, _)) -> t) (Lazy.force fields)) in
       tuple_types := LidMap.add lid typ !tuple_types;
       Abbrev typ
+  | CSlice t -> Abbrev (TBuf (Lazy.force t, false))
   | CAbbrev t -> Abbrev (Lazy.force t)
   | CEnum l -> Enum (Lazy.force l)
 
@@ -2082,6 +2084,17 @@ let prepopulate_type_maps (ignored_dirs: string list) (decls: deduplicated_decls
                 | { desc = RecordDecl { fields; attributes; _ }; _ }, _
                       when Attributes.has_tuple_attr attributes ->
                     Some (CTuple (lazy (List.map translate_field fields)))
+                | { desc = RecordDecl { fields; attributes; _ }; _ }, _
+                      when Attributes.has_slice_attr attributes ->
+
+                    Some (CSlice (lazy (
+                      let fields = List.map translate_field fields in
+                      match fields with
+                      | [(Some "elt", (TBuf (t, _), _)) ; (Some "len", (TInt _, _)) ] -> t
+                      | _ ->
+                          fatal_error "A slice type should have two fields called elt and len"
+                    )))
+
                 | { desc = RecordDecl { fields; attributes; _ }; _ }, _
                       when Attributes.has_adt_attr attributes ->
                     Some (CVariant (lazy (match fields with
