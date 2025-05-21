@@ -429,6 +429,18 @@ let find_var env name =
    Every other type should be able to be deduced from the context. *)
 let typ_from_clang (e : Clang.Ast.expr) : typ = Clang.Type.of_node e |> translate_typ
 
+(* Extension of karamel's assert_tbuf_or_tarray to handle slice types.
+   Note, we cannot simply normalize slice types as we need to know
+   a given type is a slice to rewrite "len" and "elt" field accesses
+   accordingly *)
+let assert_tbuf_or_tarray t = match t with
+  | TQualified lid -> begin match LidMap.find lid !type_def_map with
+      | CSlice (lazy t) -> t
+      | _ -> fatal_error "Type %a is not a tbuf or tarray" ptyp t
+  end
+  | _ -> Helpers.assert_tbuf_or_tarray t
+
+
 (* HELPERS *)
 
 (* Helpers to deal with the Clang AST, as opposed to Helpers which deals with the Krml AST. *)
@@ -953,7 +965,7 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
               match lhs.node with
               (* Special-case rewriting for buffer assignments *)
               | EBufRead (base, index) ->
-                  let t = Helpers.assert_tbuf_or_tarray base.typ in
+                  let t = assert_tbuf_or_tarray base.typ in
                   EBufWrite (base, index, adjust rhs t)
               | _ ->
                   mark_mut_if_variable env lhs;
@@ -991,7 +1003,7 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
             match lhs.node with
             (* Special-case rewriting for buffer assignments *)
             | EBufRead (base, index) ->
-                let t = Helpers.assert_tbuf_or_tarray base.typ in
+                let t = assert_tbuf_or_tarray base.typ in
                 EBufWrite (base, index, adjust rhs t)
             | _ ->
                 mark_mut_if_variable env lhs;
@@ -1020,7 +1032,7 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
           | dst :: src :: len :: _ ->
               let dst = translate_expr env dst in
               let src = translate_expr env src in
-              if Helpers.assert_tbuf_or_tarray dst.typ <> Helpers.assert_tbuf_or_tarray src.typ then
+              if assert_tbuf_or_tarray dst.typ <> assert_tbuf_or_tarray src.typ then
                 fatal_error "in this memcpy, source and destination types differ: memcpy(%a: %a, %a: %a, ...)"
                   pexpr dst ptyp dst.typ
                   pexpr src ptyp src.typ;
@@ -1033,7 +1045,7 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
                     (* We recognize the case `len = lhs * sizeof (_)` *)
                     let len = adjust (translate_expr env lhs) (TInt SizeT) in
                     let ty = extract_sizeof_ty argument in
-                    assert (ty = Helpers.assert_tbuf_or_tarray dst.typ);
+                    assert (ty = assert_tbuf_or_tarray dst.typ);
                     len
                 | _, TBuf (TInt UInt8, _) ->
                     (* Unless it's a UInt8 in which case we may omit the sizeof *)
@@ -1059,7 +1071,7 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
                   ->
                     let len = adjust (translate_expr env lhs) (TInt SizeT) in
                     let ty = extract_sizeof_ty argument in
-                    assert (ty = Helpers.assert_tbuf_or_tarray dst.typ);
+                    assert (ty = assert_tbuf_or_tarray dst.typ);
                     len
                 | _, TBuf (TInt UInt8, _) ->
                     (* Unless it's a UInt8 in which case we may omit the sizeof *)
@@ -1067,7 +1079,7 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
                 | _ ->
                     failwith "ill-formed memset"
               in
-              let elt = adjust (translate_expr env v) (Helpers.assert_tbuf_or_tarray dst.typ) in
+              let elt = adjust (translate_expr env v) (assert_tbuf_or_tarray dst.typ) in
               with_type TUnit @@ EBufFill (dst, elt, len)
           | _ -> failwith "memset does not have the right number of arguments"
         end
@@ -1100,7 +1112,7 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
         let base = translate_expr env base in
         let index = adjust (translate_expr env ~must_return_value:true index) (TInt SizeT) in
         (* Is this only called on rvalues? Otherwise, might need EBufWrite *)
-        with_type (Helpers.assert_tbuf_or_tarray base.typ) (EBufRead (base, index))
+        with_type (assert_tbuf_or_tarray base.typ) (EBufRead (base, index))
 
     | ConditionalOperator { cond; then_branch; else_branch } ->
         let cond = translate_expr env cond in
@@ -1361,14 +1373,14 @@ let translate_vardecl (env : env) (vdecl : var_decl_desc) : env * binder * Krml.
       if List.length l = 1 then
         (* One element initializer, possibly repeated *)
         let e = translate_expr env (List.hd l) in
-        let e = adjust e (Helpers.assert_tbuf_or_tarray typ) in
+        let e = adjust e (assert_tbuf_or_tarray typ) in
         (* TODO: Arrays are not on stack if at top-level *)
         ( add_var env (vname, typ),
           Helpers.fresh_binder vname typ,
           Krml.Ast.with_type typ (EBufCreate (Krml.Common.Stack, e, size_e)) )
       else (
         assert (List.length l = size);
-        let ty = Helpers.assert_tbuf_or_tarray typ in
+        let ty = assert_tbuf_or_tarray typ in
         let es = List.map (fun e -> adjust (translate_expr env e) ty) l in
         ( add_var env (vname, typ),
           Helpers.fresh_binder vname typ,
