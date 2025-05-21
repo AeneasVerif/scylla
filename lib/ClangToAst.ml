@@ -1238,7 +1238,7 @@ and translate_fields env t es =
         let fields = Lazy.force lazy_fields in
         let field_names = List.map (fun x -> Option.get (fst x)) fields in
         if List.length field_names <> List.length es then
-          fatal_error "TODO: partial initializers (%s but %d initialiers)" (String.concat ", " field_names) (List.length es);
+          fatal_error "TODO: partial initializers (%s but %d initializers)" (String.concat ", " field_names) (List.length es);
         Krml.Ast.with_type t (EFlat (List.map2 (translate_field_expr env) es field_names))
     | CVariant lazy_branches ->
         let branches = Lazy.force lazy_branches in
@@ -1248,6 +1248,16 @@ and translate_fields env t es =
         | _ ->
           fatal_error "Expected two arguments for tagged union initializer";
         end
+
+    | CTuple lazy_fields ->
+        let fields = Lazy.force lazy_fields in
+        let field_names = List.map (fun x -> Option.get (fst x)) fields in
+        if List.length field_names <> List.length es then
+          fatal_error "TODO: partial initializers (%s but %d initializers)" (String.concat ", " field_names) (List.length es);
+        (* We go through translate_field_expr to ensure that the order of the
+           fields matches the initializers *)
+        let fields = List.map2 (translate_field_expr env) es field_names in
+        Krml.Ast.with_type t (ETuple (List.map snd fields))
 
     | _ -> failwith "impossible"
 
