@@ -60,12 +60,18 @@ let boxed_types = ref LidSet.empty
 type type_def_lazy =
   | CVariant of Krml.Ast.branches_t Lazy.t
   | CFlat of Krml.Ast.fields_t_opt Lazy.t
+  (* For the translation, we preserve the list of fields as if the tuple
+     were a struct: This allows us to replace field access by the correct
+     tuple access, depending on the numbering of the branches *)
+  | CTuple of Krml.Ast.fields_t_opt Lazy.t
   | CAbbrev of Krml.Ast.typ Lazy.t
   | CEnum of (lident * Krml.Ast.z option) list Lazy.t
 
 let force_type_def_lazy (t: type_def_lazy) : Krml.Ast.type_def = match t with
   | CVariant branches -> Variant (Lazy.force branches)
   | CFlat fields -> Flat (Lazy.force fields)
+  | CTuple fields ->
+      Abbrev (TTuple (List.map (fun (_, (t, _)) -> t) (Lazy.force fields)))
   | CAbbrev t -> Abbrev (Lazy.force t)
   | CEnum l -> Enum (Lazy.force l)
 
@@ -1144,6 +1150,29 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
                 in
                 with_type field_t (EField (deref_base, f))
 
+            | Some (CTuple lazy_fields) ->
+                if arrow then
+                  fatal_error "Arrow access on tuple struct not supported";
+                let fields = Lazy.force lazy_fields in
+                let field_t =
+                  if List.mem_assoc (Some f) fields then
+                    fst (List.assoc (Some f) fields)
+                  else
+                    fatal_error "Field %s of %a not found in struct def (available fields are: %s)"
+                      f plid lid
+                      (String.concat ", " (List.map (fun (f, _) -> Option.value ~default:"<noname>" f) fields))
+                in
+                (* Retrieve the position of the field in the tuple *)
+                let idx = Krml.KList.index (fun x -> fst x = (Some f)) fields in
+
+                let binder = Helpers.fresh_binder "v" field_t in
+                let tuple_pat = PTuple (
+                  List.mapi (fun i (_, (t, _)) -> Krml.Ast.with_type t (if i = idx then PBound 0 else PWild)) fields)
+                in
+                let tuple_branch = [binder], Krml.Ast.with_type field_t tuple_pat, Krml.Ast.with_type field_t (EBound 0) in
+                Krml.Ast.with_type field_t (EMatch (Unchecked, base, [tuple_branch]))
+
+
             | Some _ -> fatal_error "Taking a field of %a which is not a struct nor a tagged union" plid lid
             | None -> fatal_error "Taking a field of %a which is not in the map" plid lid
         end
@@ -2033,6 +2062,9 @@ let prepopulate_type_maps (ignored_dirs: string list) (decls: deduplicated_decls
                 when a struct field refers to another type.
             *)
             (match StringMap.find (get_id_name name) decls with
+                | { desc = RecordDecl { fields; attributes; _ }; _ }, _
+                      when Attributes.has_tuple_attr attributes ->
+                    Some (CTuple (lazy (List.map translate_field fields)))
                 | { desc = RecordDecl { fields; attributes; _ }; _ }, _
                       when Attributes.has_adt_attr attributes ->
                     Some (CVariant (lazy (match fields with
