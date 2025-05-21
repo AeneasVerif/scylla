@@ -399,6 +399,7 @@ let rec normalize_type t =
   | TBuf (t, c) -> TBuf (normalize_type t, c)
   | TArray (t, c) -> TArray (normalize_type t, c)
   | TArrow (t1, t2) -> TArrow (normalize_type t1, normalize_type t2)
+  | TTuple ts -> TTuple (List.map normalize_type ts)
   | _ -> t
 
 let translate_typ t = normalize_type (translate_typ t)
