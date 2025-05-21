@@ -41,7 +41,7 @@ let boxed_types = ref LidSet.empty
 
 (* A map from types that are annotated with `scylla_tuple` to their
    corresponding Ast tuple type definition. *)
-let tuple_types : typ LidMap.t ref = ref LidMap.empty
+let tuple_and_slice_types : typ LidMap.t ref = ref LidMap.empty
 
 (* The values of type_def_map below used to be of type lazy AST.type_def.
     However, when pattern-matching on lazy values, OCaml will force the evaluation,
@@ -77,9 +77,12 @@ let force_type_def_lazy lid (t: type_def_lazy) : Krml.Ast.type_def = match t wit
   | CFlat fields -> Flat (Lazy.force fields)
   | CTuple fields ->
       let typ = TTuple (List.map (fun (_, (t, _)) -> t) (Lazy.force fields)) in
-      tuple_types := LidMap.add lid typ !tuple_types;
+      tuple_and_slice_types := LidMap.add lid typ !tuple_and_slice_types;
       Abbrev typ
-  | CSlice t -> Abbrev (TBuf (Lazy.force t, false))
+  | CSlice t ->
+      let typ = TBuf (Lazy.force t, false) in
+      tuple_and_slice_types := LidMap.add lid typ !tuple_and_slice_types;
+      Abbrev typ
   | CAbbrev t -> Abbrev (Lazy.force t)
   | CEnum l -> Enum (Lazy.force l)
 
@@ -643,6 +646,16 @@ let adjust e t =
   | _, TBuf (t, false), TBuf (t', true) when t = t' ->
       e
 
+  (* Special handling for slice types *)
+  | _, TBuf (t, _), TQualified lid | _, TQualified lid, TBuf (t, _) ->
+      begin match LidMap.find_opt lid !type_def_map with
+      | Some (CSlice (lazy t')) when t = t' ->
+          (* Nothing to do, this will be erased at a later phase *)
+          e
+      | _ ->
+        fatal_error "Could not convert expression %a: %a to have type %a" pexpr e ptyp e.typ ptyp t;
+      end
+
   (* TODO: tag indices *)
   | _ ->
       if e.typ <> t then
@@ -1186,7 +1199,7 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
                 if arrow then
                   fatal_error "Arrow access on slice struct not supported";
                 if f = "elt" then
-                  failwith "Support accessing element"
+                  base
                 else if f = "len" then
                   let len_fn = Krml.Ast.with_type TAny (EQualified (["Pulse"; "Lib"; "Slice"], "len")) in
                   let len_call = Krml.Ast.with_type TAny (ETApp (len_fn, [], [], [TBuf (t, false)])) in
@@ -2256,7 +2269,7 @@ let fill_type_maps (ignored_dirs : string list) (decls: deduplicated_decls) =
 (* Final pass. Actually emit definitions. *)
 let translate_compil_units (ast : grouped_decls) (command_line_args : string list) =
   let file_args = List.map stem_of_file command_line_args in
-  !boxed_types, !tuple_types, List.map (fun (file, decls) ->
+  !boxed_types, !tuple_and_slice_types, List.map (fun (file, decls) ->
     if List.mem file file_args then
       file, List.filter_map translate_decl decls
     else
