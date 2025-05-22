@@ -1041,10 +1041,11 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
         match args with
         | [ e; i ] ->
             let e = translate_expr env e in
-            let e_t = assert_tbuf_or_tarray e.typ in
+            (* Sanity-check: The argument should be a pointer *)
+            let _ = assert_tbuf_or_tarray e.typ in
             let i = translate_expr env i in
             let split_fn = with_type TAny (EQualified (["Pulse"; "Lib"; "Slice"], "split")) in
-            let split_call = with_type TAny (ETApp (split_fn, [], [], [e_t]) ) in
+            let split_call = with_type TAny (ETApp (split_fn, [], [], [e.typ]) ) in
             with_type (TTuple ([e.typ; e.typ])) (EApp (split_call, [e; i]))
         | _ -> failwith "wrong number of arguments for scylla_split"
       end

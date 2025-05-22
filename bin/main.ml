@@ -88,8 +88,10 @@ Supported options:|}
   (* Needed to handle tuples and slices *)
   let files = Krml.Inlining.inline_type_abbrevs files in
 
-  let pulse_builtin = "Pulse_Lib_Slice",
-    [ Krml.Builtin.mk_val ~nvars:1 [ "Pulse"; "Lib"; "Slice" ] "len" Krml.Ast.(TArrow (TBound 0, TInt SizeT)) ] in
+  let pulse_builtin = "Pulse_Lib_Slice", [
+    Krml.Builtin.mk_val ~nvars:1 [ "Pulse"; "Lib"; "Slice" ] "len" Krml.Ast.(TArrow (TBound 0, TInt SizeT)) ;
+    Krml.Builtin.mk_val ~nvars:1 [ "Pulse"; "Lib"; "Slice" ] "split" Krml.Ast.(TArrow (TBound 0, TArrow (TInt SizeT, TTuple [TBound 0; TBound 0]))) ;
+  ] in
 
   let files = pulse_builtin :: Krml.Builtin.lowstar_ignore :: files in
 
