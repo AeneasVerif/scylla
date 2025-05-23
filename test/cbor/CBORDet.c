@@ -7,6 +7,7 @@
 #define CBOR_SERIALIZED_DEFAULT { .cbor_serialized_header = {.size = 0, .value = 0}, .cbor_serialized_payload = NULL }
 #define OPTION_DEFAULT { .tag = 1 }
 #define LONG_ARGUMENT_DEFAULT { .tag = LongArgumentOther }
+#define split__uint8_t scylla_split
 
 static uint8_t get_bitfield_gen8(uint8_t x, uint32_t lo, uint32_t hi)
 {
@@ -662,7 +663,9 @@ static header cbor_raw_with_perm_get_header(cbor_raw xl)
   return res;
 }
 
-typedef struct __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t_s
+typedef struct
+__attribute__((annotate("scylla_tuple")))
+__Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t_s
 {
   Pulse_Lib_Slice_slice__uint8_t fst;
   Pulse_Lib_Slice_slice__uint8_t snd;
@@ -670,7 +673,7 @@ typedef struct __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t_s
 __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t;
 
 static __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-split__uint8_t(Pulse_Lib_Slice_slice__uint8_t s, size_t i)
+scylla_split(Pulse_Lib_Slice_slice__uint8_t s, size_t i)
 {
   uint8_t *elt_ = s.elt + i;
   Pulse_Lib_Slice_slice__uint8_t s1 = { .elt = s.elt, .len = i };
