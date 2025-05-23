@@ -229,7 +229,7 @@ pub fn CBOR_Pulse_Raw_Compare_impl_cbor_compare(x1: cbor_raw, x2: cbor_raw) -> i
           cond
           {
             let i00: CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw = pi1;
-            let mut elt1: cbor_raw = Default::default();
+            let mut elt1: cbor_raw = cbor_raw::case_CBOR_Case_Simple { v: 0u8 };
             match i00
             {
               CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw::case_CBOR_Raw_Iterator_Slice
@@ -274,7 +274,7 @@ pub fn CBOR_Pulse_Raw_Compare_impl_cbor_compare(x1: cbor_raw, x2: cbor_raw) -> i
                 }
             };
             let i0: CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw = pi2;
-            let mut elt2: cbor_raw = Default::default();
+            let mut elt2: cbor_raw = cbor_raw::case_CBOR_Case_Simple { v: 0u8 };
             match i0
             {
               CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw::case_CBOR_Raw_Iterator_Slice
@@ -524,7 +524,12 @@ pub fn CBOR_Pulse_Raw_Compare_impl_cbor_compare(x1: cbor_raw, x2: cbor_raw) -> i
           {
             let i00: CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry =
                 pi1;
-            let mut elt1: cbor_map_entry = Default::default();
+            let mut elt1: cbor_map_entry =
+                cbor_map_entry
+                {
+                  cbor_map_entry_key: cbor_raw::case_CBOR_Case_Simple { v: 0u8 },
+                  cbor_map_entry_value: cbor_raw::case_CBOR_Case_Simple { v: 0u8 }
+                };
             match i00
             {
               CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry::case_CBOR_Raw_Iterator_Slice
@@ -570,7 +575,12 @@ pub fn CBOR_Pulse_Raw_Compare_impl_cbor_compare(x1: cbor_raw, x2: cbor_raw) -> i
             };
             let i0: CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry =
                 pi2;
-            let mut elt2: cbor_map_entry = Default::default();
+            let mut elt2: cbor_map_entry =
+                cbor_map_entry
+                {
+                  cbor_map_entry_key: cbor_raw::case_CBOR_Case_Simple { v: 0u8 },
+                  cbor_map_entry_value: cbor_raw::case_CBOR_Case_Simple { v: 0u8 }
+                };
             match i0
             {
               CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry::case_CBOR_Raw_Iterator_Slice

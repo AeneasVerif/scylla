@@ -5,6 +5,8 @@
 #define CBOR_STRING_DEFAULT { .cbor_string_type = 0, .cbor_string_size = 0, .cbor_string_ptr = {.elt = NULL, .len = 0}}
 #define CBOR_TAGGED_DEFAULT { .cbor_tagged_tag = {.size = 0, .value = 0}, .cbor_tagged_ptr = NULL }
 #define CBOR_SERIALIZED_DEFAULT { .cbor_serialized_header = {.size = 0, .value = 0}, .cbor_serialized_payload = NULL }
+#define CBOR_RAW_DEFAULT { .tag = 1, .case_CBOR_Case_Simple = 0 }
+#define CBOR_MAP_ENTRY_DEFAULT { .cbor_map_entry_key = CBOR_RAW_DEFAULT, .cbor_map_entry_value = CBOR_RAW_DEFAULT }
 #define OPTION_DEFAULT { .tag = 1 }
 #define LONG_ARGUMENT_DEFAULT { .tag = LongArgumentOther }
 #define split__uint8_t scylla_split
@@ -2822,607 +2824,607 @@ impl_raw_uint64_compare(CBOR_Spec_Raw_Base_raw_uint64 x1, CBOR_Spec_Raw_Base_raw
   else
     return c;
 }
-//
-// int16_t CBOR_Pulse_Raw_Compare_impl_cbor_compare(cbor_raw x1, cbor_raw x2)
-// {
-//   uint8_t ty1 = impl_major_type(x1);
-//   uint8_t ty2 = impl_major_type(x2);
-//   int16_t c = impl_uint8_compare(ty1, ty2);
-//   if (c == (int16_t)0)
-//     if (ty1 == CBOR_MAJOR_TYPE_UINT64 || ty1 == CBOR_MAJOR_TYPE_NEG_INT64)
-//     {
-//       cbor_int c_;
-//       if (x1.tag == CBOR_Case_Int)
-//         c_ = x1.case_CBOR_Case_Int;
-//       else
-//         exit(253);
-//         // c_ = KRML_EABORT(cbor_int, "unreachable (pattern matches are exhaustive in F*)");
-//       CBOR_Spec_Raw_Base_raw_uint64 i1 = { .size = c_.cbor_int_size, .value = c_.cbor_int_value };
-//       cbor_int c_0;
-//       if (x2.tag == CBOR_Case_Int)
-//         c_0 = x2.case_CBOR_Case_Int;
-//       else
-//         exit(253);
-//         // c_0 = KRML_EABORT(cbor_int, "unreachable (pattern matches are exhaustive in F*)");
-//       CBOR_Spec_Raw_Base_raw_uint64 i2 = { .size = c_0.cbor_int_size, .value = c_0.cbor_int_value };
-//       return impl_raw_uint64_compare(i1, i2);
-//     }
-//     else if (ty1 == CBOR_MAJOR_TYPE_BYTE_STRING || ty1 == CBOR_MAJOR_TYPE_TEXT_STRING)
-//     {
-//       cbor_string c_ = CBOR_STRING_DEFAULT;
-//       if (x1.tag == CBOR_Case_String)
-//         c_ = x1.case_CBOR_Case_String;
-//       else
-//         exit(253);
-//         // c_ = KRML_EABORT(cbor_string, "unreachable (pattern matches are exhaustive in F*)");
-//       CBOR_Spec_Raw_Base_raw_uint64
-//       res = { .size = c_.cbor_string_size, .value = (uint64_t)len__uint8_t(c_.cbor_string_ptr) };
-//       CBOR_Spec_Raw_Base_raw_uint64 i1 = res;
-//       cbor_string c_0 = CBOR_STRING_DEFAULT;
-//       if (x2.tag == CBOR_Case_String)
-//         c_0 = x2.case_CBOR_Case_String;
-//       else
-//         exit(253);
-//         // c_0 = KRML_EABORT(cbor_string, "unreachable (pattern matches are exhaustive in F*)");
-//       CBOR_Spec_Raw_Base_raw_uint64
-//       res0 = { .size = c_0.cbor_string_size, .value = (uint64_t)len__uint8_t(c_0.cbor_string_ptr) };
-//       CBOR_Spec_Raw_Base_raw_uint64 i2 = res0;
-//       int16_t c1 = impl_raw_uint64_compare(i1, i2);
-//       if (c1 == (int16_t)0)
-//       {
-//         cbor_string c_ = CBOR_STRING_DEFAULT;
-//         if (x1.tag == CBOR_Case_String)
-//           c_ = x1.case_CBOR_Case_String;
-//         else
-//           exit(253);
-//           // c_ = KRML_EABORT(cbor_string, "unreachable (pattern matches are exhaustive in F*)");
-//         Pulse_Lib_Slice_slice__uint8_t pl1 = c_.cbor_string_ptr;
-//         cbor_string c_0 = CBOR_STRING_DEFAULT;
-//         if (x2.tag == CBOR_Case_String)
-//           c_0 = x2.case_CBOR_Case_String;
-//         else
-//           exit(253);
-//           // c_0 = KRML_EABORT(cbor_string, "unreachable (pattern matches are exhaustive in F*)");
-//         Pulse_Lib_Slice_slice__uint8_t pl2 = c_0.cbor_string_ptr;
-//         int16_t res = lex_compare_bytes(pl1, pl2);
-//         return res;
-//       }
-//       else
-//         return c1;
-//     }
-//     else if (ty1 == CBOR_MAJOR_TYPE_TAGGED)
-//     {
-//       CBOR_Spec_Raw_Base_raw_uint64 tag1;
-//       if (x1.tag == CBOR_Case_Tagged)
-//       {
-//         cbor_tagged c_ = x1.case_CBOR_Case_Tagged;
-//         tag1 = c_.cbor_tagged_tag;
-//       }
-//       else if (x1.tag == CBOR_Case_Serialized_Tagged)
-//       {
-//         cbor_serialized c_ = x1.case_CBOR_Case_Serialized_Tagged;
-//         tag1 = c_.cbor_serialized_header;
-//       }
-//       else
-//         exit(253);
-//         // tag1 =
-//         //   KRML_EABORT(CBOR_Spec_Raw_Base_raw_uint64,
-//         //     "unreachable (pattern matches are exhaustive in F*)");
-//       CBOR_Spec_Raw_Base_raw_uint64 tag2;
-//       if (x2.tag == CBOR_Case_Tagged)
-//       {
-//         cbor_tagged c_ = x2.case_CBOR_Case_Tagged;
-//         tag2 = c_.cbor_tagged_tag;
-//       }
-//       else if (x2.tag == CBOR_Case_Serialized_Tagged)
-//       {
-//         cbor_serialized c_ = x2.case_CBOR_Case_Serialized_Tagged;
-//         tag2 = c_.cbor_serialized_header;
-//       }
-//       else
-//         exit(253);
-//         // tag2 =
-//         //   KRML_EABORT(CBOR_Spec_Raw_Base_raw_uint64,
-//         //     "unreachable (pattern matches are exhaustive in F*)");
-//       int16_t c1 = impl_raw_uint64_compare(tag1, tag2);
-//       if (c1 == (int16_t)0)
-//       {
-//         cbor_raw pl1 = cbor_match_tagged_get_payload(x1);
-//         cbor_raw pl2 = cbor_match_tagged_get_payload(x2);
-//         int16_t res = CBOR_Pulse_Raw_Compare_impl_cbor_compare(pl1, pl2);
-//         return res;
-//       }
-//       else
-//         return c1;
-//     }
-//     else if (ty1 == CBOR_MAJOR_TYPE_ARRAY)
-//     {
-//       CBOR_Spec_Raw_Base_raw_uint64 len1;
-//       if (x1.tag == CBOR_Case_Array)
-//       {
-//         cbor_array c_ = x1.case_CBOR_Case_Array;
-//         len1 = c_.cbor_array_length;
-//       }
-//       else if (x1.tag == CBOR_Case_Serialized_Array)
-//       {
-//         cbor_serialized c_ = x1.case_CBOR_Case_Serialized_Array;
-//         len1 = c_.cbor_serialized_header;
-//       }
-//       else
-//         exit(253);
-//         // len1 =
-//         //   KRML_EABORT(CBOR_Spec_Raw_Base_raw_uint64,
-//         //     "unreachable (pattern matches are exhaustive in F*)");
-//       CBOR_Spec_Raw_Base_raw_uint64 len2;
-//       if (x2.tag == CBOR_Case_Array)
-//       {
-//         cbor_array c_ = x2.case_CBOR_Case_Array;
-//         len2 = c_.cbor_array_length;
-//       }
-//       else if (x2.tag == CBOR_Case_Serialized_Array)
-//       {
-//         cbor_serialized c_ = x2.case_CBOR_Case_Serialized_Array;
-//         len2 = c_.cbor_serialized_header;
-//       }
-//       else
-//         exit(253);
-//         // len2 =
-//         //   KRML_EABORT(CBOR_Spec_Raw_Base_raw_uint64,
-//         //     "unreachable (pattern matches are exhaustive in F*)");
-//       int16_t c1 = impl_raw_uint64_compare(len1, len2);
-//       if (c1 == (int16_t)0)
-//       {
-//         CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw
-//         i1 = cbor_array_iterator_init(x1);
-//         CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw
-//         i2 = cbor_array_iterator_init(x2);
-//         CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw pl1 = i1;
-//         CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw pl2 = i2;
-//         bool fin1;
-//         if (pl1.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Slice)
-//         {
-//           Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw c_ = pl1.case_CBOR_Raw_Iterator_Slice;
-//           bool res = len__CBOR_Pulse_Raw_Type_cbor_raw(c_) == (size_t)0U;
-//           bool res0 = res;
-//           fin1 = res0;
-//         }
-//         else if (pl1.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Serialized)
-//         {
-//           Pulse_Lib_Slice_slice__uint8_t c_ = pl1.case_CBOR_Raw_Iterator_Serialized;
-//           bool res = cbor_serialized_array_iterator_is_empty(c_);
-//           fin1 = res;
-//         }
-//         else
-//           exit(253);
-//           // fin1 = KRML_EABORT(bool, "unreachable (pattern matches are exhaustive in F*)");
-//         bool fin2;
-//         if (pl2.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Slice)
-//         {
-//           Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw c_ = pl2.case_CBOR_Raw_Iterator_Slice;
-//           bool res = len__CBOR_Pulse_Raw_Type_cbor_raw(c_) == (size_t)0U;
-//           bool res0 = res;
-//           fin2 = res0;
-//         }
-//         else if (pl2.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Serialized)
-//         {
-//           Pulse_Lib_Slice_slice__uint8_t c_ = pl2.case_CBOR_Raw_Iterator_Serialized;
-//           bool res = cbor_serialized_array_iterator_is_empty(c_);
-//           fin2 = res;
-//         }
-//         else
-//           exit(253);
-//           // fin2 = KRML_EABORT(bool, "unreachable (pattern matches are exhaustive in F*)");
-//         int16_t res0;
-//         if (fin1)
-//           if (fin2)
-//             res0 = (int16_t)0;
-//           else
-//             res0 = (int16_t)-1;
-//         else if (fin2)
-//           res0 = (int16_t)1;
-//         else
-//         {
-//           CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw pi1 = pl1;
-//           CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw pi2 = pl2;
-//           int16_t pres = (int16_t)0;
-//           bool pfin1 = false;
-//           int16_t res1 = pres;
-//           bool fin110 = pfin1;
-//           bool cond = res1 == (int16_t)0 && !fin110;
-//           while (cond)
-//           {
-//             CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw i00 = pi1;
-//             cbor_raw elt1;
-//             if (i00.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Slice)
-//             {
-//               Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw
-//               i = i00.case_CBOR_Raw_Iterator_Slice;
-//               cbor_raw res = op_Array_Access__CBOR_Pulse_Raw_Type_cbor_raw(i, (size_t)0U);
-//               __Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_raw_Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_raw
-//               sp = split__CBOR_Pulse_Raw_Type_cbor_raw(i, (size_t)1U);
-//               Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw s_ = sp.snd;
-//               Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw i11 = s_;
-//               Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw i_ = i11;
-//               pi1 =
-//                 (
-//                   (CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw){
-//                     .tag = CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Slice,
-//                     { .case_CBOR_Raw_Iterator_Slice = i_ }
-//                   }
-//                 );
-//               cbor_raw res0 = res;
-//               elt1 = res0;
-//             }
-//             else if (i00.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Serialized)
-//             {
-//               Pulse_Lib_Slice_slice__uint8_t i = i00.case_CBOR_Raw_Iterator_Serialized;
-//               cbor_raw res = cbor_serialized_array_iterator_next(&pi1, i);
-//               elt1 = res;
-//             }
-//             else
-//               exit(253);
-//               // elt1 = KRML_EABORT(cbor_raw, "unreachable (pattern matches are exhaustive in F*)");
-//             CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw i0 = pi2;
-//             cbor_raw elt2;
-//             if (i0.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Slice)
-//             {
-//               Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw
-//               i = i0.case_CBOR_Raw_Iterator_Slice;
-//               cbor_raw res = op_Array_Access__CBOR_Pulse_Raw_Type_cbor_raw(i, (size_t)0U);
-//               __Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_raw_Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_raw
-//               sp = split__CBOR_Pulse_Raw_Type_cbor_raw(i, (size_t)1U);
-//               Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw s_ = sp.snd;
-//               Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw i11 = s_;
-//               Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw i_ = i11;
-//               pi2 =
-//                 (
-//                   (CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw){
-//                     .tag = CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Slice,
-//                     { .case_CBOR_Raw_Iterator_Slice = i_ }
-//                   }
-//                 );
-//               cbor_raw res0 = res;
-//               elt2 = res0;
-//             }
-//             else if (i0.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Serialized)
-//             {
-//               Pulse_Lib_Slice_slice__uint8_t i = i0.case_CBOR_Raw_Iterator_Serialized;
-//               cbor_raw res = cbor_serialized_array_iterator_next(&pi2, i);
-//               elt2 = res;
-//             }
-//             else
-//               exit(253);
-//               // elt2 = KRML_EABORT(cbor_raw, "unreachable (pattern matches are exhaustive in F*)");
-//             cbor_raw pelt1 = elt1;
-//             cbor_raw pelt2 = elt2;
-//             int16_t res = CBOR_Pulse_Raw_Compare_impl_cbor_compare(pelt1, pelt2);
-//             int16_t c2 = res;
-//             if (c2 == (int16_t)0)
-//             {
-//               CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw i11 = pi1;
-//               bool fin11;
-//               if (i11.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Slice)
-//               {
-//                 Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw
-//                 c_ = i11.case_CBOR_Raw_Iterator_Slice;
-//                 bool res = len__CBOR_Pulse_Raw_Type_cbor_raw(c_) == (size_t)0U;
-//                 bool res0 = res;
-//                 fin11 = res0;
-//               }
-//               else if (i11.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Serialized)
-//               {
-//                 Pulse_Lib_Slice_slice__uint8_t c_ = i11.case_CBOR_Raw_Iterator_Serialized;
-//                 bool res = cbor_serialized_array_iterator_is_empty(c_);
-//                 fin11 = res;
-//               }
-//               else
-//                 exit(253);
-//                 // fin11 = KRML_EABORT(bool, "unreachable (pattern matches are exhaustive in F*)");
-//               CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw i21 = pi2;
-//               bool fin21;
-//               if (i21.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Slice)
-//               {
-//                 Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw
-//                 c_ = i21.case_CBOR_Raw_Iterator_Slice;
-//                 bool res = len__CBOR_Pulse_Raw_Type_cbor_raw(c_) == (size_t)0U;
-//                 bool res0 = res;
-//                 fin21 = res0;
-//               }
-//               else if (i21.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Serialized)
-//               {
-//                 Pulse_Lib_Slice_slice__uint8_t c_ = i21.case_CBOR_Raw_Iterator_Serialized;
-//                 bool res = cbor_serialized_array_iterator_is_empty(c_);
-//                 fin21 = res;
-//               }
-//               else
-//                 exit(253);
-//                 // fin21 = KRML_EABORT(bool, "unreachable (pattern matches are exhaustive in F*)");
-//               if (fin11 == fin21)
-//                 pfin1 = fin11;
-//               else if (fin11)
-//                 pres = (int16_t)-1;
-//               else
-//                 pres = (int16_t)1;
-//             }
-//             else
-//               pres = c2;
-//             int16_t res0 = pres;
-//             bool fin11 = pfin1;
-//             cond = res0 == (int16_t)0 && !fin11;
-//           }
-//           res0 = pres;
-//         }
-//         int16_t res = res0;
-//         return res;
-//       }
-//       else
-//         return c1;
-//     }
-//     else if (ty1 == CBOR_MAJOR_TYPE_MAP)
-//     {
-//       CBOR_Spec_Raw_Base_raw_uint64 len1;
-//       if (x1.tag == CBOR_Case_Map)
-//       {
-//         cbor_map c_ = x1.case_CBOR_Case_Map;
-//         len1 = c_.cbor_map_length;
-//       }
-//       else if (x1.tag == CBOR_Case_Serialized_Map)
-//       {
-//         cbor_serialized c_ = x1.case_CBOR_Case_Serialized_Map;
-//         len1 = c_.cbor_serialized_header;
-//       }
-//       else
-//         exit(253);
-//         // len1 =
-//         //   KRML_EABORT(CBOR_Spec_Raw_Base_raw_uint64,
-//         //     "unreachable (pattern matches are exhaustive in F*)");
-//       CBOR_Spec_Raw_Base_raw_uint64 len2;
-//       if (x2.tag == CBOR_Case_Map)
-//       {
-//         cbor_map c_ = x2.case_CBOR_Case_Map;
-//         len2 = c_.cbor_map_length;
-//       }
-//       else if (x2.tag == CBOR_Case_Serialized_Map)
-//       {
-//         cbor_serialized c_ = x2.case_CBOR_Case_Serialized_Map;
-//         len2 = c_.cbor_serialized_header;
-//       }
-//       else
-//         exit(253);
-//         // len2 =
-//         //   KRML_EABORT(CBOR_Spec_Raw_Base_raw_uint64,
-//         //     "unreachable (pattern matches are exhaustive in F*)");
-//       int16_t c1 = impl_raw_uint64_compare(len1, len2);
-//       if (c1 == (int16_t)0)
-//       {
-//         CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry
-//         i1 = cbor_map_iterator_init(x1);
-//         CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry
-//         i2 = cbor_map_iterator_init(x2);
-//         CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry pl1 = i1;
-//         CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry pl2 = i2;
-//         bool fin1;
-//         if (pl1.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Slice)
-//         {
-//           Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry
-//           c_ = pl1.case_CBOR_Raw_Iterator_Slice;
-//           bool res = len__CBOR_Pulse_Raw_Type_cbor_map_entry(c_) == (size_t)0U;
-//           bool res0 = res;
-//           fin1 = res0;
-//         }
-//         else if (pl1.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Serialized)
-//         {
-//           Pulse_Lib_Slice_slice__uint8_t c_ = pl1.case_CBOR_Raw_Iterator_Serialized;
-//           bool res = cbor_serialized_map_iterator_is_empty(c_);
-//           fin1 = res;
-//         }
-//         else
-//           exit(253);
-//           // fin1 = KRML_EABORT(bool, "unreachable (pattern matches are exhaustive in F*)");
-//         bool fin2;
-//         if (pl2.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Slice)
-//         {
-//           Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry
-//           c_ = pl2.case_CBOR_Raw_Iterator_Slice;
-//           bool res = len__CBOR_Pulse_Raw_Type_cbor_map_entry(c_) == (size_t)0U;
-//           bool res0 = res;
-//           fin2 = res0;
-//         }
-//         else if (pl2.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Serialized)
-//         {
-//           Pulse_Lib_Slice_slice__uint8_t c_ = pl2.case_CBOR_Raw_Iterator_Serialized;
-//           bool res = cbor_serialized_map_iterator_is_empty(c_);
-//           fin2 = res;
-//         }
-//         else
-//           exit(253);
-//           // fin2 = KRML_EABORT(bool, "unreachable (pattern matches are exhaustive in F*)");
-//         int16_t res0;
-//         if (fin1)
-//           if (fin2)
-//             res0 = (int16_t)0;
-//           else
-//             res0 = (int16_t)-1;
-//         else if (fin2)
-//           res0 = (int16_t)1;
-//         else
-//         {
-//           CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry pi1 = pl1;
-//           CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry pi2 = pl2;
-//           int16_t pres = (int16_t)0;
-//           bool pfin1 = false;
-//           int16_t res1 = pres;
-//           bool fin110 = pfin1;
-//           bool cond = res1 == (int16_t)0 && !fin110;
-//           while (cond)
-//           {
-//             CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry i00 = pi1;
-//             cbor_map_entry elt1;
-//             if (i00.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Slice)
-//             {
-//               Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry
-//               i = i00.case_CBOR_Raw_Iterator_Slice;
-//               cbor_map_entry
-//               res = op_Array_Access__CBOR_Pulse_Raw_Type_cbor_map_entry(i, (size_t)0U);
-//               __Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_map_entry_Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_map_entry
-//               sp = split__CBOR_Pulse_Raw_Type_cbor_map_entry(i, (size_t)1U);
-//               Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry s_ = sp.snd;
-//               Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry i11 = s_;
-//               Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry i_ = i11;
-//               pi1 =
-//                 (
-//                   (CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry){
-//                     .tag = CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Slice,
-//                     { .case_CBOR_Raw_Iterator_Slice = i_ }
-//                   }
-//                 );
-//               cbor_map_entry res0 = res;
-//               elt1 = res0;
-//             }
-//             else if (i00.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Serialized)
-//             {
-//               Pulse_Lib_Slice_slice__uint8_t i = i00.case_CBOR_Raw_Iterator_Serialized;
-//               cbor_map_entry res = cbor_serialized_map_iterator_next(&pi1, i);
-//               elt1 = res;
-//             }
-//             else
-//               exit(253);
-//               // elt1 =
-//               //   KRML_EABORT(cbor_map_entry,
-//               //     "unreachable (pattern matches are exhaustive in F*)");
-//             CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry i0 = pi2;
-//             cbor_map_entry elt2;
-//             if (i0.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Slice)
-//             {
-//               Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry
-//               i = i0.case_CBOR_Raw_Iterator_Slice;
-//               cbor_map_entry
-//               res = op_Array_Access__CBOR_Pulse_Raw_Type_cbor_map_entry(i, (size_t)0U);
-//               __Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_map_entry_Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_map_entry
-//               sp = split__CBOR_Pulse_Raw_Type_cbor_map_entry(i, (size_t)1U);
-//               Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry s_ = sp.snd;
-//               Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry i11 = s_;
-//               Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry i_ = i11;
-//               pi2 =
-//                 (
-//                   (CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry){
-//                     .tag = CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Slice,
-//                     { .case_CBOR_Raw_Iterator_Slice = i_ }
-//                   }
-//                 );
-//               cbor_map_entry res0 = res;
-//               elt2 = res0;
-//             }
-//             else if (i0.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Serialized)
-//             {
-//               Pulse_Lib_Slice_slice__uint8_t i = i0.case_CBOR_Raw_Iterator_Serialized;
-//               cbor_map_entry res = cbor_serialized_map_iterator_next(&pi2, i);
-//               elt2 = res;
-//             }
-//             else
-//               exit(253);
-//               // elt2 =
-//               //   KRML_EABORT(cbor_map_entry,
-//               //     "unreachable (pattern matches are exhaustive in F*)");
-//             cbor_map_entry pelt1 = elt1;
-//             cbor_map_entry pelt2 = elt2;
-//             int16_t
-//             c20 =
-//               CBOR_Pulse_Raw_Compare_impl_cbor_compare(pelt1.cbor_map_entry_key,
-//                 pelt2.cbor_map_entry_key);
-//             int16_t c2;
-//             if (c20 == (int16_t)0)
-//             {
-//               int16_t
-//               c3 =
-//                 CBOR_Pulse_Raw_Compare_impl_cbor_compare(pelt1.cbor_map_entry_value,
-//                   pelt2.cbor_map_entry_value);
-//               c2 = c3;
-//             }
-//             else
-//               c2 = c20;
-//             if (c2 == (int16_t)0)
-//             {
-//               CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry
-//               i11 = pi1;
-//               bool fin11;
-//               if (i11.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Slice)
-//               {
-//                 Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry
-//                 c_ = i11.case_CBOR_Raw_Iterator_Slice;
-//                 bool res = len__CBOR_Pulse_Raw_Type_cbor_map_entry(c_) == (size_t)0U;
-//                 bool res0 = res;
-//                 fin11 = res0;
-//               }
-//               else if (i11.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Serialized)
-//               {
-//                 Pulse_Lib_Slice_slice__uint8_t c_ = i11.case_CBOR_Raw_Iterator_Serialized;
-//                 bool res = cbor_serialized_map_iterator_is_empty(c_);
-//                 fin11 = res;
-//               }
-//               else
-//                 exit(253);
-//                 // fin11 = KRML_EABORT(bool, "unreachable (pattern matches are exhaustive in F*)");
-//               CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry
-//               i21 = pi2;
-//               bool fin21;
-//               if (i21.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Slice)
-//               {
-//                 Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry
-//                 c_ = i21.case_CBOR_Raw_Iterator_Slice;
-//                 bool res = len__CBOR_Pulse_Raw_Type_cbor_map_entry(c_) == (size_t)0U;
-//                 bool res0 = res;
-//                 fin21 = res0;
-//               }
-//               else if (i21.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Serialized)
-//               {
-//                 Pulse_Lib_Slice_slice__uint8_t c_ = i21.case_CBOR_Raw_Iterator_Serialized;
-//                 bool res = cbor_serialized_map_iterator_is_empty(c_);
-//                 fin21 = res;
-//               }
-//               else
-//                 exit(253);
-//                 // fin21 = KRML_EABORT(bool, "unreachable (pattern matches are exhaustive in F*)");
-//               if (fin11 == fin21)
-//                 pfin1 = fin11;
-//               else if (fin11)
-//                 pres = (int16_t)-1;
-//               else
-//                 pres = (int16_t)1;
-//             }
-//             else
-//               pres = c2;
-//             int16_t res = pres;
-//             bool fin11 = pfin1;
-//             cond = res == (int16_t)0 && !fin11;
-//           }
-//           res0 = pres;
-//         }
-//         int16_t res = res0;
-//         return res;
-//       }
-//       else
-//         return c1;
-//     }
-//     else
-//     {
-//       uint8_t val1;
-//       if (x1.tag == CBOR_Case_Simple)
-//         val1 = x1.case_CBOR_Case_Simple;
-//       else
-//         exit(253);
-//         // val1 = KRML_EABORT(uint8_t, "unreachable (pattern matches are exhaustive in F*)");
-//       uint8_t val2;
-//       if (x2.tag == CBOR_Case_Simple)
-//         val2 = x2.case_CBOR_Case_Simple;
-//       else
-//         exit(253);
-//         // val2 = KRML_EABORT(uint8_t, "unreachable (pattern matches are exhaustive in F*)");
-//       return impl_uint8_compare(val1, val2);
-//     }
-//   else
-//     return c;
-// }
+
+int16_t CBOR_Pulse_Raw_Compare_impl_cbor_compare(cbor_raw x1, cbor_raw x2)
+{
+  uint8_t ty1 = impl_major_type(x1);
+  uint8_t ty2 = impl_major_type(x2);
+  int16_t c = impl_uint8_compare(ty1, ty2);
+  if (c == (int16_t)0)
+    if (ty1 == CBOR_MAJOR_TYPE_UINT64 || ty1 == CBOR_MAJOR_TYPE_NEG_INT64)
+    {
+      cbor_int c_;
+      if (x1.tag == CBOR_Case_Int)
+        c_ = x1.case_CBOR_Case_Int;
+      else
+        exit(253);
+        // c_ = KRML_EABORT(cbor_int, "unreachable (pattern matches are exhaustive in F*)");
+      CBOR_Spec_Raw_Base_raw_uint64 i1 = { .size = c_.cbor_int_size, .value = c_.cbor_int_value };
+      cbor_int c_0;
+      if (x2.tag == CBOR_Case_Int)
+        c_0 = x2.case_CBOR_Case_Int;
+      else
+        exit(253);
+        // c_0 = KRML_EABORT(cbor_int, "unreachable (pattern matches are exhaustive in F*)");
+      CBOR_Spec_Raw_Base_raw_uint64 i2 = { .size = c_0.cbor_int_size, .value = c_0.cbor_int_value };
+      return impl_raw_uint64_compare(i1, i2);
+    }
+    else if (ty1 == CBOR_MAJOR_TYPE_BYTE_STRING || ty1 == CBOR_MAJOR_TYPE_TEXT_STRING)
+    {
+      cbor_string c_ = CBOR_STRING_DEFAULT;
+      if (x1.tag == CBOR_Case_String)
+        c_ = x1.case_CBOR_Case_String;
+      else
+        exit(253);
+        // c_ = KRML_EABORT(cbor_string, "unreachable (pattern matches are exhaustive in F*)");
+      CBOR_Spec_Raw_Base_raw_uint64
+      res = { .size = c_.cbor_string_size, .value = (uint64_t)len__uint8_t(c_.cbor_string_ptr) };
+      CBOR_Spec_Raw_Base_raw_uint64 i1 = res;
+      cbor_string c_0 = CBOR_STRING_DEFAULT;
+      if (x2.tag == CBOR_Case_String)
+        c_0 = x2.case_CBOR_Case_String;
+      else
+        exit(253);
+        // c_0 = KRML_EABORT(cbor_string, "unreachable (pattern matches are exhaustive in F*)");
+      CBOR_Spec_Raw_Base_raw_uint64
+      res0 = { .size = c_0.cbor_string_size, .value = (uint64_t)len__uint8_t(c_0.cbor_string_ptr) };
+      CBOR_Spec_Raw_Base_raw_uint64 i2 = res0;
+      int16_t c1 = impl_raw_uint64_compare(i1, i2);
+      if (c1 == (int16_t)0)
+      {
+        cbor_string c_ = CBOR_STRING_DEFAULT;
+        if (x1.tag == CBOR_Case_String)
+          c_ = x1.case_CBOR_Case_String;
+        else
+          exit(253);
+          // c_ = KRML_EABORT(cbor_string, "unreachable (pattern matches are exhaustive in F*)");
+        Pulse_Lib_Slice_slice__uint8_t pl1 = c_.cbor_string_ptr;
+        cbor_string c_0 = CBOR_STRING_DEFAULT;
+        if (x2.tag == CBOR_Case_String)
+          c_0 = x2.case_CBOR_Case_String;
+        else
+          exit(253);
+          // c_0 = KRML_EABORT(cbor_string, "unreachable (pattern matches are exhaustive in F*)");
+        Pulse_Lib_Slice_slice__uint8_t pl2 = c_0.cbor_string_ptr;
+        int16_t res = lex_compare_bytes(pl1, pl2);
+        return res;
+      }
+      else
+        return c1;
+    }
+    else if (ty1 == CBOR_MAJOR_TYPE_TAGGED)
+    {
+      CBOR_Spec_Raw_Base_raw_uint64 tag1;
+      if (x1.tag == CBOR_Case_Tagged)
+      {
+        cbor_tagged c_ = x1.case_CBOR_Case_Tagged;
+        tag1 = c_.cbor_tagged_tag;
+      }
+      else if (x1.tag == CBOR_Case_Serialized_Tagged)
+      {
+        cbor_serialized c_ = x1.case_CBOR_Case_Serialized_Tagged;
+        tag1 = c_.cbor_serialized_header;
+      }
+      else
+        exit(253);
+        // tag1 =
+        //   KRML_EABORT(CBOR_Spec_Raw_Base_raw_uint64,
+        //     "unreachable (pattern matches are exhaustive in F*)");
+      CBOR_Spec_Raw_Base_raw_uint64 tag2;
+      if (x2.tag == CBOR_Case_Tagged)
+      {
+        cbor_tagged c_ = x2.case_CBOR_Case_Tagged;
+        tag2 = c_.cbor_tagged_tag;
+      }
+      else if (x2.tag == CBOR_Case_Serialized_Tagged)
+      {
+        cbor_serialized c_ = x2.case_CBOR_Case_Serialized_Tagged;
+        tag2 = c_.cbor_serialized_header;
+      }
+      else
+        exit(253);
+        // tag2 =
+        //   KRML_EABORT(CBOR_Spec_Raw_Base_raw_uint64,
+        //     "unreachable (pattern matches are exhaustive in F*)");
+      int16_t c1 = impl_raw_uint64_compare(tag1, tag2);
+      if (c1 == (int16_t)0)
+      {
+        cbor_raw pl1 = cbor_match_tagged_get_payload(x1);
+        cbor_raw pl2 = cbor_match_tagged_get_payload(x2);
+        int16_t res = CBOR_Pulse_Raw_Compare_impl_cbor_compare(pl1, pl2);
+        return res;
+      }
+      else
+        return c1;
+    }
+    else if (ty1 == CBOR_MAJOR_TYPE_ARRAY)
+    {
+      CBOR_Spec_Raw_Base_raw_uint64 len1;
+      if (x1.tag == CBOR_Case_Array)
+      {
+        cbor_array c_ = x1.case_CBOR_Case_Array;
+        len1 = c_.cbor_array_length;
+      }
+      else if (x1.tag == CBOR_Case_Serialized_Array)
+      {
+        cbor_serialized c_ = x1.case_CBOR_Case_Serialized_Array;
+        len1 = c_.cbor_serialized_header;
+      }
+      else
+        exit(253);
+        // len1 =
+        //   KRML_EABORT(CBOR_Spec_Raw_Base_raw_uint64,
+        //     "unreachable (pattern matches are exhaustive in F*)");
+      CBOR_Spec_Raw_Base_raw_uint64 len2;
+      if (x2.tag == CBOR_Case_Array)
+      {
+        cbor_array c_ = x2.case_CBOR_Case_Array;
+        len2 = c_.cbor_array_length;
+      }
+      else if (x2.tag == CBOR_Case_Serialized_Array)
+      {
+        cbor_serialized c_ = x2.case_CBOR_Case_Serialized_Array;
+        len2 = c_.cbor_serialized_header;
+      }
+      else
+        exit(253);
+        // len2 =
+        //   KRML_EABORT(CBOR_Spec_Raw_Base_raw_uint64,
+        //     "unreachable (pattern matches are exhaustive in F*)");
+      int16_t c1 = impl_raw_uint64_compare(len1, len2);
+      if (c1 == (int16_t)0)
+      {
+        CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw
+        i1 = cbor_array_iterator_init(x1);
+        CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw
+        i2 = cbor_array_iterator_init(x2);
+        CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw pl1 = i1;
+        CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw pl2 = i2;
+        bool fin1;
+        if (pl1.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Slice)
+        {
+          Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw c_ = pl1.case_CBOR_Raw_Iterator_Slice;
+          bool res = len__CBOR_Pulse_Raw_Type_cbor_raw(c_) == (size_t)0U;
+          bool res0 = res;
+          fin1 = res0;
+        }
+        else if (pl1.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Serialized)
+        {
+          Pulse_Lib_Slice_slice__uint8_t c_ = pl1.case_CBOR_Raw_Iterator_Serialized;
+          bool res = cbor_serialized_array_iterator_is_empty(c_);
+          fin1 = res;
+        }
+        else
+          exit(253);
+          // fin1 = KRML_EABORT(bool, "unreachable (pattern matches are exhaustive in F*)");
+        bool fin2;
+        if (pl2.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Slice)
+        {
+          Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw c_ = pl2.case_CBOR_Raw_Iterator_Slice;
+          bool res = len__CBOR_Pulse_Raw_Type_cbor_raw(c_) == (size_t)0U;
+          bool res0 = res;
+          fin2 = res0;
+        }
+        else if (pl2.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Serialized)
+        {
+          Pulse_Lib_Slice_slice__uint8_t c_ = pl2.case_CBOR_Raw_Iterator_Serialized;
+          bool res = cbor_serialized_array_iterator_is_empty(c_);
+          fin2 = res;
+        }
+        else
+          exit(253);
+          // fin2 = KRML_EABORT(bool, "unreachable (pattern matches are exhaustive in F*)");
+        int16_t res0;
+        if (fin1)
+          if (fin2)
+            res0 = (int16_t)0;
+          else
+            res0 = (int16_t)-1;
+        else if (fin2)
+          res0 = (int16_t)1;
+        else
+        {
+          CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw pi1 = pl1;
+          CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw pi2 = pl2;
+          int16_t pres = (int16_t)0;
+          bool pfin1 = false;
+          int16_t res1 = pres;
+          bool fin110 = pfin1;
+          bool cond = res1 == (int16_t)0 && !fin110;
+          while (cond)
+          {
+            CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw i00 = pi1;
+            cbor_raw elt1 = CBOR_RAW_DEFAULT;
+            if (i00.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Slice)
+            {
+              Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw
+              i = i00.case_CBOR_Raw_Iterator_Slice;
+              cbor_raw res = op_Array_Access__CBOR_Pulse_Raw_Type_cbor_raw(i, (size_t)0U);
+              __Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_raw_Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_raw
+              sp = split__CBOR_Pulse_Raw_Type_cbor_raw(i, (size_t)1U);
+              Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw s_ = sp.snd;
+              Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw i11 = s_;
+              Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw i_ = i11;
+              pi1 =
+                (
+                  (CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw){
+                    .tag = CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Slice,
+                    { .case_CBOR_Raw_Iterator_Slice = i_ }
+                  }
+                );
+              cbor_raw res0 = res;
+              elt1 = res0;
+            }
+            else if (i00.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Serialized)
+            {
+              Pulse_Lib_Slice_slice__uint8_t i = i00.case_CBOR_Raw_Iterator_Serialized;
+              cbor_raw res = cbor_serialized_array_iterator_next(&pi1, i);
+              elt1 = res;
+            }
+            else
+              exit(253);
+              // elt1 = KRML_EABORT(cbor_raw, "unreachable (pattern matches are exhaustive in F*)");
+            CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw i0 = pi2;
+            cbor_raw elt2 = CBOR_RAW_DEFAULT;
+            if (i0.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Slice)
+            {
+              Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw
+              i = i0.case_CBOR_Raw_Iterator_Slice;
+              cbor_raw res = op_Array_Access__CBOR_Pulse_Raw_Type_cbor_raw(i, (size_t)0U);
+              __Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_raw_Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_raw
+              sp = split__CBOR_Pulse_Raw_Type_cbor_raw(i, (size_t)1U);
+              Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw s_ = sp.snd;
+              Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw i11 = s_;
+              Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw i_ = i11;
+              pi2 =
+                (
+                  (CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw){
+                    .tag = CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Slice,
+                    { .case_CBOR_Raw_Iterator_Slice = i_ }
+                  }
+                );
+              cbor_raw res0 = res;
+              elt2 = res0;
+            }
+            else if (i0.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Serialized)
+            {
+              Pulse_Lib_Slice_slice__uint8_t i = i0.case_CBOR_Raw_Iterator_Serialized;
+              cbor_raw res = cbor_serialized_array_iterator_next(&pi2, i);
+              elt2 = res;
+            }
+            else
+              exit(253);
+              // elt2 = KRML_EABORT(cbor_raw, "unreachable (pattern matches are exhaustive in F*)");
+            cbor_raw pelt1 = elt1;
+            cbor_raw pelt2 = elt2;
+            int16_t res = CBOR_Pulse_Raw_Compare_impl_cbor_compare(pelt1, pelt2);
+            int16_t c2 = res;
+            if (c2 == (int16_t)0)
+            {
+              CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw i11 = pi1;
+              bool fin11;
+              if (i11.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Slice)
+              {
+                Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw
+                c_ = i11.case_CBOR_Raw_Iterator_Slice;
+                bool res = len__CBOR_Pulse_Raw_Type_cbor_raw(c_) == (size_t)0U;
+                bool res0 = res;
+                fin11 = res0;
+              }
+              else if (i11.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Serialized)
+              {
+                Pulse_Lib_Slice_slice__uint8_t c_ = i11.case_CBOR_Raw_Iterator_Serialized;
+                bool res = cbor_serialized_array_iterator_is_empty(c_);
+                fin11 = res;
+              }
+              else
+                exit(253);
+                // fin11 = KRML_EABORT(bool, "unreachable (pattern matches are exhaustive in F*)");
+              CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw i21 = pi2;
+              bool fin21;
+              if (i21.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Slice)
+              {
+                Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw
+                c_ = i21.case_CBOR_Raw_Iterator_Slice;
+                bool res = len__CBOR_Pulse_Raw_Type_cbor_raw(c_) == (size_t)0U;
+                bool res0 = res;
+                fin21 = res0;
+              }
+              else if (i21.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Serialized)
+              {
+                Pulse_Lib_Slice_slice__uint8_t c_ = i21.case_CBOR_Raw_Iterator_Serialized;
+                bool res = cbor_serialized_array_iterator_is_empty(c_);
+                fin21 = res;
+              }
+              else
+                exit(253);
+                // fin21 = KRML_EABORT(bool, "unreachable (pattern matches are exhaustive in F*)");
+              if (fin11 == fin21)
+                pfin1 = fin11;
+              else if (fin11)
+                pres = (int16_t)-1;
+              else
+                pres = (int16_t)1;
+            }
+            else
+              pres = c2;
+            int16_t res0 = pres;
+            bool fin11 = pfin1;
+            cond = res0 == (int16_t)0 && !fin11;
+          }
+          res0 = pres;
+        }
+        int16_t res = res0;
+        return res;
+      }
+      else
+        return c1;
+    }
+    else if (ty1 == CBOR_MAJOR_TYPE_MAP)
+    {
+      CBOR_Spec_Raw_Base_raw_uint64 len1;
+      if (x1.tag == CBOR_Case_Map)
+      {
+        cbor_map c_ = x1.case_CBOR_Case_Map;
+        len1 = c_.cbor_map_length;
+      }
+      else if (x1.tag == CBOR_Case_Serialized_Map)
+      {
+        cbor_serialized c_ = x1.case_CBOR_Case_Serialized_Map;
+        len1 = c_.cbor_serialized_header;
+      }
+      else
+        exit(253);
+        // len1 =
+        //   KRML_EABORT(CBOR_Spec_Raw_Base_raw_uint64,
+        //     "unreachable (pattern matches are exhaustive in F*)");
+      CBOR_Spec_Raw_Base_raw_uint64 len2;
+      if (x2.tag == CBOR_Case_Map)
+      {
+        cbor_map c_ = x2.case_CBOR_Case_Map;
+        len2 = c_.cbor_map_length;
+      }
+      else if (x2.tag == CBOR_Case_Serialized_Map)
+      {
+        cbor_serialized c_ = x2.case_CBOR_Case_Serialized_Map;
+        len2 = c_.cbor_serialized_header;
+      }
+      else
+        exit(253);
+        // len2 =
+        //   KRML_EABORT(CBOR_Spec_Raw_Base_raw_uint64,
+        //     "unreachable (pattern matches are exhaustive in F*)");
+      int16_t c1 = impl_raw_uint64_compare(len1, len2);
+      if (c1 == (int16_t)0)
+      {
+        CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry
+        i1 = cbor_map_iterator_init(x1);
+        CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry
+        i2 = cbor_map_iterator_init(x2);
+        CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry pl1 = i1;
+        CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry pl2 = i2;
+        bool fin1;
+        if (pl1.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Slice)
+        {
+          Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry
+          c_ = pl1.case_CBOR_Raw_Iterator_Slice;
+          bool res = len__CBOR_Pulse_Raw_Type_cbor_map_entry(c_) == (size_t)0U;
+          bool res0 = res;
+          fin1 = res0;
+        }
+        else if (pl1.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Serialized)
+        {
+          Pulse_Lib_Slice_slice__uint8_t c_ = pl1.case_CBOR_Raw_Iterator_Serialized;
+          bool res = cbor_serialized_map_iterator_is_empty(c_);
+          fin1 = res;
+        }
+        else
+          exit(253);
+          // fin1 = KRML_EABORT(bool, "unreachable (pattern matches are exhaustive in F*)");
+        bool fin2;
+        if (pl2.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Slice)
+        {
+          Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry
+          c_ = pl2.case_CBOR_Raw_Iterator_Slice;
+          bool res = len__CBOR_Pulse_Raw_Type_cbor_map_entry(c_) == (size_t)0U;
+          bool res0 = res;
+          fin2 = res0;
+        }
+        else if (pl2.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Serialized)
+        {
+          Pulse_Lib_Slice_slice__uint8_t c_ = pl2.case_CBOR_Raw_Iterator_Serialized;
+          bool res = cbor_serialized_map_iterator_is_empty(c_);
+          fin2 = res;
+        }
+        else
+          exit(253);
+          // fin2 = KRML_EABORT(bool, "unreachable (pattern matches are exhaustive in F*)");
+        int16_t res0;
+        if (fin1)
+          if (fin2)
+            res0 = (int16_t)0;
+          else
+            res0 = (int16_t)-1;
+        else if (fin2)
+          res0 = (int16_t)1;
+        else
+        {
+          CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry pi1 = pl1;
+          CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry pi2 = pl2;
+          int16_t pres = (int16_t)0;
+          bool pfin1 = false;
+          int16_t res1 = pres;
+          bool fin110 = pfin1;
+          bool cond = res1 == (int16_t)0 && !fin110;
+          while (cond)
+          {
+            CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry i00 = pi1;
+            cbor_map_entry elt1 = CBOR_MAP_ENTRY_DEFAULT;
+            if (i00.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Slice)
+            {
+              Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry
+              i = i00.case_CBOR_Raw_Iterator_Slice;
+              cbor_map_entry
+              res = op_Array_Access__CBOR_Pulse_Raw_Type_cbor_map_entry(i, (size_t)0U);
+              __Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_map_entry_Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_map_entry
+              sp = split__CBOR_Pulse_Raw_Type_cbor_map_entry(i, (size_t)1U);
+              Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry s_ = sp.snd;
+              Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry i11 = s_;
+              Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry i_ = i11;
+              pi1 =
+                (
+                  (CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry){
+                    .tag = CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Slice,
+                    { .case_CBOR_Raw_Iterator_Slice = i_ }
+                  }
+                );
+              cbor_map_entry res0 = res;
+              elt1 = res0;
+            }
+            else if (i00.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Serialized)
+            {
+              Pulse_Lib_Slice_slice__uint8_t i = i00.case_CBOR_Raw_Iterator_Serialized;
+              cbor_map_entry res = cbor_serialized_map_iterator_next(&pi1, i);
+              elt1 = res;
+            }
+            else
+              exit(253);
+              // elt1 =
+              //   KRML_EABORT(cbor_map_entry,
+              //     "unreachable (pattern matches are exhaustive in F*)");
+            CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry i0 = pi2;
+            cbor_map_entry elt2 = CBOR_MAP_ENTRY_DEFAULT;
+            if (i0.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Slice)
+            {
+              Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry
+              i = i0.case_CBOR_Raw_Iterator_Slice;
+              cbor_map_entry
+              res = op_Array_Access__CBOR_Pulse_Raw_Type_cbor_map_entry(i, (size_t)0U);
+              __Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_map_entry_Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_map_entry
+              sp = split__CBOR_Pulse_Raw_Type_cbor_map_entry(i, (size_t)1U);
+              Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry s_ = sp.snd;
+              Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry i11 = s_;
+              Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry i_ = i11;
+              pi2 =
+                (
+                  (CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry){
+                    .tag = CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Slice,
+                    { .case_CBOR_Raw_Iterator_Slice = i_ }
+                  }
+                );
+              cbor_map_entry res0 = res;
+              elt2 = res0;
+            }
+            else if (i0.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Serialized)
+            {
+              Pulse_Lib_Slice_slice__uint8_t i = i0.case_CBOR_Raw_Iterator_Serialized;
+              cbor_map_entry res = cbor_serialized_map_iterator_next(&pi2, i);
+              elt2 = res;
+            }
+            else
+              exit(253);
+              // elt2 =
+              //   KRML_EABORT(cbor_map_entry,
+              //     "unreachable (pattern matches are exhaustive in F*)");
+            cbor_map_entry pelt1 = elt1;
+            cbor_map_entry pelt2 = elt2;
+            int16_t
+            c20 =
+              CBOR_Pulse_Raw_Compare_impl_cbor_compare(pelt1.cbor_map_entry_key,
+                pelt2.cbor_map_entry_key);
+            int16_t c2;
+            if (c20 == (int16_t)0)
+            {
+              int16_t
+              c3 =
+                CBOR_Pulse_Raw_Compare_impl_cbor_compare(pelt1.cbor_map_entry_value,
+                  pelt2.cbor_map_entry_value);
+              c2 = c3;
+            }
+            else
+              c2 = c20;
+            if (c2 == (int16_t)0)
+            {
+              CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry
+              i11 = pi1;
+              bool fin11;
+              if (i11.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Slice)
+              {
+                Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry
+                c_ = i11.case_CBOR_Raw_Iterator_Slice;
+                bool res = len__CBOR_Pulse_Raw_Type_cbor_map_entry(c_) == (size_t)0U;
+                bool res0 = res;
+                fin11 = res0;
+              }
+              else if (i11.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Serialized)
+              {
+                Pulse_Lib_Slice_slice__uint8_t c_ = i11.case_CBOR_Raw_Iterator_Serialized;
+                bool res = cbor_serialized_map_iterator_is_empty(c_);
+                fin11 = res;
+              }
+              else
+                exit(253);
+                // fin11 = KRML_EABORT(bool, "unreachable (pattern matches are exhaustive in F*)");
+              CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry
+              i21 = pi2;
+              bool fin21;
+              if (i21.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Slice)
+              {
+                Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry
+                c_ = i21.case_CBOR_Raw_Iterator_Slice;
+                bool res = len__CBOR_Pulse_Raw_Type_cbor_map_entry(c_) == (size_t)0U;
+                bool res0 = res;
+                fin21 = res0;
+              }
+              else if (i21.tag == CBOR_Pulse_Raw_Iterator_CBOR_Raw_Iterator_Serialized)
+              {
+                Pulse_Lib_Slice_slice__uint8_t c_ = i21.case_CBOR_Raw_Iterator_Serialized;
+                bool res = cbor_serialized_map_iterator_is_empty(c_);
+                fin21 = res;
+              }
+              else
+                exit(253);
+                // fin21 = KRML_EABORT(bool, "unreachable (pattern matches are exhaustive in F*)");
+              if (fin11 == fin21)
+                pfin1 = fin11;
+              else if (fin11)
+                pres = (int16_t)-1;
+              else
+                pres = (int16_t)1;
+            }
+            else
+              pres = c2;
+            int16_t res = pres;
+            bool fin11 = pfin1;
+            cond = res == (int16_t)0 && !fin11;
+          }
+          res0 = pres;
+        }
+        int16_t res = res0;
+        return res;
+      }
+      else
+        return c1;
+    }
+    else
+    {
+      uint8_t val1;
+      if (x1.tag == CBOR_Case_Simple)
+        val1 = x1.case_CBOR_Case_Simple;
+      else
+        exit(253);
+        // val1 = KRML_EABORT(uint8_t, "unreachable (pattern matches are exhaustive in F*)");
+      uint8_t val2;
+      if (x2.tag == CBOR_Case_Simple)
+        val2 = x2.case_CBOR_Case_Simple;
+      else
+        exit(253);
+        // val2 = KRML_EABORT(uint8_t, "unreachable (pattern matches are exhaustive in F*)");
+      return impl_uint8_compare(val1, val2);
+    }
+  else
+    return c;
+}
 //
 // static size_t cbor_validate(Pulse_Lib_Slice_slice__uint8_t input)
 // {
