@@ -130,6 +130,8 @@ Supported options:|}
     debug_ast files;
 
   Krml.Options.contained := Scylla.ClangToAst.LidSet.elements container_types |> List.map snd;
+  (* Boxed types need to be explicitly annotated *)
+  Krml.Options.no_box := true;
 
   (* Addition of derives has to be done this way because we have a map from Ast lids to the derives
      we want, and if we try to do this after AstToMiniRust then we have Rust names that we do not
