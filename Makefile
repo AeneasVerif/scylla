@@ -40,6 +40,7 @@ scylla: build
 .PHONY: test
 test: regen-outputs test-cbor test-symcrypt test-pqcrypto test-bzip2
 	cd out/hacl && cargo test
+	cd out/cbor && cargo test
 
 # SYMCRYPT
 # --------
