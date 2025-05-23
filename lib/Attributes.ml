@@ -44,6 +44,10 @@ let slice_attr = "scylla_slice"
 (* Expose directly as a C FFI function or global, with #[no_mangle] and the like *)
 let expose_attr = "scylla_expose"
 
+(* Recognize container types, i.e., structs that contain pointers to other pointers,
+   and that therefore need to be extracted with different lifetimes *)
+let container_attr = "scylla_container_type"
+
 let has a (attrs : attribute list) =
   List.exists (fun (attr: attribute) ->
     match attr.desc with
@@ -68,6 +72,8 @@ let has_tuple_attr = has tuple_attr
 let has_slice_attr = has slice_attr
 
 let has_expose_attr = has expose_attr
+
+let has_container_attr = has container_attr
 
 (* If the [adt_attr] attribute is specified on a structure,
    we can also specify `scylla_empty_variant(name)`, which
@@ -173,3 +179,6 @@ let decl_is_opaque (decl : decl) =
 
 let decl_has_default decl =
   decl_has_attr decl default_attr
+
+let decl_is_container decl =
+  decl_has_attr decl container_attr
