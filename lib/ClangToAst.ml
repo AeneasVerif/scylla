@@ -458,6 +458,9 @@ module ClangHelpers = struct
   (* Check whether a given Clang expression is a scylla_reset callee *)
   let is_scylla_reset = is_known_name "scylla_reset"
 
+  (* Check whether a given Clang expression is a scylla_split callee *)
+  let is_scylla_split = is_known_name "scylla_split"
+
   (* Check whether a given Clang expression is a memcpy callee *)
   let is_memcpy e = is_known_name "__builtin___memcpy_chk" e || is_known_name "memcpy" e
 
@@ -667,6 +670,15 @@ let adjust e t =
       begin match LidMap.find_opt lid !type_def_map with
       (* The second case of the when is to handle null pointers *)
       | Some (CSlice (lazy t')) when t = t' || t = TAny ->
+          (* Nothing to do, this will be erased at a later phase *)
+          e
+      | _ ->
+        fatal_error "Could not convert expression %a: %a to have type %a" pexpr e ptyp e.typ ptyp t;
+      end
+
+  | _, TTuple [t1; t2], TQualified lid | _, TQualified lid, TTuple [t1; t2] ->
+      begin match LidMap.find_opt lid !type_def_map with
+      | Some (CTuple (lazy [(_, (t1', _)); (_, (t2', _))])) when t1 = t1' && t2 = t2' ->
           (* Nothing to do, this will be erased at a later phase *)
           e
       | _ ->
@@ -1024,6 +1036,18 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
         match args with
         | [ e ] -> Helpers.push_ignore (translate_expr env e)
         | _ -> failwith "wrong number of arguments for scylla_reset"
+      end
+    | Call { callee; args } when is_scylla_split callee -> begin
+        match args with
+        | [ e; i ] ->
+            let e = translate_expr env e in
+            (* Sanity-check: The argument should be a pointer *)
+            let _ = assert_tbuf_or_tarray e.typ in
+            let i = translate_expr env i in
+            let split_fn = with_type TAny (EQualified (["Pulse"; "Lib"; "Slice"], "split")) in
+            let split_call = with_type TAny (ETApp (split_fn, [], [], [e.typ]) ) in
+            with_type (TTuple ([e.typ; e.typ])) (EApp (split_call, [e; i]))
+        | _ -> failwith "wrong number of arguments for scylla_split"
       end
     | Call { callee; args } when is_memcpy callee ->
         (* Format.printf "Trying to translate memcpy %a@." Clang.Expr.pp e; *)
