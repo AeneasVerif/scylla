@@ -145,6 +145,7 @@ Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw;
 
 typedef uint8_t CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw_tags;
 
+__attribute__((annotate("scylla_container_type")))
 typedef struct
 __attribute__((annotate("scylla_adt")))
 CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw_s
@@ -165,6 +166,7 @@ typedef struct Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry_s
 }
 Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry;
 
+__attribute__((annotate("scylla_container_type")))
 typedef struct
 __attribute__((annotate("scylla_adt")))
 CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry_s
