@@ -84,7 +84,7 @@ Supported options:|}
   let lib_dirs = get_sdkroot () @ Clang.default_include_directories () in
   let files = Scylla.ClangToAst.split_into_files lib_dirs deduped_files in
   Scylla.ClangToAst.fill_type_maps (if !Scylla.Options.ignore_lib_errors then lib_dirs else []) deduped_files;
-  let boxed_types, files = Scylla.ClangToAst.translate_compil_units files command_line_args in
+  let boxed_types, container_types, files = Scylla.ClangToAst.translate_compil_units files command_line_args in
   (* Needed to handle tuples and slices *)
   let files = Krml.Inlining.inline_type_abbrevs files in
 
@@ -128,6 +128,8 @@ Supported options:|}
 
   if Krml.Options.debug "AstOptim" then
     debug_ast files;
+
+  Krml.Options.contained := Scylla.ClangToAst.LidSet.elements container_types |> List.map snd;
 
   (* Addition of derives has to be done this way because we have a map from Ast lids to the derives
      we want, and if we try to do this after AstToMiniRust then we have Rust names that we do not

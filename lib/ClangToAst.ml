@@ -39,6 +39,10 @@ let elaborated_map = ref ElaboratedMap.empty
    that internal pointers should be translated to Boxes instead of borrows *)
 let boxed_types = ref LidSet.empty
 
+(* A map storing types that are annotated with `scylla_container_type`,
+   to be passed to karamel *)
+let container_types = ref LidSet.empty
+
 (* The values of type_def_map below used to be of type lazy AST.type_def.
     However, when pattern-matching on lazy values, OCaml will force the evaluation,
     even if the resulting value does not correspond the pattern.
@@ -2042,6 +2046,7 @@ let translate_decl (decl : decl) =
       None
   | TypedefDecl { name; _ } ->
       let lid = Option.get (lid_of_name name) in
+      if Attributes.decl_is_container decl then container_types := LidSet.add lid !container_types;
       begin
         match LidMap.find_opt lid !type_def_map with
         | Some def -> Some (DType (lid, [], 0, 0, force_type_def_lazy def))
@@ -2317,7 +2322,7 @@ let fill_type_maps (ignored_dirs : string list) (decls: deduplicated_decls) =
 (* Final pass. Actually emit definitions. *)
 let translate_compil_units (ast : grouped_decls) (command_line_args : string list) =
   let file_args = List.map stem_of_file command_line_args in
-  !boxed_types, List.map (fun (file, decls) ->
+  !boxed_types, !container_types, List.map (fun (file, decls) ->
     if List.mem file file_args then
       file, List.filter_map translate_decl decls
     else

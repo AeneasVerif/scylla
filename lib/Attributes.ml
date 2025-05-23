@@ -179,3 +179,6 @@ let decl_is_opaque (decl : decl) =
 
 let decl_has_default decl =
   decl_has_attr decl default_attr
+
+let decl_is_container decl =
+  decl_has_attr decl container_attr
