@@ -86,6 +86,12 @@ $(BZIP2_HOME)/bzip2-rs/target/release/libbzip2_rs.a: $(wildcard $(BZIP2_HOME)/*.
 	./scylla --ccopts -I$(BZIP2_HOME),-DSCYLLA --errors_as_warnings --ignore_lib_errors --bundle bzlib_private $(addprefix $(BZIP2_HOME)/,scylla_glue.h bzlib_private.h blocksort.c huffman.c crctable.c randtable.c compress.c) --output $(BZIP2_HOME)/bzip2-rs/src/
 	cd $(BZIP2_HOME)/bzip2-rs && cargo build --release
 
+# CBOR
+
+.PHONY: test-cbor
+test-cbor: test/cbor/CBORDet.c test/cbor/CBORDet.h scylla
+	./scylla $(SCYLLA_OPTS) test/cbor/CBORDet.c --output out/cbor/src
+
 # HACL
 # ----
 
