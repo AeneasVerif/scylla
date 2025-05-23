@@ -84,10 +84,14 @@ Supported options:|}
   let lib_dirs = get_sdkroot () @ Clang.default_include_directories () in
   let files = Scylla.ClangToAst.split_into_files lib_dirs deduped_files in
   Scylla.ClangToAst.fill_type_maps (if !Scylla.Options.ignore_lib_errors then lib_dirs else []) deduped_files;
-  let boxed_types, tuple_types, files = Scylla.ClangToAst.translate_compil_units files command_line_args in
-  let files = (Scylla.Simplify.inline_tuple_types tuple_types)#visit_files () files in
+  let boxed_types, files = Scylla.ClangToAst.translate_compil_units files command_line_args in
+  (* Needed to handle tuples and slices *)
+  let files = Krml.Inlining.inline_type_abbrevs files in
 
-  let files = Krml.Builtin.lowstar_ignore :: files in
+  let pulse_builtin = "Pulse_Lib_Slice",
+    [ Krml.Builtin.mk_val ~nvars:1 [ "Pulse"; "Lib"; "Slice" ] "len" Krml.Ast.(TArrow (TBound 0, TInt SizeT)) ] in
+
+  let files = pulse_builtin :: Krml.Builtin.lowstar_ignore :: files in
 
   (* Makes debugging the checker messages horrible, otherwise *)
   let files = Krml.Simplify.let_to_sequence#visit_files () files in

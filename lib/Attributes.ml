@@ -36,6 +36,11 @@ let empty_variant_attr = "scylla_empty_variant"
 (* Translate a given type to a tuple instead of a struct *)
 let tuple_attr = "scylla_tuple"
 
+(* Translate a struct type to a slice. It requires the
+   struct to have two fields, called `elt` and `len`,
+   where `elt` is a pointer type, and `len` is an integer *)
+let slice_attr = "scylla_slice"
+
 (* Expose directly as a C FFI function or global, with #[no_mangle] and the like *)
 let expose_attr = "scylla_expose"
 
@@ -59,6 +64,8 @@ let has_box_attr = has box_attr
 let has_adt_attr = has adt_attr
 
 let has_tuple_attr = has tuple_attr
+
+let has_slice_attr = has slice_attr
 
 let has_expose_attr = has expose_attr
 

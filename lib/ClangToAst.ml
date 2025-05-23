@@ -39,10 +39,6 @@ let elaborated_map = ref ElaboratedMap.empty
    that internal pointers should be translated to Boxes instead of borrows *)
 let boxed_types = ref LidSet.empty
 
-(* A map from types that are annotated with `scylla_tuple` to their
-   corresponding Ast tuple type definition. *)
-let tuple_types : typ LidMap.t ref = ref LidMap.empty
-
 (* The values of type_def_map below used to be of type lazy AST.type_def.
     However, when pattern-matching on lazy values, OCaml will force the evaluation,
     even if the resulting value does not correspond the pattern.
@@ -68,15 +64,19 @@ type type_def_lazy =
      were a struct: This allows us to replace field access by the correct
      tuple access, depending on the numbering of the branches *)
   | CTuple of Krml.Ast.fields_t_opt Lazy.t
+  (* A slice of elements of type t. In C, this is a pointer type t* *)
+  | CSlice of Krml.Ast.typ Lazy.t
   | CAbbrev of Krml.Ast.typ Lazy.t
   | CEnum of (lident * Krml.Ast.z option) list Lazy.t
 
-let force_type_def_lazy lid (t: type_def_lazy) : Krml.Ast.type_def = match t with
+let force_type_def_lazy (t: type_def_lazy) : Krml.Ast.type_def = match t with
   | CVariant branches -> Variant (Lazy.force branches)
   | CFlat fields -> Flat (Lazy.force fields)
   | CTuple fields ->
       let typ = TTuple (List.map (fun (_, (t, _)) -> t) (Lazy.force fields)) in
-      tuple_types := LidMap.add lid typ !tuple_types;
+      Abbrev typ
+  | CSlice t ->
+      let typ = TBuf (Lazy.force t, false) in
       Abbrev typ
   | CAbbrev t -> Abbrev (Lazy.force t)
   | CEnum l -> Enum (Lazy.force l)
@@ -423,6 +423,27 @@ let find_var env name =
    Every other type should be able to be deduced from the context. *)
 let typ_from_clang (e : Clang.Ast.expr) : typ = Clang.Type.of_node e |> translate_typ
 
+(* Extension of karamel's assert_tbuf_or_tarray to handle slice types.
+   Note, we cannot simply normalize slice types as we need to know
+   a given type is a slice to rewrite "len" and "elt" field accesses
+   accordingly *)
+let assert_tbuf_or_tarray t = match t with
+  | TQualified lid -> begin match LidMap.find lid !type_def_map with
+      | CSlice (lazy t) -> t
+      | _ -> fatal_error "Type %a is not a tbuf or tarray" ptyp t
+  end
+  | _ -> Helpers.assert_tbuf_or_tarray t
+
+let is_tbuf_tarray_tslice t =
+  match t with
+  | TQualified lid -> begin
+      match LidMap.find lid !type_def_map with
+      | CSlice _ -> true
+      | _ -> false
+    end
+  | TBuf _ | TArray _ -> true
+  | _ -> false
+
 (* HELPERS *)
 
 (* Helpers to deal with the Clang AST, as opposed to Helpers which deals with the Krml AST. *)
@@ -641,6 +662,17 @@ let adjust e t =
   | _, TBuf (t, false), TBuf (t', true) when t = t' ->
       e
 
+  (* Special handling for slice types *)
+  | _, TBuf (t, _), TQualified lid | _, TQualified lid, TBuf (t, _) ->
+      begin match LidMap.find_opt lid !type_def_map with
+      (* The second case of the when is to handle null pointers *)
+      | Some (CSlice (lazy t')) when t = t' || t = TAny ->
+          (* Nothing to do, this will be erased at a later phase *)
+          e
+      | _ ->
+        fatal_error "Could not convert expression %a: %a to have type %a" pexpr e ptyp e.typ ptyp t;
+      end
+
   (* TODO: tag indices *)
   | _ ->
       if e.typ <> t then
@@ -770,7 +802,7 @@ let mk_binop lhs kind rhs =
 
   (* In case of pointer arithmetic, we need to perform a rewriting into EBufSub/Diff *)
   match lhs.typ, kind with
-  | (TBuf _ | TArray _), Clang.Add ->
+  | t, Clang.Add when is_tbuf_tarray_tslice t ->
       with_type lhs.typ
         begin
           match lhs.node with
@@ -792,7 +824,7 @@ let mk_binop lhs kind rhs =
               EBufSub (lhs', adjust (apply_op Sub rhs rhs') (TInt SizeT))
           | _ -> EBufSub (lhs, adjust rhs (TInt SizeT))
         end
-  | (TBuf _ | TArray _), Sub ->
+  | t, Sub when is_tbuf_tarray_tslice t ->
       with_type lhs.typ
         begin
           match lhs.node with
@@ -936,7 +968,7 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
               match lhs.node with
               (* Special-case rewriting for buffer assignments *)
               | EBufRead (base, index) ->
-                  let t = Helpers.assert_tbuf_or_tarray base.typ in
+                  let t = assert_tbuf_or_tarray base.typ in
                   EBufWrite (base, index, adjust rhs t)
               | _ ->
                   mark_mut_if_variable env lhs;
@@ -974,7 +1006,7 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
             match lhs.node with
             (* Special-case rewriting for buffer assignments *)
             | EBufRead (base, index) ->
-                let t = Helpers.assert_tbuf_or_tarray base.typ in
+                let t = assert_tbuf_or_tarray base.typ in
                 EBufWrite (base, index, adjust rhs t)
             | _ ->
                 mark_mut_if_variable env lhs;
@@ -1003,7 +1035,7 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
           | dst :: src :: len :: _ ->
               let dst = translate_expr env dst in
               let src = translate_expr env src in
-              if Helpers.assert_tbuf_or_tarray dst.typ <> Helpers.assert_tbuf_or_tarray src.typ then
+              if assert_tbuf_or_tarray dst.typ <> assert_tbuf_or_tarray src.typ then
                 fatal_error "in this memcpy, source and destination types differ: memcpy(%a: %a, %a: %a, ...)"
                   pexpr dst ptyp dst.typ
                   pexpr src ptyp src.typ;
@@ -1016,7 +1048,7 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
                     (* We recognize the case `len = lhs * sizeof (_)` *)
                     let len = adjust (translate_expr env lhs) (TInt SizeT) in
                     let ty = extract_sizeof_ty argument in
-                    assert (ty = Helpers.assert_tbuf_or_tarray dst.typ);
+                    assert (ty = assert_tbuf_or_tarray dst.typ);
                     len
                 | _, TBuf (TInt UInt8, _) ->
                     (* Unless it's a UInt8 in which case we may omit the sizeof *)
@@ -1042,7 +1074,7 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
                   ->
                     let len = adjust (translate_expr env lhs) (TInt SizeT) in
                     let ty = extract_sizeof_ty argument in
-                    assert (ty = Helpers.assert_tbuf_or_tarray dst.typ);
+                    assert (ty = assert_tbuf_or_tarray dst.typ);
                     len
                 | _, TBuf (TInt UInt8, _) ->
                     (* Unless it's a UInt8 in which case we may omit the sizeof *)
@@ -1050,7 +1082,7 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
                 | _ ->
                     failwith "ill-formed memset"
               in
-              let elt = adjust (translate_expr env v) (Helpers.assert_tbuf_or_tarray dst.typ) in
+              let elt = adjust (translate_expr env v) (assert_tbuf_or_tarray dst.typ) in
               with_type TUnit @@ EBufFill (dst, elt, len)
           | _ -> failwith "memset does not have the right number of arguments"
         end
@@ -1083,7 +1115,7 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
         let base = translate_expr env base in
         let index = adjust (translate_expr env ~must_return_value:true index) (TInt SizeT) in
         (* Is this only called on rvalues? Otherwise, might need EBufWrite *)
-        with_type (Helpers.assert_tbuf_or_tarray base.typ) (EBufRead (base, index))
+        with_type (assert_tbuf_or_tarray base.typ) (EBufRead (base, index))
 
     | ConditionalOperator { cond; then_branch; else_branch } ->
         let cond = translate_expr env cond in
@@ -1179,8 +1211,21 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
                 let tuple_branch = [binder], Krml.Ast.with_type field_t tuple_pat, Krml.Ast.with_type field_t (EBound 0) in
                 Krml.Ast.with_type field_t (EMatch (Unchecked, base, [tuple_branch]))
 
+            | Some (CSlice t) ->
+                let t = Lazy.force t in
+                if arrow then
+                  fatal_error "Arrow access on slice struct not supported";
+                if f = "elt" then
+                  base
+                else if f = "len" then
+                  let len_fn = Krml.Ast.with_type TAny (EQualified (["Pulse"; "Lib"; "Slice"], "len")) in
+                  let len_call = Krml.Ast.with_type TAny (ETApp (len_fn, [], [], [TBuf (t, false)])) in
+                  Krml.Ast.with_type (TInt K.SizeT) (EApp (len_call, [base]))
+                else
+                  fatal_error "Field %s of slice %a is not elt or len" f plid lid
 
-            | Some _ -> fatal_error "Taking a field of %a which is not a struct nor a tagged union" plid lid
+
+            | Some _ -> fatal_error "Taking a field of %a which is not a struct, tuple, slice, nor a tagged union" plid lid
             | None -> fatal_error "Taking a field of %a which is not in the map" plid lid
         end
     | UnaryExpr { kind = SizeOf; argument = ArgumentType t; _ } -> begin
@@ -1266,6 +1311,13 @@ and translate_fields env t es =
         let fields = List.map2 (translate_field_expr env) es field_names in
         Krml.Ast.with_type t (ETuple (List.map snd fields))
 
+    | CSlice _ ->
+        if List.length es <> 2 then
+          fatal_error "Expected two initializers for slice type for fields elt and len";
+        (* Ensuring the right order and names of initializers *)
+        let fields = List.map2 (translate_field_expr env) es ["elt"; "len"] in
+        snd (List.hd fields)
+
     | _ -> failwith "impossible"
 
 let is_tag_check env (cond : expr) = match cond.desc with
@@ -1324,14 +1376,14 @@ let translate_vardecl (env : env) (vdecl : var_decl_desc) : env * binder * Krml.
       if List.length l = 1 then
         (* One element initializer, possibly repeated *)
         let e = translate_expr env (List.hd l) in
-        let e = adjust e (Helpers.assert_tbuf_or_tarray typ) in
+        let e = adjust e (assert_tbuf_or_tarray typ) in
         (* TODO: Arrays are not on stack if at top-level *)
         ( add_var env (vname, typ),
           Helpers.fresh_binder vname typ,
           Krml.Ast.with_type typ (EBufCreate (Krml.Common.Stack, e, size_e)) )
       else (
         assert (List.length l = size);
-        let ty = Helpers.assert_tbuf_or_tarray typ in
+        let ty = assert_tbuf_or_tarray typ in
         let es = List.map (fun e -> adjust (translate_expr env e) ty) l in
         ( add_var env (vname, typ),
           Helpers.fresh_binder vname typ,
@@ -1968,7 +2020,7 @@ let translate_decl (decl : decl) =
       let lid = Option.get (lid_of_name name) in
       begin
         match LidMap.find_opt lid !type_def_map with
-        | Some def -> Some (DType (lid, [], 0, 0, force_type_def_lazy lid def))
+        | Some def -> Some (DType (lid, [], 0, 0, force_type_def_lazy def))
         | None -> None
       end
   | _ -> raise Unsupported
@@ -2082,6 +2134,17 @@ let prepopulate_type_maps (ignored_dirs: string list) (decls: deduplicated_decls
                 | { desc = RecordDecl { fields; attributes; _ }; _ }, _
                       when Attributes.has_tuple_attr attributes ->
                     Some (CTuple (lazy (List.map translate_field fields)))
+                | { desc = RecordDecl { fields; attributes; _ }; _ }, _
+                      when Attributes.has_slice_attr attributes ->
+
+                    Some (CSlice (lazy (
+                      let fields = List.map translate_field fields in
+                      match fields with
+                      | [(Some "elt", (TBuf (t, _), _)) ; (Some "len", (TInt _, _)) ] -> t
+                      | _ ->
+                          fatal_error "A slice type should have two fields called elt and len"
+                    )))
+
                 | { desc = RecordDecl { fields; attributes; _ }; _ }, _
                       when Attributes.has_adt_attr attributes ->
                     Some (CVariant (lazy (match fields with
@@ -2230,7 +2293,7 @@ let fill_type_maps (ignored_dirs : string list) (decls: deduplicated_decls) =
 (* Final pass. Actually emit definitions. *)
 let translate_compil_units (ast : grouped_decls) (command_line_args : string list) =
   let file_args = List.map stem_of_file command_line_args in
-  !boxed_types, !tuple_types, List.map (fun (file, decls) ->
+  !boxed_types, List.map (fun (file, decls) ->
     if List.mem file file_args then
       file, List.filter_map translate_decl decls
     else
