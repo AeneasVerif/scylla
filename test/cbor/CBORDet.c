@@ -3425,983 +3425,982 @@ int16_t CBOR_Pulse_Raw_Compare_impl_cbor_compare(cbor_raw x1, cbor_raw x2)
   else
     return c;
 }
-//
-// static size_t cbor_validate(Pulse_Lib_Slice_slice__uint8_t input)
-// {
-//   size_t poffset = (size_t)0U;
-//   bool is_valid = validate_raw_data_item(input, &poffset);
-//   if (is_valid)
-//     return poffset;
-//   else
-//     return (size_t)0U;
-// }
-//
-// static bool impl_raw_uint64_optimal(CBOR_Spec_Raw_Base_raw_uint64 x)
-// {
-//   if (x.value <= (uint64_t)MAX_SIMPLE_VALUE_ADDITIONAL_INFO == (x.size == 0U))
-//     if (x.size <= 1U)
-//       return true;
-//     else if (x.size == 2U)
-//       return 256ULL <= x.value;
-//     else if (x.size == 3U)
-//       return 65536ULL <= x.value;
-//     else
-//       return 4294967296ULL <= x.value;
-//   else
-//     return false;
-// }
-//
-// static bool cbor_raw_ints_optimal(Pulse_Lib_Slice_slice__uint8_t a)
-// {
-//   size_t i = jump_header(a, (size_t)0U);
-//   __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t s = split__uint8_t(a, i);
-//   Pulse_Lib_Slice_slice__uint8_t s1 = s.fst;
-//   Pulse_Lib_Slice_slice__uint8_t s2 = s.snd;
-//   __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t res = { .fst = s1, .snd = s2 };
-//   Pulse_Lib_Slice_slice__uint8_t input1 = res.fst;
-//   Pulse_Lib_Slice_slice__uint8_t input2 = res.snd;
-//   __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//   spl = { .fst = input1, .snd = input2 };
-//   Pulse_Lib_Slice_slice__uint8_t input10 = spl.fst;
-//   header h = read_header(input10);
-//   if (get_header_major_type(h) == CBOR_MAJOR_TYPE_SIMPLE_VALUE)
-//     return true;
-//   else
-//   {
-//     long_argument scrut = h.snd;
-//     CBOR_Spec_Raw_Base_raw_uint64 ite;
-//     if (scrut.tag == LongArgumentU8)
-//     {
-//       uint8_t v = scrut.case_LongArgumentU8;
-//       ite = ((CBOR_Spec_Raw_Base_raw_uint64){ .size = 1U, .value = (uint64_t)v });
-//     }
-//     else if (scrut.tag == LongArgumentU16)
-//     {
-//       uint16_t v = scrut.case_LongArgumentU16;
-//       ite = ((CBOR_Spec_Raw_Base_raw_uint64){ .size = 2U, .value = (uint64_t)v });
-//     }
-//     else if (scrut.tag == LongArgumentU32)
-//     {
-//       uint32_t v = scrut.case_LongArgumentU32;
-//       ite = ((CBOR_Spec_Raw_Base_raw_uint64){ .size = 3U, .value = (uint64_t)v });
-//     }
-//     else if (scrut.tag == LongArgumentU64)
-//     {
-//       uint64_t v = scrut.case_LongArgumentU64;
-//       ite = ((CBOR_Spec_Raw_Base_raw_uint64){ .size = 4U, .value = v });
-//     }
-//     else if (scrut.tag == LongArgumentOther)
-//       ite =
-//         ((CBOR_Spec_Raw_Base_raw_uint64){ .size = 0U, .value = (uint64_t)h.fst.additional_info });
-//     else
-//       exit(253);
-//       // ite =
-//       //   KRML_EABORT(CBOR_Spec_Raw_Base_raw_uint64,
-//       //     "unreachable (pattern matches are exhaustive in F*)");
-//     return impl_raw_uint64_optimal(ite);
-//   }
-// }
-//
-// static bool
-// impl_deterministically_encoded_cbor_map_key_order(
-//   Pulse_Lib_Slice_slice__uint8_t a1,
-//   Pulse_Lib_Slice_slice__uint8_t a2
-// )
-// {
-//   size_t i0 = jump_raw_data_item(a1, (size_t)0U);
-//   __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t s = split__uint8_t(a1, i0);
-//   Pulse_Lib_Slice_slice__uint8_t s10 = s.fst;
-//   Pulse_Lib_Slice_slice__uint8_t s20 = s.snd;
-//   __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t res = { .fst = s10, .snd = s20 };
-//   Pulse_Lib_Slice_slice__uint8_t input10 = res.fst;
-//   Pulse_Lib_Slice_slice__uint8_t input20 = res.snd;
-//   __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//   res0 = { .fst = input10, .snd = input20 };
-//   Pulse_Lib_Slice_slice__uint8_t input11 = res0.fst;
-//   Pulse_Lib_Slice_slice__uint8_t input21 = res0.snd;
-//   __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//   spl = { .fst = input11, .snd = input21 };
-//   Pulse_Lib_Slice_slice__uint8_t k1 = spl.fst;
-//   size_t i = jump_raw_data_item(a2, (size_t)0U);
-//   __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t s0 = split__uint8_t(a2, i);
-//   Pulse_Lib_Slice_slice__uint8_t s1 = s0.fst;
-//   Pulse_Lib_Slice_slice__uint8_t s2 = s0.snd;
-//   __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t res1 = { .fst = s1, .snd = s2 };
-//   Pulse_Lib_Slice_slice__uint8_t input12 = res1.fst;
-//   Pulse_Lib_Slice_slice__uint8_t input22 = res1.snd;
-//   __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//   res2 = { .fst = input12, .snd = input22 };
-//   Pulse_Lib_Slice_slice__uint8_t input1 = res2.fst;
-//   Pulse_Lib_Slice_slice__uint8_t input2 = res2.snd;
-//   __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//   spl0 = { .fst = input1, .snd = input2 };
-//   Pulse_Lib_Slice_slice__uint8_t k2 = spl0.fst;
-//   int16_t res3 = lex_compare_bytes(k1, k2);
-//   return res3 < (int16_t)0;
-// }
-//
-// static bool cbor_raw_sorted(Pulse_Lib_Slice_slice__uint8_t a)
-// {
-//   size_t i0 = jump_header(a, (size_t)0U);
-//   __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t s = split__uint8_t(a, i0);
-//   Pulse_Lib_Slice_slice__uint8_t s10 = s.fst;
-//   Pulse_Lib_Slice_slice__uint8_t s20 = s.snd;
-//   __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//   res0 = { .fst = s10, .snd = s20 };
-//   Pulse_Lib_Slice_slice__uint8_t input10 = res0.fst;
-//   Pulse_Lib_Slice_slice__uint8_t input20 = res0.snd;
-//   __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//   spl = { .fst = input10, .snd = input20 };
-//   Pulse_Lib_Slice_slice__uint8_t ah = spl.fst;
-//   Pulse_Lib_Slice_slice__uint8_t ap = spl.snd;
-//   header h = read_header(ah);
-//   if (get_header_major_type(h) == CBOR_MAJOR_TYPE_MAP)
-//   {
-//     initial_byte_t b = h.fst;
-//     long_argument l = h.snd;
-//     uint64_t n = argument_as_uint64(b, l);
-//     if ((size_t)n == (size_t)0U)
-//       return true;
-//     else
-//     {
-//       size_t off10 = jump_raw_data_item(ap, (size_t)0U);
-//       size_t i0 = jump_raw_data_item(ap, off10);
-//       __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t s10 = split__uint8_t(ap, i0);
-//       Pulse_Lib_Slice_slice__uint8_t s110 = s10.fst;
-//       Pulse_Lib_Slice_slice__uint8_t s20 = s10.snd;
-//       __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//       res0 = { .fst = s110, .snd = s20 };
-//       Pulse_Lib_Slice_slice__uint8_t input10 = res0.fst;
-//       Pulse_Lib_Slice_slice__uint8_t input20 = res0.snd;
-//       __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//       res1 = { .fst = input10, .snd = input20 };
-//       Pulse_Lib_Slice_slice__uint8_t input11 = res1.fst;
-//       Pulse_Lib_Slice_slice__uint8_t input21 = res1.snd;
-//       __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//       res2 = { .fst = input11, .snd = input21 };
-//       __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t pl = res2;
-//       Pulse_Lib_Slice_slice__uint8_t s1 = pl.fst;
-//       Pulse_Lib_Slice_slice__uint8_t s2 = pl.snd;
-//       Pulse_Lib_Slice_slice__uint8_t phd = s1;
-//       Pulse_Lib_Slice_slice__uint8_t ptl = s2;
-//       size_t n_ = (size_t)n - (size_t)1U;
-//       size_t pi = n_;
-//       bool pres = true;
-//       size_t i = pi;
-//       bool res3 = pres;
-//       bool cond = res3 && i > (size_t)0U;
-//       while (cond)
-//       {
-//         Pulse_Lib_Slice_slice__uint8_t stl = ptl;
-//         size_t off1 = jump_raw_data_item(stl, (size_t)0U);
-//         size_t i = jump_raw_data_item(stl, off1);
-//         __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t s3 = split__uint8_t(stl, i);
-//         Pulse_Lib_Slice_slice__uint8_t s110 = s3.fst;
-//         Pulse_Lib_Slice_slice__uint8_t s210 = s3.snd;
-//         __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//         res0 = { .fst = s110, .snd = s210 };
-//         Pulse_Lib_Slice_slice__uint8_t input10 = res0.fst;
-//         Pulse_Lib_Slice_slice__uint8_t input20 = res0.snd;
-//         __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//         res1 = { .fst = input10, .snd = input20 };
-//         Pulse_Lib_Slice_slice__uint8_t input1 = res1.fst;
-//         Pulse_Lib_Slice_slice__uint8_t input2 = res1.snd;
-//         __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//         res2 = { .fst = input1, .snd = input2 };
-//         __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t pl1 = res2;
-//         Pulse_Lib_Slice_slice__uint8_t s11 = pl1.fst;
-//         Pulse_Lib_Slice_slice__uint8_t s21 = pl1.snd;
-//         Pulse_Lib_Slice_slice__uint8_t shd = phd;
-//         bool res3 = impl_deterministically_encoded_cbor_map_key_order(shd, s11);
-//         if (res3)
-//         {
-//           phd = s11;
-//           ptl = s21;
-//           size_t i = pi;
-//           size_t i_ = i - (size_t)1U;
-//           pi = i_;
-//         }
-//         else
-//           pres = false;
-//         size_t i0 = pi;
-//         bool res = pres;
-//         cond = res && i0 > (size_t)0U;
-//       }
-//       return pres;
-//     }
-//   }
-//   else
-//     return true;
-// }
-//
-// static size_t cbor_validate_det_(Pulse_Lib_Slice_slice__uint8_t input)
-// {
-//   size_t len = cbor_validate(input);
-//   if (len == (size_t)0U)
-//     return len;
-//   else
-//   {
-//     __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//     s_ = split__uint8_t(input, (size_t)0U);
-//     Pulse_Lib_Slice_slice__uint8_t s10 = s_.fst;
-//     Pulse_Lib_Slice_slice__uint8_t s20 = s_.snd;
-//     __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//     split123 = { .fst = s10, .snd = s20 };
-//     Pulse_Lib_Slice_slice__uint8_t input23 = split123.snd;
-//     size_t consumed0 = len - (size_t)0U;
-//     __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//     s1s2 = split__uint8_t(input23, consumed0);
-//     Pulse_Lib_Slice_slice__uint8_t s11 = s1s2.fst;
-//     Pulse_Lib_Slice_slice__uint8_t s21 = s1s2.snd;
-//     __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//     res0 = { .fst = s11, .snd = s21 };
-//     Pulse_Lib_Slice_slice__uint8_t left0 = res0.fst;
-//     Pulse_Lib_Slice_slice__uint8_t right0 = res0.snd;
-//     __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//     split23 = { .fst = left0, .snd = right0 };
-//     Pulse_Lib_Slice_slice__uint8_t input1 = split23.fst;
-//     bool check = false;
-//     KRML_HOST_IGNORE(&check);
-//     size_t pn = (size_t)1U;
-//     bool pres0 = true;
-//     Pulse_Lib_Slice_slice__uint8_t ppi0 = input1;
-//     bool res1 = pres0;
-//     size_t n0 = pn;
-//     bool cond = res1 && n0 > (size_t)0U;
-//     while (cond)
-//     {
-//       size_t n0 = pn;
-//       Pulse_Lib_Slice_slice__uint8_t pi = ppi0;
-//       size_t i0 = jump_raw_data_item(pi, (size_t)0U);
-//       __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t s = split__uint8_t(pi, i0);
-//       Pulse_Lib_Slice_slice__uint8_t s10 = s.fst;
-//       Pulse_Lib_Slice_slice__uint8_t s20 = s.snd;
-//       __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//       res = { .fst = s10, .snd = s20 };
-//       Pulse_Lib_Slice_slice__uint8_t input110 = res.fst;
-//       Pulse_Lib_Slice_slice__uint8_t input20 = res.snd;
-//       __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//       res0 = { .fst = input110, .snd = input20 };
-//       Pulse_Lib_Slice_slice__uint8_t input111 = res0.fst;
-//       Pulse_Lib_Slice_slice__uint8_t input21 = res0.snd;
-//       __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//       spl = { .fst = input111, .snd = input21 };
-//       Pulse_Lib_Slice_slice__uint8_t res1 = spl.fst;
-//       Pulse_Lib_Slice_slice__uint8_t px = res1;
-//       bool res2 = cbor_raw_ints_optimal(px);
-//       if (!res2)
-//         pres0 = false;
-//       else
-//       {
-//         size_t off1 = jump_header(pi, (size_t)0U);
-//         __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//         s_ = split__uint8_t(pi, (size_t)0U);
-//         Pulse_Lib_Slice_slice__uint8_t s10 = s_.fst;
-//         Pulse_Lib_Slice_slice__uint8_t s20 = s_.snd;
-//         __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//         split123 = { .fst = s10, .snd = s20 };
-//         Pulse_Lib_Slice_slice__uint8_t input23 = split123.snd;
-//         size_t consumed = off1 - (size_t)0U;
-//         __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//         s1s2 = split__uint8_t(input23, consumed);
-//         Pulse_Lib_Slice_slice__uint8_t s11 = s1s2.fst;
-//         Pulse_Lib_Slice_slice__uint8_t s21 = s1s2.snd;
-//         __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//         res1 = { .fst = s11, .snd = s21 };
-//         Pulse_Lib_Slice_slice__uint8_t left = res1.fst;
-//         Pulse_Lib_Slice_slice__uint8_t right = res1.snd;
-//         __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//         split23 = { .fst = left, .snd = right };
-//         Pulse_Lib_Slice_slice__uint8_t input_ = split23.fst;
-//         header res10 = read_header(input_);
-//         header x = res10;
-//         initial_byte_t b0 = x.fst;
-//         size_t i;
-//         if
-//         (
-//           b0.major_type
-//           == CBOR_MAJOR_TYPE_BYTE_STRING
-//           || b0.major_type == CBOR_MAJOR_TYPE_TEXT_STRING
-//         )
-//         {
-//           initial_byte_t b = x.fst;
-//           long_argument l = x.snd;
-//           i = off1 + (size_t)argument_as_uint64(b, l);
-//         }
-//         else
-//           i = off1 + (size_t)0U;
-//         __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t s = split__uint8_t(pi, i);
-//         Pulse_Lib_Slice_slice__uint8_t s1 = s.fst;
-//         Pulse_Lib_Slice_slice__uint8_t s2 = s.snd;
-//         __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//         res11 = { .fst = s1, .snd = s2 };
-//         Pulse_Lib_Slice_slice__uint8_t input11 = res11.fst;
-//         Pulse_Lib_Slice_slice__uint8_t input2 = res11.snd;
-//         __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//         spl = { .fst = input11, .snd = input2 };
-//         Pulse_Lib_Slice_slice__uint8_t ph = spl.fst;
-//         Pulse_Lib_Slice_slice__uint8_t pc = spl.snd;
-//         size_t unused = len__uint8_t(pc);
-//         scylla_reset(unused); // KRML_MAYBE_UNUSED_VAR(unused);
-//         size_t count = jump_recursive_step_count_leaf(ph);
-//         pn = n0 - (size_t)1U + count;
-//         ppi0 = pc;
-//       }
-//       bool res3 = pres0;
-//       size_t n = pn;
-//       cond = res3 && n > (size_t)0U;
-//     }
-//     bool res2 = pres0;
-//     bool check1 = res2;
-//     if (!check1)
-//       return (size_t)0U;
-//     else
-//     {
-//       size_t pn = (size_t)1U;
-//       bool pres = true;
-//       Pulse_Lib_Slice_slice__uint8_t ppi = input1;
-//       bool res = pres;
-//       size_t n0 = pn;
-//       bool cond = res && n0 > (size_t)0U;
-//       while (cond)
-//       {
-//         size_t n0 = pn;
-//         Pulse_Lib_Slice_slice__uint8_t pi = ppi;
-//         size_t i0 = jump_raw_data_item(pi, (size_t)0U);
-//         __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t s = split__uint8_t(pi, i0);
-//         Pulse_Lib_Slice_slice__uint8_t s10 = s.fst;
-//         Pulse_Lib_Slice_slice__uint8_t s20 = s.snd;
-//         __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//         res = { .fst = s10, .snd = s20 };
-//         Pulse_Lib_Slice_slice__uint8_t input110 = res.fst;
-//         Pulse_Lib_Slice_slice__uint8_t input20 = res.snd;
-//         __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//         res0 = { .fst = input110, .snd = input20 };
-//         Pulse_Lib_Slice_slice__uint8_t input111 = res0.fst;
-//         Pulse_Lib_Slice_slice__uint8_t input21 = res0.snd;
-//         __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//         spl = { .fst = input111, .snd = input21 };
-//         Pulse_Lib_Slice_slice__uint8_t res1 = spl.fst;
-//         Pulse_Lib_Slice_slice__uint8_t px = res1;
-//         bool res2 = cbor_raw_sorted(px);
-//         if (!res2)
-//           pres = false;
-//         else
-//         {
-//           size_t off1 = jump_header(pi, (size_t)0U);
-//           __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//           s_ = split__uint8_t(pi, (size_t)0U);
-//           Pulse_Lib_Slice_slice__uint8_t s10 = s_.fst;
-//           Pulse_Lib_Slice_slice__uint8_t s20 = s_.snd;
-//           __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//           split123 = { .fst = s10, .snd = s20 };
-//           Pulse_Lib_Slice_slice__uint8_t input23 = split123.snd;
-//           size_t consumed = off1 - (size_t)0U;
-//           __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//           s1s2 = split__uint8_t(input23, consumed);
-//           Pulse_Lib_Slice_slice__uint8_t s11 = s1s2.fst;
-//           Pulse_Lib_Slice_slice__uint8_t s21 = s1s2.snd;
-//           __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//           res1 = { .fst = s11, .snd = s21 };
-//           Pulse_Lib_Slice_slice__uint8_t left = res1.fst;
-//           Pulse_Lib_Slice_slice__uint8_t right = res1.snd;
-//           __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//           split23 = { .fst = left, .snd = right };
-//           Pulse_Lib_Slice_slice__uint8_t input_ = split23.fst;
-//           header res10 = read_header(input_);
-//           header x = res10;
-//           initial_byte_t b0 = x.fst;
-//           size_t i;
-//           if
-//           (
-//             b0.major_type
-//             == CBOR_MAJOR_TYPE_BYTE_STRING
-//             || b0.major_type == CBOR_MAJOR_TYPE_TEXT_STRING
-//           )
-//           {
-//             initial_byte_t b = x.fst;
-//             long_argument l = x.snd;
-//             i = off1 + (size_t)argument_as_uint64(b, l);
-//           }
-//           else
-//             i = off1 + (size_t)0U;
-//           __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t s = split__uint8_t(pi, i);
-//           Pulse_Lib_Slice_slice__uint8_t s1 = s.fst;
-//           Pulse_Lib_Slice_slice__uint8_t s2 = s.snd;
-//           __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//           res11 = { .fst = s1, .snd = s2 };
-//           Pulse_Lib_Slice_slice__uint8_t input11 = res11.fst;
-//           Pulse_Lib_Slice_slice__uint8_t input2 = res11.snd;
-//           __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//           spl = { .fst = input11, .snd = input2 };
-//           Pulse_Lib_Slice_slice__uint8_t ph = spl.fst;
-//           Pulse_Lib_Slice_slice__uint8_t pc = spl.snd;
-//           size_t unused = len__uint8_t(pc);
-//           scylla_reset(unused); // KRML_MAYBE_UNUSED_VAR(unused);
-//           size_t count = jump_recursive_step_count_leaf(ph);
-//           pn = n0 - (size_t)1U + count;
-//           ppi = pc;
-//         }
-//         bool res3 = pres;
-//         size_t n = pn;
-//         cond = res3 && n > (size_t)0U;
-//       }
-//       bool res0 = pres;
-//       bool check2 = res0;
-//       if (!check2)
-//         return (size_t)0U;
-//       else
-//         return len;
-//     }
-//   }
-// }
-//
-// static size_t cbor_validate_det(Pulse_Lib_Slice_slice__uint8_t input)
-// {
-//   size_t res = cbor_validate_det_(input);
-//   return res;
-// }
-//
-// static cbor_raw cbor_parse(Pulse_Lib_Slice_slice__uint8_t input, size_t len)
-// {
-//   __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//   s_ = split__uint8_t(input, (size_t)0U);
-//   Pulse_Lib_Slice_slice__uint8_t s10 = s_.fst;
-//   Pulse_Lib_Slice_slice__uint8_t s20 = s_.snd;
-//   __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//   split123 = { .fst = s10, .snd = s20 };
-//   Pulse_Lib_Slice_slice__uint8_t input23 = split123.snd;
-//   size_t consumed = len - (size_t)0U;
-//   __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//   s1s2 = split__uint8_t(input23, consumed);
-//   Pulse_Lib_Slice_slice__uint8_t s1 = s1s2.fst;
-//   Pulse_Lib_Slice_slice__uint8_t s2 = s1s2.snd;
-//   __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t res = { .fst = s1, .snd = s2 };
-//   Pulse_Lib_Slice_slice__uint8_t left = res.fst;
-//   Pulse_Lib_Slice_slice__uint8_t right = res.snd;
-//   __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
-//   split23 = { .fst = left, .snd = right };
-//   Pulse_Lib_Slice_slice__uint8_t input1 = split23.fst;
-//   cbor_raw res0 = cbor_read(input1);
-//   return res0;
-// }
-//
-// bool uu___is_CBOR_Case_Int(cbor_raw projectee)
-// {
-//   if (projectee.tag == CBOR_Case_Int)
-//     return true;
-//   else
-//     return false;
-// }
-//
-// bool uu___is_CBOR_Case_Simple(cbor_raw projectee)
-// {
-//   if (projectee.tag == CBOR_Case_Simple)
-//     return true;
-//   else
-//     return false;
-// }
-//
-// bool uu___is_CBOR_Case_String(cbor_raw projectee)
-// {
-//   if (projectee.tag == CBOR_Case_String)
-//     return true;
-//   else
-//     return false;
-// }
-//
-// bool uu___is_CBOR_Case_Tagged(cbor_raw projectee)
-// {
-//   if (projectee.tag == CBOR_Case_Tagged)
-//     return true;
-//   else
-//     return false;
-// }
-//
-// bool uu___is_CBOR_Case_Array(cbor_raw projectee)
-// {
-//   if (projectee.tag == CBOR_Case_Array)
-//     return true;
-//   else
-//     return false;
-// }
-//
-// bool uu___is_CBOR_Case_Map(cbor_raw projectee)
-// {
-//   if (projectee.tag == CBOR_Case_Map)
-//     return true;
-//   else
-//     return false;
-// }
-//
-// bool uu___is_CBOR_Case_Serialized_Tagged(cbor_raw projectee)
-// {
-//   if (projectee.tag == CBOR_Case_Serialized_Tagged)
-//     return true;
-//   else
-//     return false;
-// }
-//
-// bool uu___is_CBOR_Case_Serialized_Array(cbor_raw projectee)
-// {
-//   if (projectee.tag == CBOR_Case_Serialized_Array)
-//     return true;
-//   else
-//     return false;
-// }
-//
-// bool uu___is_CBOR_Case_Serialized_Map(cbor_raw projectee)
-// {
-//   if (projectee.tag == CBOR_Case_Serialized_Map)
-//     return true;
-//   else
-//     return false;
-// }
-//
-// size_t cbor_det_validate(Pulse_Lib_Slice_slice__uint8_t input)
-// {
-//   size_t res = cbor_validate_det(input);
-//   return res;
-// }
-//
-// cbor_raw cbor_det_parse(Pulse_Lib_Slice_slice__uint8_t input, size_t len)
-// {
-//   cbor_raw res = cbor_parse(input, len);
-//   return res;
-// }
-//
-// size_t cbor_det_size(cbor_raw x, size_t bound)
-// {
-//   size_t res = cbor_size(x, bound);
-//   return res;
-// }
-//
-// size_t cbor_det_serialize(cbor_raw x, Pulse_Lib_Slice_slice__uint8_t output)
-// {
-//   size_t res = cbor_serialize(x, output);
-//   return res;
-// }
-//
-// cbor_raw cbor_det_mk_simple_value(uint8_t v)
-// {
-//   return ((cbor_raw){ .tag = CBOR_Case_Simple, { .case_CBOR_Case_Simple = v } });
-// }
-//
-// cbor_raw cbor_det_mk_int64(uint8_t ty, uint64_t v)
-// {
-//   cbor_int
-//   res =
-//     {
-//       .cbor_int_type = ty,
-//       .cbor_int_size = mk_raw_uint64(v).size,
-//       .cbor_int_value = mk_raw_uint64(v).value
-//     };
-//   cbor_int resi = res;
-//   cbor_raw res0 = { .tag = CBOR_Case_Int, { .case_CBOR_Case_Int = resi } };
-//   return res0;
-// }
-//
-// cbor_raw cbor_det_mk_string(uint8_t ty, Pulse_Lib_Slice_slice__uint8_t s)
-// {
-//   CBOR_Spec_Raw_Base_raw_uint64 len64 = mk_raw_uint64((uint64_t)len__uint8_t(s));
-//   cbor_string
-//   ress = { .cbor_string_type = ty, .cbor_string_size = len64.size, .cbor_string_ptr = s };
-//   return ((cbor_raw){ .tag = CBOR_Case_String, { .case_CBOR_Case_String = ress } });
-// }
-//
-// cbor_raw cbor_det_mk_tagged(uint64_t tag, cbor_raw *r)
-// {
-//   CBOR_Spec_Raw_Base_raw_uint64 tag64 = mk_raw_uint64(tag);
-//   cbor_tagged res_ = { .cbor_tagged_tag = tag64, .cbor_tagged_ptr = r };
-//   return ((cbor_raw){ .tag = CBOR_Case_Tagged, { .case_CBOR_Case_Tagged = res_ } });
-// }
-//
-// cbor_raw cbor_det_mk_array(cbor_raw *a, uint64_t len)
-// {
-//   CBOR_Spec_Raw_Base_raw_uint64 len64 = mk_raw_uint64(len);
-//   cbor_array res_ = { .cbor_array_length = len64, .cbor_array_ptr = a };
-//   return ((cbor_raw){ .tag = CBOR_Case_Array, { .case_CBOR_Case_Array = res_ } });
-// }
-//
-// static int16_t cbor_raw_compare(cbor_raw x1, cbor_raw x2)
-// {
-//   return CBOR_Pulse_Raw_Compare_impl_cbor_compare(x1, x2);
-// }
-//
-// static int16_t cbor_map_entry_raw_compare(cbor_map_entry x1, cbor_map_entry x2)
-// {
-//   int16_t res = cbor_raw_compare(x1.cbor_map_entry_key, x2.cbor_map_entry_key);
-//   return res;
-// }
-//
-// bool cbor_raw_sort_aux(cbor_map_entry *a, size_t lo, size_t hi)
-// {
-//   size_t len = hi - lo;
-//   if (len < (size_t)2U)
-//     return true;
-//   else
-//   {
-//     size_t len_half = len / (size_t)2U;
-//     size_t mi = lo + len_half;
-//     bool res = cbor_raw_sort_aux(a, lo, mi);
-//     if (!res)
-//       return false;
-//     else
-//     {
-//       bool res1 = cbor_raw_sort_aux(a, mi, hi);
-//       if (!res1)
-//         return false;
-//       else
-//       {
-//         size_t pi1 = lo;
-//         size_t pi2 = mi;
-//         bool pres = true;
-//         size_t i10 = pi1;
-//         size_t i20 = pi2;
-//         bool res20 = pres;
-//         bool cond = res20 && !(i10 == i20 || i20 == hi);
-//         while (cond)
-//         {
-//           size_t i1 = pi1;
-//           cbor_map_entry x1 = a[i1];
-//           size_t i20 = pi2;
-//           cbor_map_entry x2 = a[i20];
-//           int16_t comp = cbor_map_entry_raw_compare(x1, x2);
-//           if (comp == (int16_t)0)
-//             pres = false;
-//           else if (comp < (int16_t)0)
-//           {
-//             size_t i1_ = i1 + (size_t)1U;
-//             pi1 = i1_;
-//           }
-//           else
-//           {
-//             size_t i2_ = i20 + (size_t)1U;
-//             size_t i1_;
-//             if (i1 == i20)
-//               i1_ = i2_;
-//             else if (i20 == i2_)
-//               i1_ = i1;
-//             else
-//             {
-//               size_t pn = i2_ - i1;
-//               size_t pl = i20 - i1;
-//               size_t l30 = pl;
-//               bool cond = l30 > (size_t)0U;
-//               while (cond)
-//               {
-//                 size_t n = pn;
-//                 size_t l3 = pl;
-//                 size_t l_ = n % l3;
-//                 pn = l3;
-//                 pl = l_;
-//                 size_t l30 = pl;
-//                 cond = l30 > (size_t)0U;
-//               }
-//               size_t d = pn;
-//               size_t q = (i2_ - i1) / d;
-//               size_t pi = i1;
-//               size_t i0 = pi;
-//               bool cond0 = i0 - i1 < d;
-//               while (cond0)
-//               {
-//                 size_t i = pi;
-//                 cbor_map_entry save = a[i];
-//                 size_t pj = (size_t)0U;
-//                 size_t pidx = i;
-//                 size_t j0 = pj;
-//                 bool cond = j0 < q - (size_t)1U;
-//                 while (cond)
-//                 {
-//                   size_t j = pj;
-//                   size_t idx = pidx;
-//                   size_t idx_;
-//                   if (idx - i1 >= i2_ - i20)
-//                     idx_ = idx - (i2_ - i20);
-//                   else
-//                     idx_ = idx + i20 - i1;
-//                   cbor_map_entry x = a[idx_];
-//                   size_t j_ = j + (size_t)1U;
-//                   a[idx] = x;
-//                   pj = j_;
-//                   pidx = idx_;
-//                   size_t j0 = pj;
-//                   cond = j0 < q - (size_t)1U;
-//                 }
-//                 size_t idx = pidx;
-//                 a[idx] = save;
-//                 size_t i_ = i + (size_t)1U;
-//                 pi = i_;
-//                 size_t i0 = pi;
-//                 cond0 = i0 - i1 < d;
-//               }
-//               i1_ = i1 + i2_ - i20;
-//             }
-//             pi1 = i1_;
-//             pi2 = i2_;
-//           }
-//           size_t i10 = pi1;
-//           size_t i2 = pi2;
-//           bool res2 = pres;
-//           cond = res2 && !(i10 == i2 || i2 == hi);
-//         }
-//         bool res2 = pres;
-//         return res2;
-//       }
-//     }
-//   }
-// }
-//
-// static bool cbor_raw_sort(cbor_map_entry *a, size_t len)
-// {
-//   bool res = cbor_raw_sort_aux(a, (size_t)0U, len);
-//   return res;
-// }
-//
-// cbor_raw cbor_det_mk_map(cbor_map_entry *a, uint64_t len)
-// {
-//   cbor_raw_sort(a, (size_t)len);
-//   CBOR_Spec_Raw_Base_raw_uint64 raw_len = mk_raw_uint64(len);
-//   cbor_map res_ = { .cbor_map_length = raw_len, .cbor_map_ptr = a };
-//   return ((cbor_raw){ .tag = CBOR_Case_Map, { .case_CBOR_Case_Map = res_ } });
-// }
-//
-// bool cbor_det_equal(cbor_raw x1, cbor_raw x2)
-// {
-//   int16_t comp = CBOR_Pulse_Raw_Compare_impl_cbor_compare(x1, x2);
-//   return comp == (int16_t)0;
-// }
-//
-// uint8_t cbor_det_major_type(cbor_raw x)
-// {
-//   uint8_t res = impl_major_type(x);
-//   return res;
-// }
-//
-// uint8_t cbor_det_read_simple_value(cbor_raw x)
-// {
-//   if (x.tag == CBOR_Case_Simple)
-//     return x.case_CBOR_Case_Simple;
-//   else
-//   {
-//     // KRML_HOST_EPRINTF("KaRaMeL abort at %s:%d\n%s\n",
-//     //   __FILE__,
-//     //   __LINE__,
-//     //   "unreachable (pattern matches are exhaustive in F*)");
-//     KRML_HOST_EXIT(255U);
-//   }
-// }
-//
-// uint64_t cbor_det_read_uint64(cbor_raw x)
-// {
-//   cbor_int c_;
-//   if (x.tag == CBOR_Case_Int)
-//     c_ = x.case_CBOR_Case_Int;
-//   else
-//     exit(253);
-//     // c_ = KRML_EABORT(cbor_int, "unreachable (pattern matches are exhaustive in F*)");
-//   CBOR_Spec_Raw_Base_raw_uint64 res = { .size = c_.cbor_int_size, .value = c_.cbor_int_value };
-//   return res.value;
-// }
-//
-// Pulse_Lib_Slice_slice__uint8_t cbor_det_get_string(cbor_raw x)
-// {
-//   cbor_string c_ = CBOR_STRING_DEFAULT;
-//   if (x.tag == CBOR_Case_String)
-//     c_ = x.case_CBOR_Case_String;
-//   else
-//     exit(253);
-//     // c_ = KRML_EABORT(cbor_string, "unreachable (pattern matches are exhaustive in F*)");
-//   return c_.cbor_string_ptr;
-// }
-//
-// uint64_t cbor_det_get_tagged_tag(cbor_raw x)
-// {
-//   CBOR_Spec_Raw_Base_raw_uint64 res;
-//   if (x.tag == CBOR_Case_Tagged)
-//   {
-//     cbor_tagged c_ = x.case_CBOR_Case_Tagged;
-//     res = c_.cbor_tagged_tag;
-//   }
-//   else if (x.tag == CBOR_Case_Serialized_Tagged)
-//   {
-//     cbor_serialized c_ = x.case_CBOR_Case_Serialized_Tagged;
-//     res = c_.cbor_serialized_header;
-//   }
-//   else
-//     exit(253);
-//     // res =
-//     //   KRML_EABORT(CBOR_Spec_Raw_Base_raw_uint64,
-//     //     "unreachable (pattern matches are exhaustive in F*)");
-//   return res.value;
-// }
-//
-// cbor_raw cbor_det_get_tagged_payload(cbor_raw x)
-// {
-//   cbor_raw res = cbor_match_tagged_get_payload(x);
-//   return res;
-// }
-//
-// uint64_t cbor_det_get_array_length(cbor_raw x)
-// {
-//   CBOR_Spec_Raw_Base_raw_uint64 res;
-//   if (x.tag == CBOR_Case_Array)
-//   {
-//     cbor_array c_ = x.case_CBOR_Case_Array;
-//     res = c_.cbor_array_length;
-//   }
-//   else if (x.tag == CBOR_Case_Serialized_Array)
-//   {
-//     cbor_serialized c_ = x.case_CBOR_Case_Serialized_Array;
-//     res = c_.cbor_serialized_header;
-//   }
-//   else
-//     exit(253);
-//     // res =
-//     //   KRML_EABORT(CBOR_Spec_Raw_Base_raw_uint64,
-//     //     "unreachable (pattern matches are exhaustive in F*)");
-//   return res.value;
-// }
-//
-// CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw
-// cbor_det_array_iterator_start(cbor_raw x)
-// {
-//   CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw
-//   res = cbor_array_iterator_init(x);
-//   return res;
-// }
-//
-// bool
-// cbor_det_array_iterator_is_empty(
-//   CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw x
-// )
-// {
-//   bool res = cbor_array_iterator_is_empty(x);
-//   return res;
-// }
-//
-// cbor_raw
-// cbor_det_array_iterator_next(
-//   CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw *x
-// )
-// {
-//   cbor_raw res = cbor_array_iterator_next(x);
-//   return res;
-// }
-//
-// cbor_raw cbor_det_get_array_item(cbor_raw x, uint64_t i)
-// {
-//   cbor_raw res = cbor_array_item(x, i);
-//   return res;
-// }
-//
-// uint64_t cbor_det_get_map_length(cbor_raw x)
-// {
-//   CBOR_Spec_Raw_Base_raw_uint64 res;
-//   if (x.tag == CBOR_Case_Map)
-//   {
-//     cbor_map c_ = x.case_CBOR_Case_Map;
-//     res = c_.cbor_map_length;
-//   }
-//   else if (x.tag == CBOR_Case_Serialized_Map)
-//   {
-//     cbor_serialized c_ = x.case_CBOR_Case_Serialized_Map;
-//     res = c_.cbor_serialized_header;
-//   }
-//   else
-//     exit(253);
-//     // res =
-//     //   KRML_EABORT(CBOR_Spec_Raw_Base_raw_uint64,
-//     //     "unreachable (pattern matches are exhaustive in F*)");
-//   return res.value;
-// }
-//
-// static int16_t impl_cbor_det_compare(cbor_raw x1, cbor_raw x2)
-// {
-//   int16_t res = CBOR_Pulse_Raw_Compare_impl_cbor_compare(x1, x2);
-//   return res;
-// }
-//
-// static CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry
-// cbor_det_map_iterator_start_(cbor_raw x)
-// {
-//   CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry
-//   res = cbor_map_iterator_init(x);
-//   return res;
-// }
-//
-// CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry
-// cbor_det_map_iterator_start(cbor_raw x)
-// {
-//   return cbor_det_map_iterator_start_(x);
-// }
-//
-// bool
-// cbor_det_map_iterator_is_empty(
-//   CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry x
-// )
-// {
-//   bool res = cbor_map_iterator_is_empty(x);
-//   return res;
-// }
-//
-// cbor_map_entry
-// cbor_det_map_iterator_next(
-//   CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry *x
-// )
-// {
-//   cbor_map_entry res = cbor_map_iterator_next(x);
-//   return res;
-// }
-//
-// cbor_raw cbor_det_map_entry_key(cbor_map_entry x2)
-// {
-//   return x2.cbor_map_entry_key;
-// }
-//
-// cbor_raw cbor_det_map_entry_value(cbor_map_entry x2)
-// {
-//   return x2.cbor_map_entry_value;
-// }
-//
-// FStar_Pervasives_Native_option__CBOR_Pulse_Raw_Type_cbor_raw
-// cbor_det_map_get(cbor_raw x, cbor_raw k)
-// {
-//   CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry
-//   i = cbor_det_map_iterator_start_(x);
-//   CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry pi = i;
-//   FStar_Pervasives_Native_option__CBOR_Pulse_Raw_Type_cbor_raw
-//   pres = { .tag = FStar_Pervasives_Native_None };
-//   bool i_is_empty = cbor_det_map_iterator_is_empty(i);
-//   bool cont = !i_is_empty;
-//   bool pcont = cont;
-//   while (pcont)
-//   {
-//     cbor_map_entry entry = cbor_det_map_iterator_next(&pi);
-//     cbor_raw key = cbor_det_map_entry_key(entry);
-//     int16_t comp = impl_cbor_det_compare(key, k);
-//     if (comp == (int16_t)0)
-//     {
-//       cbor_raw value = cbor_det_map_entry_value(entry);
-//       pres =
-//         (
-//           (FStar_Pervasives_Native_option__CBOR_Pulse_Raw_Type_cbor_raw){
-//             .tag = FStar_Pervasives_Native_Some,
-//             .v = value
-//           }
-//         );
-//       pcont = false;
-//     }
-//     else if (comp > (int16_t)0)
-//       pcont = false;
-//     else
-//     {
-//       CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry i_ = pi;
-//       bool is_empty = cbor_det_map_iterator_is_empty(i_);
-//       bool cont1 = !is_empty;
-//       pcont = cont1;
-//     }
-//   }
-//   return pres;
-// }
 
+static size_t cbor_validate(Pulse_Lib_Slice_slice__uint8_t input)
+{
+  size_t poffset = (size_t)0U;
+  bool is_valid = validate_raw_data_item(input, &poffset);
+  if (is_valid)
+    return poffset;
+  else
+    return (size_t)0U;
+}
+
+static bool impl_raw_uint64_optimal(CBOR_Spec_Raw_Base_raw_uint64 x)
+{
+  if (x.value <= (uint64_t)MAX_SIMPLE_VALUE_ADDITIONAL_INFO == (x.size == 0U))
+    if (x.size <= 1U)
+      return true;
+    else if (x.size == 2U)
+      return 256ULL <= x.value;
+    else if (x.size == 3U)
+      return 65536ULL <= x.value;
+    else
+      return 4294967296ULL <= x.value;
+  else
+    return false;
+}
+
+static bool cbor_raw_ints_optimal(Pulse_Lib_Slice_slice__uint8_t a)
+{
+  size_t i = jump_header(a, (size_t)0U);
+  __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t s = split__uint8_t(a, i);
+  Pulse_Lib_Slice_slice__uint8_t s1 = s.fst;
+  Pulse_Lib_Slice_slice__uint8_t s2 = s.snd;
+  __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t res = { .fst = s1, .snd = s2 };
+  Pulse_Lib_Slice_slice__uint8_t input1 = res.fst;
+  Pulse_Lib_Slice_slice__uint8_t input2 = res.snd;
+  __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+  spl = { .fst = input1, .snd = input2 };
+  Pulse_Lib_Slice_slice__uint8_t input10 = spl.fst;
+  header h = read_header(input10);
+  if (get_header_major_type(h) == CBOR_MAJOR_TYPE_SIMPLE_VALUE)
+    return true;
+  else
+  {
+    long_argument scrut = h.snd;
+    CBOR_Spec_Raw_Base_raw_uint64 ite;
+    if (scrut.tag == LongArgumentU8)
+    {
+      uint8_t v = scrut.case_LongArgumentU8;
+      ite = ((CBOR_Spec_Raw_Base_raw_uint64){ .size = 1U, .value = (uint64_t)v });
+    }
+    else if (scrut.tag == LongArgumentU16)
+    {
+      uint16_t v = scrut.case_LongArgumentU16;
+      ite = ((CBOR_Spec_Raw_Base_raw_uint64){ .size = 2U, .value = (uint64_t)v });
+    }
+    else if (scrut.tag == LongArgumentU32)
+    {
+      uint32_t v = scrut.case_LongArgumentU32;
+      ite = ((CBOR_Spec_Raw_Base_raw_uint64){ .size = 3U, .value = (uint64_t)v });
+    }
+    else if (scrut.tag == LongArgumentU64)
+    {
+      uint64_t v = scrut.case_LongArgumentU64;
+      ite = ((CBOR_Spec_Raw_Base_raw_uint64){ .size = 4U, .value = v });
+    }
+    else if (scrut.tag == LongArgumentOther)
+      ite =
+        ((CBOR_Spec_Raw_Base_raw_uint64){ .size = 0U, .value = (uint64_t)h.fst.additional_info });
+    else
+      exit(253);
+      // ite =
+      //   KRML_EABORT(CBOR_Spec_Raw_Base_raw_uint64,
+      //     "unreachable (pattern matches are exhaustive in F*)");
+    return impl_raw_uint64_optimal(ite);
+  }
+}
+
+static bool
+impl_deterministically_encoded_cbor_map_key_order(
+  Pulse_Lib_Slice_slice__uint8_t a1,
+  Pulse_Lib_Slice_slice__uint8_t a2
+)
+{
+  size_t i0 = jump_raw_data_item(a1, (size_t)0U);
+  __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t s = split__uint8_t(a1, i0);
+  Pulse_Lib_Slice_slice__uint8_t s10 = s.fst;
+  Pulse_Lib_Slice_slice__uint8_t s20 = s.snd;
+  __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t res = { .fst = s10, .snd = s20 };
+  Pulse_Lib_Slice_slice__uint8_t input10 = res.fst;
+  Pulse_Lib_Slice_slice__uint8_t input20 = res.snd;
+  __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+  res0 = { .fst = input10, .snd = input20 };
+  Pulse_Lib_Slice_slice__uint8_t input11 = res0.fst;
+  Pulse_Lib_Slice_slice__uint8_t input21 = res0.snd;
+  __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+  spl = { .fst = input11, .snd = input21 };
+  Pulse_Lib_Slice_slice__uint8_t k1 = spl.fst;
+  size_t i = jump_raw_data_item(a2, (size_t)0U);
+  __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t s0 = split__uint8_t(a2, i);
+  Pulse_Lib_Slice_slice__uint8_t s1 = s0.fst;
+  Pulse_Lib_Slice_slice__uint8_t s2 = s0.snd;
+  __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t res1 = { .fst = s1, .snd = s2 };
+  Pulse_Lib_Slice_slice__uint8_t input12 = res1.fst;
+  Pulse_Lib_Slice_slice__uint8_t input22 = res1.snd;
+  __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+  res2 = { .fst = input12, .snd = input22 };
+  Pulse_Lib_Slice_slice__uint8_t input1 = res2.fst;
+  Pulse_Lib_Slice_slice__uint8_t input2 = res2.snd;
+  __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+  spl0 = { .fst = input1, .snd = input2 };
+  Pulse_Lib_Slice_slice__uint8_t k2 = spl0.fst;
+  int16_t res3 = lex_compare_bytes(k1, k2);
+  return res3 < (int16_t)0;
+}
+
+static bool cbor_raw_sorted(Pulse_Lib_Slice_slice__uint8_t a)
+{
+  size_t i0 = jump_header(a, (size_t)0U);
+  __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t s = split__uint8_t(a, i0);
+  Pulse_Lib_Slice_slice__uint8_t s10 = s.fst;
+  Pulse_Lib_Slice_slice__uint8_t s20 = s.snd;
+  __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+  res0 = { .fst = s10, .snd = s20 };
+  Pulse_Lib_Slice_slice__uint8_t input10 = res0.fst;
+  Pulse_Lib_Slice_slice__uint8_t input20 = res0.snd;
+  __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+  spl = { .fst = input10, .snd = input20 };
+  Pulse_Lib_Slice_slice__uint8_t ah = spl.fst;
+  Pulse_Lib_Slice_slice__uint8_t ap = spl.snd;
+  header h = read_header(ah);
+  if (get_header_major_type(h) == CBOR_MAJOR_TYPE_MAP)
+  {
+    initial_byte_t b = h.fst;
+    long_argument l = h.snd;
+    uint64_t n = argument_as_uint64(b, l);
+    if ((size_t)n == (size_t)0U)
+      return true;
+    else
+    {
+      size_t off10 = jump_raw_data_item(ap, (size_t)0U);
+      size_t i0 = jump_raw_data_item(ap, off10);
+      __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t s10 = split__uint8_t(ap, i0);
+      Pulse_Lib_Slice_slice__uint8_t s110 = s10.fst;
+      Pulse_Lib_Slice_slice__uint8_t s20 = s10.snd;
+      __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+      res0 = { .fst = s110, .snd = s20 };
+      Pulse_Lib_Slice_slice__uint8_t input10 = res0.fst;
+      Pulse_Lib_Slice_slice__uint8_t input20 = res0.snd;
+      __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+      res1 = { .fst = input10, .snd = input20 };
+      Pulse_Lib_Slice_slice__uint8_t input11 = res1.fst;
+      Pulse_Lib_Slice_slice__uint8_t input21 = res1.snd;
+      __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+      res2 = { .fst = input11, .snd = input21 };
+      __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t pl = res2;
+      Pulse_Lib_Slice_slice__uint8_t s1 = pl.fst;
+      Pulse_Lib_Slice_slice__uint8_t s2 = pl.snd;
+      Pulse_Lib_Slice_slice__uint8_t phd = s1;
+      Pulse_Lib_Slice_slice__uint8_t ptl = s2;
+      size_t n_ = (size_t)n - (size_t)1U;
+      size_t pi = n_;
+      bool pres = true;
+      size_t i = pi;
+      bool res3 = pres;
+      bool cond = res3 && i > (size_t)0U;
+      while (cond)
+      {
+        Pulse_Lib_Slice_slice__uint8_t stl = ptl;
+        size_t off1 = jump_raw_data_item(stl, (size_t)0U);
+        size_t i = jump_raw_data_item(stl, off1);
+        __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t s3 = split__uint8_t(stl, i);
+        Pulse_Lib_Slice_slice__uint8_t s110 = s3.fst;
+        Pulse_Lib_Slice_slice__uint8_t s210 = s3.snd;
+        __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+        res0 = { .fst = s110, .snd = s210 };
+        Pulse_Lib_Slice_slice__uint8_t input10 = res0.fst;
+        Pulse_Lib_Slice_slice__uint8_t input20 = res0.snd;
+        __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+        res1 = { .fst = input10, .snd = input20 };
+        Pulse_Lib_Slice_slice__uint8_t input1 = res1.fst;
+        Pulse_Lib_Slice_slice__uint8_t input2 = res1.snd;
+        __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+        res2 = { .fst = input1, .snd = input2 };
+        __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t pl1 = res2;
+        Pulse_Lib_Slice_slice__uint8_t s11 = pl1.fst;
+        Pulse_Lib_Slice_slice__uint8_t s21 = pl1.snd;
+        Pulse_Lib_Slice_slice__uint8_t shd = phd;
+        bool res3 = impl_deterministically_encoded_cbor_map_key_order(shd, s11);
+        if (res3)
+        {
+          phd = s11;
+          ptl = s21;
+          size_t i = pi;
+          size_t i_ = i - (size_t)1U;
+          pi = i_;
+        }
+        else
+          pres = false;
+        size_t i0 = pi;
+        bool res = pres;
+        cond = res && i0 > (size_t)0U;
+      }
+      return pres;
+    }
+  }
+  else
+    return true;
+}
+
+static size_t cbor_validate_det_(Pulse_Lib_Slice_slice__uint8_t input)
+{
+  size_t len = cbor_validate(input);
+  if (len == (size_t)0U)
+    return len;
+  else
+  {
+    __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+    s_ = split__uint8_t(input, (size_t)0U);
+    Pulse_Lib_Slice_slice__uint8_t s10 = s_.fst;
+    Pulse_Lib_Slice_slice__uint8_t s20 = s_.snd;
+    __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+    split123 = { .fst = s10, .snd = s20 };
+    Pulse_Lib_Slice_slice__uint8_t input23 = split123.snd;
+    size_t consumed0 = len - (size_t)0U;
+    __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+    s1s2 = split__uint8_t(input23, consumed0);
+    Pulse_Lib_Slice_slice__uint8_t s11 = s1s2.fst;
+    Pulse_Lib_Slice_slice__uint8_t s21 = s1s2.snd;
+    __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+    res0 = { .fst = s11, .snd = s21 };
+    Pulse_Lib_Slice_slice__uint8_t left0 = res0.fst;
+    Pulse_Lib_Slice_slice__uint8_t right0 = res0.snd;
+    __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+    split23 = { .fst = left0, .snd = right0 };
+    Pulse_Lib_Slice_slice__uint8_t input1 = split23.fst;
+    bool check = false;
+    KRML_HOST_IGNORE(&check);
+    size_t pn = (size_t)1U;
+    bool pres0 = true;
+    Pulse_Lib_Slice_slice__uint8_t ppi0 = input1;
+    bool res1 = pres0;
+    size_t n0 = pn;
+    bool cond = res1 && n0 > (size_t)0U;
+    while (cond)
+    {
+      size_t n0 = pn;
+      Pulse_Lib_Slice_slice__uint8_t pi = ppi0;
+      size_t i0 = jump_raw_data_item(pi, (size_t)0U);
+      __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t s = split__uint8_t(pi, i0);
+      Pulse_Lib_Slice_slice__uint8_t s10 = s.fst;
+      Pulse_Lib_Slice_slice__uint8_t s20 = s.snd;
+      __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+      res = { .fst = s10, .snd = s20 };
+      Pulse_Lib_Slice_slice__uint8_t input110 = res.fst;
+      Pulse_Lib_Slice_slice__uint8_t input20 = res.snd;
+      __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+      res0 = { .fst = input110, .snd = input20 };
+      Pulse_Lib_Slice_slice__uint8_t input111 = res0.fst;
+      Pulse_Lib_Slice_slice__uint8_t input21 = res0.snd;
+      __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+      spl = { .fst = input111, .snd = input21 };
+      Pulse_Lib_Slice_slice__uint8_t res1 = spl.fst;
+      Pulse_Lib_Slice_slice__uint8_t px = res1;
+      bool res2 = cbor_raw_ints_optimal(px);
+      if (!res2)
+        pres0 = false;
+      else
+      {
+        size_t off1 = jump_header(pi, (size_t)0U);
+        __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+        s_ = split__uint8_t(pi, (size_t)0U);
+        Pulse_Lib_Slice_slice__uint8_t s10 = s_.fst;
+        Pulse_Lib_Slice_slice__uint8_t s20 = s_.snd;
+        __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+        split123 = { .fst = s10, .snd = s20 };
+        Pulse_Lib_Slice_slice__uint8_t input23 = split123.snd;
+        size_t consumed = off1 - (size_t)0U;
+        __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+        s1s2 = split__uint8_t(input23, consumed);
+        Pulse_Lib_Slice_slice__uint8_t s11 = s1s2.fst;
+        Pulse_Lib_Slice_slice__uint8_t s21 = s1s2.snd;
+        __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+        res1 = { .fst = s11, .snd = s21 };
+        Pulse_Lib_Slice_slice__uint8_t left = res1.fst;
+        Pulse_Lib_Slice_slice__uint8_t right = res1.snd;
+        __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+        split23 = { .fst = left, .snd = right };
+        Pulse_Lib_Slice_slice__uint8_t input_ = split23.fst;
+        header res10 = read_header(input_);
+        header x = res10;
+        initial_byte_t b0 = x.fst;
+        size_t i;
+        if
+        (
+          b0.major_type
+          == CBOR_MAJOR_TYPE_BYTE_STRING
+          || b0.major_type == CBOR_MAJOR_TYPE_TEXT_STRING
+        )
+        {
+          initial_byte_t b = x.fst;
+          long_argument l = x.snd;
+          i = off1 + (size_t)argument_as_uint64(b, l);
+        }
+        else
+          i = off1 + (size_t)0U;
+        __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t s = split__uint8_t(pi, i);
+        Pulse_Lib_Slice_slice__uint8_t s1 = s.fst;
+        Pulse_Lib_Slice_slice__uint8_t s2 = s.snd;
+        __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+        res11 = { .fst = s1, .snd = s2 };
+        Pulse_Lib_Slice_slice__uint8_t input11 = res11.fst;
+        Pulse_Lib_Slice_slice__uint8_t input2 = res11.snd;
+        __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+        spl = { .fst = input11, .snd = input2 };
+        Pulse_Lib_Slice_slice__uint8_t ph = spl.fst;
+        Pulse_Lib_Slice_slice__uint8_t pc = spl.snd;
+        size_t unused = len__uint8_t(pc);
+        scylla_reset(unused); // KRML_MAYBE_UNUSED_VAR(unused);
+        size_t count = jump_recursive_step_count_leaf(ph);
+        pn = n0 - (size_t)1U + count;
+        ppi0 = pc;
+      }
+      bool res3 = pres0;
+      size_t n = pn;
+      cond = res3 && n > (size_t)0U;
+    }
+    bool res2 = pres0;
+    bool check1 = res2;
+    if (!check1)
+      return (size_t)0U;
+    else
+    {
+      size_t pn = (size_t)1U;
+      bool pres = true;
+      Pulse_Lib_Slice_slice__uint8_t ppi = input1;
+      bool res = pres;
+      size_t n0 = pn;
+      bool cond = res && n0 > (size_t)0U;
+      while (cond)
+      {
+        size_t n0 = pn;
+        Pulse_Lib_Slice_slice__uint8_t pi = ppi;
+        size_t i0 = jump_raw_data_item(pi, (size_t)0U);
+        __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t s = split__uint8_t(pi, i0);
+        Pulse_Lib_Slice_slice__uint8_t s10 = s.fst;
+        Pulse_Lib_Slice_slice__uint8_t s20 = s.snd;
+        __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+        res = { .fst = s10, .snd = s20 };
+        Pulse_Lib_Slice_slice__uint8_t input110 = res.fst;
+        Pulse_Lib_Slice_slice__uint8_t input20 = res.snd;
+        __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+        res0 = { .fst = input110, .snd = input20 };
+        Pulse_Lib_Slice_slice__uint8_t input111 = res0.fst;
+        Pulse_Lib_Slice_slice__uint8_t input21 = res0.snd;
+        __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+        spl = { .fst = input111, .snd = input21 };
+        Pulse_Lib_Slice_slice__uint8_t res1 = spl.fst;
+        Pulse_Lib_Slice_slice__uint8_t px = res1;
+        bool res2 = cbor_raw_sorted(px);
+        if (!res2)
+          pres = false;
+        else
+        {
+          size_t off1 = jump_header(pi, (size_t)0U);
+          __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+          s_ = split__uint8_t(pi, (size_t)0U);
+          Pulse_Lib_Slice_slice__uint8_t s10 = s_.fst;
+          Pulse_Lib_Slice_slice__uint8_t s20 = s_.snd;
+          __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+          split123 = { .fst = s10, .snd = s20 };
+          Pulse_Lib_Slice_slice__uint8_t input23 = split123.snd;
+          size_t consumed = off1 - (size_t)0U;
+          __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+          s1s2 = split__uint8_t(input23, consumed);
+          Pulse_Lib_Slice_slice__uint8_t s11 = s1s2.fst;
+          Pulse_Lib_Slice_slice__uint8_t s21 = s1s2.snd;
+          __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+          res1 = { .fst = s11, .snd = s21 };
+          Pulse_Lib_Slice_slice__uint8_t left = res1.fst;
+          Pulse_Lib_Slice_slice__uint8_t right = res1.snd;
+          __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+          split23 = { .fst = left, .snd = right };
+          Pulse_Lib_Slice_slice__uint8_t input_ = split23.fst;
+          header res10 = read_header(input_);
+          header x = res10;
+          initial_byte_t b0 = x.fst;
+          size_t i;
+          if
+          (
+            b0.major_type
+            == CBOR_MAJOR_TYPE_BYTE_STRING
+            || b0.major_type == CBOR_MAJOR_TYPE_TEXT_STRING
+          )
+          {
+            initial_byte_t b = x.fst;
+            long_argument l = x.snd;
+            i = off1 + (size_t)argument_as_uint64(b, l);
+          }
+          else
+            i = off1 + (size_t)0U;
+          __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t s = split__uint8_t(pi, i);
+          Pulse_Lib_Slice_slice__uint8_t s1 = s.fst;
+          Pulse_Lib_Slice_slice__uint8_t s2 = s.snd;
+          __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+          res11 = { .fst = s1, .snd = s2 };
+          Pulse_Lib_Slice_slice__uint8_t input11 = res11.fst;
+          Pulse_Lib_Slice_slice__uint8_t input2 = res11.snd;
+          __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+          spl = { .fst = input11, .snd = input2 };
+          Pulse_Lib_Slice_slice__uint8_t ph = spl.fst;
+          Pulse_Lib_Slice_slice__uint8_t pc = spl.snd;
+          size_t unused = len__uint8_t(pc);
+          scylla_reset(unused); // KRML_MAYBE_UNUSED_VAR(unused);
+          size_t count = jump_recursive_step_count_leaf(ph);
+          pn = n0 - (size_t)1U + count;
+          ppi = pc;
+        }
+        bool res3 = pres;
+        size_t n = pn;
+        cond = res3 && n > (size_t)0U;
+      }
+      bool res0 = pres;
+      bool check2 = res0;
+      if (!check2)
+        return (size_t)0U;
+      else
+        return len;
+    }
+  }
+}
+
+static size_t cbor_validate_det(Pulse_Lib_Slice_slice__uint8_t input)
+{
+  size_t res = cbor_validate_det_(input);
+  return res;
+}
+
+static cbor_raw cbor_parse(Pulse_Lib_Slice_slice__uint8_t input, size_t len)
+{
+  __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+  s_ = split__uint8_t(input, (size_t)0U);
+  Pulse_Lib_Slice_slice__uint8_t s10 = s_.fst;
+  Pulse_Lib_Slice_slice__uint8_t s20 = s_.snd;
+  __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+  split123 = { .fst = s10, .snd = s20 };
+  Pulse_Lib_Slice_slice__uint8_t input23 = split123.snd;
+  size_t consumed = len - (size_t)0U;
+  __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+  s1s2 = split__uint8_t(input23, consumed);
+  Pulse_Lib_Slice_slice__uint8_t s1 = s1s2.fst;
+  Pulse_Lib_Slice_slice__uint8_t s2 = s1s2.snd;
+  __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t res = { .fst = s1, .snd = s2 };
+  Pulse_Lib_Slice_slice__uint8_t left = res.fst;
+  Pulse_Lib_Slice_slice__uint8_t right = res.snd;
+  __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t
+  split23 = { .fst = left, .snd = right };
+  Pulse_Lib_Slice_slice__uint8_t input1 = split23.fst;
+  cbor_raw res0 = cbor_read(input1);
+  return res0;
+}
+
+bool uu___is_CBOR_Case_Int(cbor_raw projectee)
+{
+  if (projectee.tag == CBOR_Case_Int)
+    return true;
+  else
+    return false;
+}
+
+bool uu___is_CBOR_Case_Simple(cbor_raw projectee)
+{
+  if (projectee.tag == CBOR_Case_Simple)
+    return true;
+  else
+    return false;
+}
+
+bool uu___is_CBOR_Case_String(cbor_raw projectee)
+{
+  if (projectee.tag == CBOR_Case_String)
+    return true;
+  else
+    return false;
+}
+
+bool uu___is_CBOR_Case_Tagged(cbor_raw projectee)
+{
+  if (projectee.tag == CBOR_Case_Tagged)
+    return true;
+  else
+    return false;
+}
+
+bool uu___is_CBOR_Case_Array(cbor_raw projectee)
+{
+  if (projectee.tag == CBOR_Case_Array)
+    return true;
+  else
+    return false;
+}
+
+bool uu___is_CBOR_Case_Map(cbor_raw projectee)
+{
+  if (projectee.tag == CBOR_Case_Map)
+    return true;
+  else
+    return false;
+}
+
+bool uu___is_CBOR_Case_Serialized_Tagged(cbor_raw projectee)
+{
+  if (projectee.tag == CBOR_Case_Serialized_Tagged)
+    return true;
+  else
+    return false;
+}
+
+bool uu___is_CBOR_Case_Serialized_Array(cbor_raw projectee)
+{
+  if (projectee.tag == CBOR_Case_Serialized_Array)
+    return true;
+  else
+    return false;
+}
+
+bool uu___is_CBOR_Case_Serialized_Map(cbor_raw projectee)
+{
+  if (projectee.tag == CBOR_Case_Serialized_Map)
+    return true;
+  else
+    return false;
+}
+
+size_t cbor_det_validate(Pulse_Lib_Slice_slice__uint8_t input)
+{
+  size_t res = cbor_validate_det(input);
+  return res;
+}
+
+cbor_raw cbor_det_parse(Pulse_Lib_Slice_slice__uint8_t input, size_t len)
+{
+  cbor_raw res = cbor_parse(input, len);
+  return res;
+}
+
+size_t cbor_det_size(cbor_raw x, size_t bound)
+{
+  size_t res = cbor_size(x, bound);
+  return res;
+}
+
+size_t cbor_det_serialize(cbor_raw x, Pulse_Lib_Slice_slice__uint8_t output)
+{
+  size_t res = cbor_serialize(x, output);
+  return res;
+}
+
+cbor_raw cbor_det_mk_simple_value(uint8_t v)
+{
+  return ((cbor_raw){ .tag = CBOR_Case_Simple, { .case_CBOR_Case_Simple = v } });
+}
+
+cbor_raw cbor_det_mk_int64(uint8_t ty, uint64_t v)
+{
+  cbor_int
+  res =
+    {
+      .cbor_int_type = ty,
+      .cbor_int_size = mk_raw_uint64(v).size,
+      .cbor_int_value = mk_raw_uint64(v).value
+    };
+  cbor_int resi = res;
+  cbor_raw res0 = { .tag = CBOR_Case_Int, { .case_CBOR_Case_Int = resi } };
+  return res0;
+}
+
+cbor_raw cbor_det_mk_string(uint8_t ty, Pulse_Lib_Slice_slice__uint8_t s)
+{
+  CBOR_Spec_Raw_Base_raw_uint64 len64 = mk_raw_uint64((uint64_t)len__uint8_t(s));
+  cbor_string
+  ress = { .cbor_string_type = ty, .cbor_string_size = len64.size, .cbor_string_ptr = s };
+  return ((cbor_raw){ .tag = CBOR_Case_String, { .case_CBOR_Case_String = ress } });
+}
+
+cbor_raw cbor_det_mk_tagged(uint64_t tag, cbor_raw *r)
+{
+  CBOR_Spec_Raw_Base_raw_uint64 tag64 = mk_raw_uint64(tag);
+  cbor_tagged res_ = { .cbor_tagged_tag = tag64, .cbor_tagged_ptr = r };
+  return ((cbor_raw){ .tag = CBOR_Case_Tagged, { .case_CBOR_Case_Tagged = res_ } });
+}
+
+cbor_raw cbor_det_mk_array(cbor_raw *a, uint64_t len)
+{
+  CBOR_Spec_Raw_Base_raw_uint64 len64 = mk_raw_uint64(len);
+  cbor_array res_ = { .cbor_array_length = len64, .cbor_array_ptr = a };
+  return ((cbor_raw){ .tag = CBOR_Case_Array, { .case_CBOR_Case_Array = res_ } });
+}
+
+static int16_t cbor_raw_compare(cbor_raw x1, cbor_raw x2)
+{
+  return CBOR_Pulse_Raw_Compare_impl_cbor_compare(x1, x2);
+}
+
+static int16_t cbor_map_entry_raw_compare(cbor_map_entry x1, cbor_map_entry x2)
+{
+  int16_t res = cbor_raw_compare(x1.cbor_map_entry_key, x2.cbor_map_entry_key);
+  return res;
+}
+
+bool cbor_raw_sort_aux(cbor_map_entry *a, size_t lo, size_t hi)
+{
+  size_t len = hi - lo;
+  if (len < (size_t)2U)
+    return true;
+  else
+  {
+    size_t len_half = len / (size_t)2U;
+    size_t mi = lo + len_half;
+    bool res = cbor_raw_sort_aux(a, lo, mi);
+    if (!res)
+      return false;
+    else
+    {
+      bool res1 = cbor_raw_sort_aux(a, mi, hi);
+      if (!res1)
+        return false;
+      else
+      {
+        size_t pi1 = lo;
+        size_t pi2 = mi;
+        bool pres = true;
+        size_t i10 = pi1;
+        size_t i20 = pi2;
+        bool res20 = pres;
+        bool cond = res20 && !(i10 == i20 || i20 == hi);
+        while (cond)
+        {
+          size_t i1 = pi1;
+          cbor_map_entry x1 = a[i1];
+          size_t i20 = pi2;
+          cbor_map_entry x2 = a[i20];
+          int16_t comp = cbor_map_entry_raw_compare(x1, x2);
+          if (comp == (int16_t)0)
+            pres = false;
+          else if (comp < (int16_t)0)
+          {
+            size_t i1_ = i1 + (size_t)1U;
+            pi1 = i1_;
+          }
+          else
+          {
+            size_t i2_ = i20 + (size_t)1U;
+            size_t i1_;
+            if (i1 == i20)
+              i1_ = i2_;
+            else if (i20 == i2_)
+              i1_ = i1;
+            else
+            {
+              size_t pn = i2_ - i1;
+              size_t pl = i20 - i1;
+              size_t l30 = pl;
+              bool cond = l30 > (size_t)0U;
+              while (cond)
+              {
+                size_t n = pn;
+                size_t l3 = pl;
+                size_t l_ = n % l3;
+                pn = l3;
+                pl = l_;
+                size_t l30 = pl;
+                cond = l30 > (size_t)0U;
+              }
+              size_t d = pn;
+              size_t q = (i2_ - i1) / d;
+              size_t pi = i1;
+              size_t i0 = pi;
+              bool cond0 = i0 - i1 < d;
+              while (cond0)
+              {
+                size_t i = pi;
+                cbor_map_entry save = a[i];
+                size_t pj = (size_t)0U;
+                size_t pidx = i;
+                size_t j0 = pj;
+                bool cond = j0 < q - (size_t)1U;
+                while (cond)
+                {
+                  size_t j = pj;
+                  size_t idx = pidx;
+                  size_t idx_;
+                  if (idx - i1 >= i2_ - i20)
+                    idx_ = idx - (i2_ - i20);
+                  else
+                    idx_ = idx + i20 - i1;
+                  cbor_map_entry x = a[idx_];
+                  size_t j_ = j + (size_t)1U;
+                  a[idx] = x;
+                  pj = j_;
+                  pidx = idx_;
+                  size_t j0 = pj;
+                  cond = j0 < q - (size_t)1U;
+                }
+                size_t idx = pidx;
+                a[idx] = save;
+                size_t i_ = i + (size_t)1U;
+                pi = i_;
+                size_t i0 = pi;
+                cond0 = i0 - i1 < d;
+              }
+              i1_ = i1 + i2_ - i20;
+            }
+            pi1 = i1_;
+            pi2 = i2_;
+          }
+          size_t i10 = pi1;
+          size_t i2 = pi2;
+          bool res2 = pres;
+          cond = res2 && !(i10 == i2 || i2 == hi);
+        }
+        bool res2 = pres;
+        return res2;
+      }
+    }
+  }
+}
+
+static bool cbor_raw_sort(cbor_map_entry *a, size_t len)
+{
+  bool res = cbor_raw_sort_aux(a, (size_t)0U, len);
+  return res;
+}
+
+cbor_raw cbor_det_mk_map(cbor_map_entry *a, uint64_t len)
+{
+  cbor_raw_sort(a, (size_t)len);
+  CBOR_Spec_Raw_Base_raw_uint64 raw_len = mk_raw_uint64(len);
+  cbor_map res_ = { .cbor_map_length = raw_len, .cbor_map_ptr = a };
+  return ((cbor_raw){ .tag = CBOR_Case_Map, { .case_CBOR_Case_Map = res_ } });
+}
+
+bool cbor_det_equal(cbor_raw x1, cbor_raw x2)
+{
+  int16_t comp = CBOR_Pulse_Raw_Compare_impl_cbor_compare(x1, x2);
+  return comp == (int16_t)0;
+}
+
+uint8_t cbor_det_major_type(cbor_raw x)
+{
+  uint8_t res = impl_major_type(x);
+  return res;
+}
+
+uint8_t cbor_det_read_simple_value(cbor_raw x)
+{
+  if (x.tag == CBOR_Case_Simple)
+    return x.case_CBOR_Case_Simple;
+  else
+  {
+    // KRML_HOST_EPRINTF("KaRaMeL abort at %s:%d\n%s\n",
+    //   __FILE__,
+    //   __LINE__,
+    //   "unreachable (pattern matches are exhaustive in F*)");
+    KRML_HOST_EXIT(255U);
+  }
+}
+
+uint64_t cbor_det_read_uint64(cbor_raw x)
+{
+  cbor_int c_;
+  if (x.tag == CBOR_Case_Int)
+    c_ = x.case_CBOR_Case_Int;
+  else
+    exit(253);
+    // c_ = KRML_EABORT(cbor_int, "unreachable (pattern matches are exhaustive in F*)");
+  CBOR_Spec_Raw_Base_raw_uint64 res = { .size = c_.cbor_int_size, .value = c_.cbor_int_value };
+  return res.value;
+}
+
+Pulse_Lib_Slice_slice__uint8_t cbor_det_get_string(cbor_raw x)
+{
+  cbor_string c_ = CBOR_STRING_DEFAULT;
+  if (x.tag == CBOR_Case_String)
+    c_ = x.case_CBOR_Case_String;
+  else
+    exit(253);
+    // c_ = KRML_EABORT(cbor_string, "unreachable (pattern matches are exhaustive in F*)");
+  return c_.cbor_string_ptr;
+}
+
+uint64_t cbor_det_get_tagged_tag(cbor_raw x)
+{
+  CBOR_Spec_Raw_Base_raw_uint64 res;
+  if (x.tag == CBOR_Case_Tagged)
+  {
+    cbor_tagged c_ = x.case_CBOR_Case_Tagged;
+    res = c_.cbor_tagged_tag;
+  }
+  else if (x.tag == CBOR_Case_Serialized_Tagged)
+  {
+    cbor_serialized c_ = x.case_CBOR_Case_Serialized_Tagged;
+    res = c_.cbor_serialized_header;
+  }
+  else
+    exit(253);
+    // res =
+    //   KRML_EABORT(CBOR_Spec_Raw_Base_raw_uint64,
+    //     "unreachable (pattern matches are exhaustive in F*)");
+  return res.value;
+}
+
+cbor_raw cbor_det_get_tagged_payload(cbor_raw x)
+{
+  cbor_raw res = cbor_match_tagged_get_payload(x);
+  return res;
+}
+
+uint64_t cbor_det_get_array_length(cbor_raw x)
+{
+  CBOR_Spec_Raw_Base_raw_uint64 res;
+  if (x.tag == CBOR_Case_Array)
+  {
+    cbor_array c_ = x.case_CBOR_Case_Array;
+    res = c_.cbor_array_length;
+  }
+  else if (x.tag == CBOR_Case_Serialized_Array)
+  {
+    cbor_serialized c_ = x.case_CBOR_Case_Serialized_Array;
+    res = c_.cbor_serialized_header;
+  }
+  else
+    exit(253);
+    // res =
+    //   KRML_EABORT(CBOR_Spec_Raw_Base_raw_uint64,
+    //     "unreachable (pattern matches are exhaustive in F*)");
+  return res.value;
+}
+
+CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw
+cbor_det_array_iterator_start(cbor_raw x)
+{
+  CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw
+  res = cbor_array_iterator_init(x);
+  return res;
+}
+
+bool
+cbor_det_array_iterator_is_empty(
+  CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw x
+)
+{
+  bool res = cbor_array_iterator_is_empty(x);
+  return res;
+}
+
+cbor_raw
+cbor_det_array_iterator_next(
+  CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw *x
+)
+{
+  cbor_raw res = cbor_array_iterator_next(x);
+  return res;
+}
+
+cbor_raw cbor_det_get_array_item(cbor_raw x, uint64_t i)
+{
+  cbor_raw res = cbor_array_item(x, i);
+  return res;
+}
+
+uint64_t cbor_det_get_map_length(cbor_raw x)
+{
+  CBOR_Spec_Raw_Base_raw_uint64 res;
+  if (x.tag == CBOR_Case_Map)
+  {
+    cbor_map c_ = x.case_CBOR_Case_Map;
+    res = c_.cbor_map_length;
+  }
+  else if (x.tag == CBOR_Case_Serialized_Map)
+  {
+    cbor_serialized c_ = x.case_CBOR_Case_Serialized_Map;
+    res = c_.cbor_serialized_header;
+  }
+  else
+    exit(253);
+    // res =
+    //   KRML_EABORT(CBOR_Spec_Raw_Base_raw_uint64,
+    //     "unreachable (pattern matches are exhaustive in F*)");
+  return res.value;
+}
+
+static int16_t impl_cbor_det_compare(cbor_raw x1, cbor_raw x2)
+{
+  int16_t res = CBOR_Pulse_Raw_Compare_impl_cbor_compare(x1, x2);
+  return res;
+}
+
+static CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry
+cbor_det_map_iterator_start_(cbor_raw x)
+{
+  CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry
+  res = cbor_map_iterator_init(x);
+  return res;
+}
+
+CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry
+cbor_det_map_iterator_start(cbor_raw x)
+{
+  return cbor_det_map_iterator_start_(x);
+}
+
+bool
+cbor_det_map_iterator_is_empty(
+  CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry x
+)
+{
+  bool res = cbor_map_iterator_is_empty(x);
+  return res;
+}
+
+cbor_map_entry
+cbor_det_map_iterator_next(
+  CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry *x
+)
+{
+  cbor_map_entry res = cbor_map_iterator_next(x);
+  return res;
+}
+
+cbor_raw cbor_det_map_entry_key(cbor_map_entry x2)
+{
+  return x2.cbor_map_entry_key;
+}
+
+cbor_raw cbor_det_map_entry_value(cbor_map_entry x2)
+{
+  return x2.cbor_map_entry_value;
+}
+
+FStar_Pervasives_Native_option__CBOR_Pulse_Raw_Type_cbor_raw
+cbor_det_map_get(cbor_raw x, cbor_raw k)
+{
+  CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry
+  i = cbor_det_map_iterator_start_(x);
+  CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry pi = i;
+  FStar_Pervasives_Native_option__CBOR_Pulse_Raw_Type_cbor_raw
+  pres = { .tag = FStar_Pervasives_Native_None };
+  bool i_is_empty = cbor_det_map_iterator_is_empty(i);
+  bool cont = !i_is_empty;
+  bool pcont = cont;
+  while (pcont)
+  {
+    cbor_map_entry entry = cbor_det_map_iterator_next(&pi);
+    cbor_raw key = cbor_det_map_entry_key(entry);
+    int16_t comp = impl_cbor_det_compare(key, k);
+    if (comp == (int16_t)0)
+    {
+      cbor_raw value = cbor_det_map_entry_value(entry);
+      pres =
+        (
+          (FStar_Pervasives_Native_option__CBOR_Pulse_Raw_Type_cbor_raw){
+            .tag = FStar_Pervasives_Native_Some,
+            .v = value
+          }
+        );
+      pcont = false;
+    }
+    else if (comp > (int16_t)0)
+      pcont = false;
+    else
+    {
+      CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry i_ = pi;
+      bool is_empty = cbor_det_map_iterator_is_empty(i_);
+      bool cont1 = !is_empty;
+      pcont = cont1;
+    }
+  }
+  return pres;
+}
