@@ -5,6 +5,727 @@
 #![allow(unreachable_patterns)]
 #![allow(unused_mut)]
 
+pub fn CBOR_Pulse_Raw_Compare_impl_cbor_compare(x1: cbor_raw, x2: cbor_raw) -> i16
+{
+  let ty1: u8 = impl_major_type(x1);
+  let ty2: u8 = impl_major_type(x2);
+  let c: i16 = impl_uint8_compare(ty1, ty2);
+  if c == 0i32 as i16
+  {
+    if ty1 as u32 == 0u32 || ty1 as u32 == 1u32
+    {
+      let mut c_: cbor_int = Default::default();
+      match x1 { cbor_raw::case_CBOR_Case_Int { v } => c_ = v, _ => panic!("") };
+      let i1: CBOR_Spec_Raw_Base_raw_uint64 =
+          CBOR_Spec_Raw_Base_raw_uint64 { size: c_.cbor_int_size, value: c_.cbor_int_value };
+      let mut c_0: cbor_int = Default::default();
+      match x2 { cbor_raw::case_CBOR_Case_Int { v } => c_0 = v, _ => panic!("") };
+      let i2: CBOR_Spec_Raw_Base_raw_uint64 =
+          CBOR_Spec_Raw_Base_raw_uint64 { size: c_0.cbor_int_size, value: c_0.cbor_int_value };
+      return impl_raw_uint64_compare(i1, i2)
+    }
+    else if ty1 as u32 == 2u32 || ty1 as u32 == 3u32
+    {
+      let mut c_: cbor_string =
+          cbor_string { cbor_string_type: 0u8, cbor_string_size: 0u8, cbor_string_ptr: &[] };
+      match x1 { cbor_raw::case_CBOR_Case_String { v } => c_ = v, _ => panic!("") };
+      let res: CBOR_Spec_Raw_Base_raw_uint64 =
+          CBOR_Spec_Raw_Base_raw_uint64
+          { size: c_.cbor_string_size, value: len__uint8_t(c_.cbor_string_ptr) as u64 };
+      let i1: CBOR_Spec_Raw_Base_raw_uint64 = res;
+      let mut c_0: cbor_string =
+          cbor_string { cbor_string_type: 0u8, cbor_string_size: 0u8, cbor_string_ptr: &[] };
+      match x2 { cbor_raw::case_CBOR_Case_String { v } => c_0 = v, _ => panic!("") };
+      let res0: CBOR_Spec_Raw_Base_raw_uint64 =
+          CBOR_Spec_Raw_Base_raw_uint64
+          { size: c_0.cbor_string_size, value: len__uint8_t(c_0.cbor_string_ptr) as u64 };
+      let i2: CBOR_Spec_Raw_Base_raw_uint64 = res0;
+      let c1: i16 = impl_raw_uint64_compare(i1, i2);
+      if c1 == 0i32 as i16
+      {
+        let mut c_1: cbor_string =
+            cbor_string { cbor_string_type: 0u8, cbor_string_size: 0u8, cbor_string_ptr: &[] };
+        match x1 { cbor_raw::case_CBOR_Case_String { v } => c_1 = v, _ => panic!("") };
+        let pl1: &[u8] = c_1.cbor_string_ptr;
+        let mut c_00: cbor_string =
+            cbor_string { cbor_string_type: 0u8, cbor_string_size: 0u8, cbor_string_ptr: &[] };
+        match x2 { cbor_raw::case_CBOR_Case_String { v } => c_00 = v, _ => panic!("") };
+        let pl2: &[u8] = c_00.cbor_string_ptr;
+        let res1: i16 = lex_compare_bytes(pl1, pl2);
+        return res1
+      }
+      else
+      { return c1 }
+    }
+    else if ty1 as u32 == 6u32
+    {
+      let mut tag1: CBOR_Spec_Raw_Base_raw_uint64 = Default::default();
+      match x1
+      {
+        cbor_raw::case_CBOR_Case_Tagged { v } =>
+          {
+            let c_: cbor_tagged = v;
+            tag1 = c_.cbor_tagged_tag
+          },
+        _ =>
+          match x1
+          {
+            cbor_raw::case_CBOR_Case_Serialized_Tagged { v } =>
+              {
+                let c_: cbor_serialized = v;
+                tag1 = c_.cbor_serialized_header
+              },
+            _ => panic!("")
+          }
+      };
+      let mut tag2: CBOR_Spec_Raw_Base_raw_uint64 = Default::default();
+      match x2
+      {
+        cbor_raw::case_CBOR_Case_Tagged { v } =>
+          {
+            let c_: cbor_tagged = v;
+            tag2 = c_.cbor_tagged_tag
+          },
+        _ =>
+          match x2
+          {
+            cbor_raw::case_CBOR_Case_Serialized_Tagged { v } =>
+              {
+                let c_: cbor_serialized = v;
+                tag2 = c_.cbor_serialized_header
+              },
+            _ => panic!("")
+          }
+      };
+      let c1: i16 = impl_raw_uint64_compare(tag1, tag2);
+      if c1 == 0i32 as i16
+      {
+        let pl1: cbor_raw = cbor_match_tagged_get_payload(x1);
+        let pl2: cbor_raw = cbor_match_tagged_get_payload(x2);
+        let res: i16 = CBOR_Pulse_Raw_Compare_impl_cbor_compare(pl1, pl2);
+        return res
+      }
+      else
+      { return c1 }
+    }
+    else if ty1 as u32 == 4u32
+    {
+      let mut len1: CBOR_Spec_Raw_Base_raw_uint64 = Default::default();
+      match x1
+      {
+        cbor_raw::case_CBOR_Case_Array { v } =>
+          {
+            let c_: cbor_array = v;
+            len1 = c_.cbor_array_length
+          },
+        _ =>
+          match x1
+          {
+            cbor_raw::case_CBOR_Case_Serialized_Array { v } =>
+              {
+                let c_: cbor_serialized = v;
+                len1 = c_.cbor_serialized_header
+              },
+            _ => panic!("")
+          }
+      };
+      let mut len2: CBOR_Spec_Raw_Base_raw_uint64 = Default::default();
+      match x2
+      {
+        cbor_raw::case_CBOR_Case_Array { v } =>
+          {
+            let c_: cbor_array = v;
+            len2 = c_.cbor_array_length
+          },
+        _ =>
+          match x2
+          {
+            cbor_raw::case_CBOR_Case_Serialized_Array { v } =>
+              {
+                let c_: cbor_serialized = v;
+                len2 = c_.cbor_serialized_header
+              },
+            _ => panic!("")
+          }
+      };
+      let c1: i16 = impl_raw_uint64_compare(len1, len2);
+      if c1 == 0i32 as i16
+      {
+        let i1: CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw =
+            cbor_array_iterator_init(x1);
+        let i2: CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw =
+            cbor_array_iterator_init(x2);
+        let pl1: CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw = i1;
+        let pl2: CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw = i2;
+        let mut fin1: bool;
+        match pl1
+        {
+          CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw::case_CBOR_Raw_Iterator_Slice
+          { v }
+          =>
+            {
+              let c_: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw = v;
+              let res: bool = len__CBOR_Pulse_Raw_Type_cbor_raw(c_) == 0u32 as usize;
+              let res0: bool = res;
+              fin1 = res0
+            },
+          _ =>
+            match pl1
+            {
+              CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw::case_CBOR_Raw_Iterator_Serialized
+              { v }
+              =>
+                {
+                  let c_: &[u8] = v;
+                  let res: bool = cbor_serialized_array_iterator_is_empty(c_);
+                  fin1 = res
+                },
+              _ => panic!("")
+            }
+        };
+        let mut fin2: bool;
+        match pl2
+        {
+          CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw::case_CBOR_Raw_Iterator_Slice
+          { v }
+          =>
+            {
+              let c_: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw = v;
+              let res: bool = len__CBOR_Pulse_Raw_Type_cbor_raw(c_) == 0u32 as usize;
+              let res0: bool = res;
+              fin2 = res0
+            },
+          _ =>
+            match pl2
+            {
+              CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw::case_CBOR_Raw_Iterator_Serialized
+              { v }
+              =>
+                {
+                  let c_: &[u8] = v;
+                  let res: bool = cbor_serialized_array_iterator_is_empty(c_);
+                  fin2 = res
+                },
+              _ => panic!("")
+            }
+        };
+        let mut res0: i16;
+        if fin1
+        { if fin2 { res0 = 0i32 as i16 } else { res0 = 0i32.wrapping_sub(1i32) as i16 } }
+        else if fin2
+        { res0 = 1i32 as i16 }
+        else
+        {
+          let mut pi1: CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw =
+              pl1;
+          let mut pi2: CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw =
+              pl2;
+          let mut pres: i16 = 0i32 as i16;
+          let mut pfin1: bool = false;
+          let res1: i16 = pres;
+          let fin110: bool = pfin1;
+          let mut cond: bool = res1 == 0i32 as i16 && ! fin110;
+          while
+          cond
+          {
+            let i00: CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw = pi1;
+            let mut elt1: cbor_raw = Default::default();
+            match i00
+            {
+              CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw::case_CBOR_Raw_Iterator_Slice
+              { v }
+              =>
+                {
+                  let i: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw = v;
+                  let res: cbor_raw =
+                      op_Array_Access__CBOR_Pulse_Raw_Type_cbor_raw(i, 0u32 as usize);
+                  let
+                  sp:
+                  __Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_raw_Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_raw
+                  =
+                      split__CBOR_Pulse_Raw_Type_cbor_raw(i, 1u32 as usize);
+                  let s_: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw = sp.snd;
+                  let i11: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw = s_;
+                  let i_: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw = i11;
+                  pi1 =
+                      CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw::case_CBOR_Raw_Iterator_Slice
+                      { v: i_ };
+                  let res00: cbor_raw = res;
+                  elt1 = res00
+                },
+              _ =>
+                match i00
+                {
+                  CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw::case_CBOR_Raw_Iterator_Serialized
+                  { v }
+                  =>
+                    {
+                      let i: &[u8] = v;
+                      let res: cbor_raw =
+                          cbor_serialized_array_iterator_next(
+                            std::slice::from_mut::<CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw>(
+                              &mut pi1
+                            ),
+                            i
+                          );
+                      elt1 = res
+                    },
+                  _ => panic!("")
+                }
+            };
+            let i0: CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw = pi2;
+            let mut elt2: cbor_raw = Default::default();
+            match i0
+            {
+              CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw::case_CBOR_Raw_Iterator_Slice
+              { v }
+              =>
+                {
+                  let i: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw = v;
+                  let res: cbor_raw =
+                      op_Array_Access__CBOR_Pulse_Raw_Type_cbor_raw(i, 0u32 as usize);
+                  let
+                  sp:
+                  __Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_raw_Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_raw
+                  =
+                      split__CBOR_Pulse_Raw_Type_cbor_raw(i, 1u32 as usize);
+                  let s_: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw = sp.snd;
+                  let i11: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw = s_;
+                  let i_: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw = i11;
+                  pi2 =
+                      CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw::case_CBOR_Raw_Iterator_Slice
+                      { v: i_ };
+                  let res00: cbor_raw = res;
+                  elt2 = res00
+                },
+              _ =>
+                match i0
+                {
+                  CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw::case_CBOR_Raw_Iterator_Serialized
+                  { v }
+                  =>
+                    {
+                      let i: &[u8] = v;
+                      let res: cbor_raw =
+                          cbor_serialized_array_iterator_next(
+                            std::slice::from_mut::<CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw>(
+                              &mut pi2
+                            ),
+                            i
+                          );
+                      elt2 = res
+                    },
+                  _ => panic!("")
+                }
+            };
+            let pelt1: cbor_raw = elt1;
+            let pelt2: cbor_raw = elt2;
+            let res: i16 = CBOR_Pulse_Raw_Compare_impl_cbor_compare(pelt1, pelt2);
+            let c2: i16 = res;
+            if c2 == 0i32 as i16
+            {
+              let i11: CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw =
+                  pi1;
+              let mut fin11: bool;
+              match i11
+              {
+                CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw::case_CBOR_Raw_Iterator_Slice
+                { v }
+                =>
+                  {
+                    let c_: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw = v;
+                    let res2: bool = len__CBOR_Pulse_Raw_Type_cbor_raw(c_) == 0u32 as usize;
+                    let res00: bool = res2;
+                    fin11 = res00
+                  },
+                _ =>
+                  match i11
+                  {
+                    CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw::case_CBOR_Raw_Iterator_Serialized
+                    { v }
+                    =>
+                      {
+                        let c_: &[u8] = v;
+                        let res2: bool = cbor_serialized_array_iterator_is_empty(c_);
+                        fin11 = res2
+                      },
+                    _ => panic!("")
+                  }
+              };
+              let i21: CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw =
+                  pi2;
+              let mut fin21: bool;
+              match i21
+              {
+                CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw::case_CBOR_Raw_Iterator_Slice
+                { v }
+                =>
+                  {
+                    let c_: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw = v;
+                    let res2: bool = len__CBOR_Pulse_Raw_Type_cbor_raw(c_) == 0u32 as usize;
+                    let res00: bool = res2;
+                    fin21 = res00
+                  },
+                _ =>
+                  match i21
+                  {
+                    CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw::case_CBOR_Raw_Iterator_Serialized
+                    { v }
+                    =>
+                      {
+                        let c_: &[u8] = v;
+                        let res2: bool = cbor_serialized_array_iterator_is_empty(c_);
+                        fin21 = res2
+                      },
+                    _ => panic!("")
+                  }
+              };
+              if fin11 == fin21
+              { pfin1 = fin11 }
+              else if fin11 { pres = 0i32.wrapping_sub(1i32) as i16 } else { pres = 1i32 as i16 }
+            }
+            else
+            { pres = c2 };
+            let res00: i16 = pres;
+            let fin11: bool = pfin1;
+            cond = res00 == 0i32 as i16 && ! fin11
+          };
+          res0 = pres
+        };
+        let res: i16 = res0;
+        return res
+      }
+      else
+      { return c1 }
+    }
+    else if ty1 as u32 == 5u32
+    {
+      let mut len1: CBOR_Spec_Raw_Base_raw_uint64 = Default::default();
+      match x1
+      {
+        cbor_raw::case_CBOR_Case_Map { v } =>
+          {
+            let c_: cbor_map = v;
+            len1 = c_.cbor_map_length
+          },
+        _ =>
+          match x1
+          {
+            cbor_raw::case_CBOR_Case_Serialized_Map { v } =>
+              {
+                let c_: cbor_serialized = v;
+                len1 = c_.cbor_serialized_header
+              },
+            _ => panic!("")
+          }
+      };
+      let mut len2: CBOR_Spec_Raw_Base_raw_uint64 = Default::default();
+      match x2
+      {
+        cbor_raw::case_CBOR_Case_Map { v } =>
+          {
+            let c_: cbor_map = v;
+            len2 = c_.cbor_map_length
+          },
+        _ =>
+          match x2
+          {
+            cbor_raw::case_CBOR_Case_Serialized_Map { v } =>
+              {
+                let c_: cbor_serialized = v;
+                len2 = c_.cbor_serialized_header
+              },
+            _ => panic!("")
+          }
+      };
+      let c1: i16 = impl_raw_uint64_compare(len1, len2);
+      if c1 == 0i32 as i16
+      {
+        let i1: CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry =
+            cbor_map_iterator_init(x1);
+        let i2: CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry =
+            cbor_map_iterator_init(x2);
+        let pl1: CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry = i1;
+        let pl2: CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry = i2;
+        let mut fin1: bool;
+        match pl1
+        {
+          CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry::case_CBOR_Raw_Iterator_Slice
+          { v }
+          =>
+            {
+              let c_: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry = v;
+              let res: bool = len__CBOR_Pulse_Raw_Type_cbor_map_entry(c_) == 0u32 as usize;
+              let res0: bool = res;
+              fin1 = res0
+            },
+          _ =>
+            match pl1
+            {
+              CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry::case_CBOR_Raw_Iterator_Serialized
+              { v }
+              =>
+                {
+                  let c_: &[u8] = v;
+                  let res: bool = cbor_serialized_map_iterator_is_empty(c_);
+                  fin1 = res
+                },
+              _ => panic!("")
+            }
+        };
+        let mut fin2: bool;
+        match pl2
+        {
+          CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry::case_CBOR_Raw_Iterator_Slice
+          { v }
+          =>
+            {
+              let c_: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry = v;
+              let res: bool = len__CBOR_Pulse_Raw_Type_cbor_map_entry(c_) == 0u32 as usize;
+              let res0: bool = res;
+              fin2 = res0
+            },
+          _ =>
+            match pl2
+            {
+              CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry::case_CBOR_Raw_Iterator_Serialized
+              { v }
+              =>
+                {
+                  let c_: &[u8] = v;
+                  let res: bool = cbor_serialized_map_iterator_is_empty(c_);
+                  fin2 = res
+                },
+              _ => panic!("")
+            }
+        };
+        let mut res0: i16;
+        if fin1
+        { if fin2 { res0 = 0i32 as i16 } else { res0 = 0i32.wrapping_sub(1i32) as i16 } }
+        else if fin2
+        { res0 = 1i32 as i16 }
+        else
+        {
+          let
+          mut pi1: CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry
+          =
+              pl1;
+          let
+          mut pi2: CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry
+          =
+              pl2;
+          let mut pres: i16 = 0i32 as i16;
+          let mut pfin1: bool = false;
+          let res1: i16 = pres;
+          let fin110: bool = pfin1;
+          let mut cond: bool = res1 == 0i32 as i16 && ! fin110;
+          while
+          cond
+          {
+            let i00: CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry =
+                pi1;
+            let mut elt1: cbor_map_entry = Default::default();
+            match i00
+            {
+              CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry::case_CBOR_Raw_Iterator_Slice
+              { v }
+              =>
+                {
+                  let i: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry = v;
+                  let res: cbor_map_entry =
+                      op_Array_Access__CBOR_Pulse_Raw_Type_cbor_map_entry(i, 0u32 as usize);
+                  let
+                  sp:
+                  __Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_map_entry_Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_map_entry
+                  =
+                      split__CBOR_Pulse_Raw_Type_cbor_map_entry(i, 1u32 as usize);
+                  let s_: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry = sp.snd;
+                  let i11: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry = s_;
+                  let i_: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry = i11;
+                  pi1 =
+                      CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry::case_CBOR_Raw_Iterator_Slice
+                      { v: i_ };
+                  let res00: cbor_map_entry = res;
+                  elt1 = res00
+                },
+              _ =>
+                match i00
+                {
+                  CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry::case_CBOR_Raw_Iterator_Serialized
+                  { v }
+                  =>
+                    {
+                      let i: &[u8] = v;
+                      let res: cbor_map_entry =
+                          cbor_serialized_map_iterator_next(
+                            std::slice::from_mut::<CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry>(
+                              &mut pi1
+                            ),
+                            i
+                          );
+                      elt1 = res
+                    },
+                  _ => panic!("")
+                }
+            };
+            let i0: CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry =
+                pi2;
+            let mut elt2: cbor_map_entry = Default::default();
+            match i0
+            {
+              CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry::case_CBOR_Raw_Iterator_Slice
+              { v }
+              =>
+                {
+                  let i: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry = v;
+                  let res: cbor_map_entry =
+                      op_Array_Access__CBOR_Pulse_Raw_Type_cbor_map_entry(i, 0u32 as usize);
+                  let
+                  sp:
+                  __Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_map_entry_Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_map_entry
+                  =
+                      split__CBOR_Pulse_Raw_Type_cbor_map_entry(i, 1u32 as usize);
+                  let s_: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry = sp.snd;
+                  let i11: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry = s_;
+                  let i_: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry = i11;
+                  pi2 =
+                      CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry::case_CBOR_Raw_Iterator_Slice
+                      { v: i_ };
+                  let res00: cbor_map_entry = res;
+                  elt2 = res00
+                },
+              _ =>
+                match i0
+                {
+                  CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry::case_CBOR_Raw_Iterator_Serialized
+                  { v }
+                  =>
+                    {
+                      let i: &[u8] = v;
+                      let res: cbor_map_entry =
+                          cbor_serialized_map_iterator_next(
+                            std::slice::from_mut::<CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry>(
+                              &mut pi2
+                            ),
+                            i
+                          );
+                      elt2 = res
+                    },
+                  _ => panic!("")
+                }
+            };
+            let pelt1: cbor_map_entry = elt1;
+            let pelt2: cbor_map_entry = elt2;
+            let c20: i16 =
+                CBOR_Pulse_Raw_Compare_impl_cbor_compare(
+                  pelt1.cbor_map_entry_key,
+                  pelt2.cbor_map_entry_key
+                );
+            let mut c2: i16;
+            if c20 == 0i32 as i16
+            {
+              let c3: i16 =
+                  CBOR_Pulse_Raw_Compare_impl_cbor_compare(
+                    pelt1.cbor_map_entry_value,
+                    pelt2.cbor_map_entry_value
+                  );
+              c2 = c3
+            }
+            else
+            { c2 = c20 };
+            if c2 == 0i32 as i16
+            {
+              let
+              i11: CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry
+              =
+                  pi1;
+              let mut fin11: bool;
+              match i11
+              {
+                CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry::case_CBOR_Raw_Iterator_Slice
+                { v }
+                =>
+                  {
+                    let c_: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry = v;
+                    let res: bool = len__CBOR_Pulse_Raw_Type_cbor_map_entry(c_) == 0u32 as usize;
+                    let res00: bool = res;
+                    fin11 = res00
+                  },
+                _ =>
+                  match i11
+                  {
+                    CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry::case_CBOR_Raw_Iterator_Serialized
+                    { v }
+                    =>
+                      {
+                        let c_: &[u8] = v;
+                        let res: bool = cbor_serialized_map_iterator_is_empty(c_);
+                        fin11 = res
+                      },
+                    _ => panic!("")
+                  }
+              };
+              let
+              i21: CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry
+              =
+                  pi2;
+              let mut fin21: bool;
+              match i21
+              {
+                CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry::case_CBOR_Raw_Iterator_Slice
+                { v }
+                =>
+                  {
+                    let c_: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry = v;
+                    let res: bool = len__CBOR_Pulse_Raw_Type_cbor_map_entry(c_) == 0u32 as usize;
+                    let res00: bool = res;
+                    fin21 = res00
+                  },
+                _ =>
+                  match i21
+                  {
+                    CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry::case_CBOR_Raw_Iterator_Serialized
+                    { v }
+                    =>
+                      {
+                        let c_: &[u8] = v;
+                        let res: bool = cbor_serialized_map_iterator_is_empty(c_);
+                        fin21 = res
+                      },
+                    _ => panic!("")
+                  }
+              };
+              if fin11 == fin21
+              { pfin1 = fin11 }
+              else if fin11 { pres = 0i32.wrapping_sub(1i32) as i16 } else { pres = 1i32 as i16 }
+            }
+            else
+            { pres = c2 };
+            let res: i16 = pres;
+            let fin11: bool = pfin1;
+            cond = res == 0i32 as i16 && ! fin11
+          };
+          res0 = pres
+        };
+        let res: i16 = res0;
+        return res
+      }
+      else
+      { return c1 }
+    }
+    else
+    {
+      let mut val1: u8;
+      match x1 { cbor_raw::case_CBOR_Case_Simple { v } => val1 = v, _ => panic!("") };
+      let mut val2: u8;
+      match x2 { cbor_raw::case_CBOR_Case_Simple { v } => val2 = v, _ => panic!("") };
+      return impl_uint8_compare(val1, val2)
+    }
+  }
+  else
+  { return c }
+}
+
 pub fn CBOR_Pulse_Raw_Format_Serialize_ser_(x_: cbor_raw, out: &mut [u8], offset: usize) ->
     usize
 {
@@ -619,6 +1340,28 @@ struct Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw <'a>
 
 pub type Pulse_Lib_Slice_slice__uint8_t <'a> = &'a [u8];
 
+#[derive(PartialEq, Clone, Copy)]
+#[repr(C)]
+pub
+struct
+__Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_map_entry_Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_map_entry
+<'a>
+{
+  pub fst: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry <'a>,
+  pub snd: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry <'a>
+}
+
+#[derive(PartialEq, Clone, Copy)]
+#[repr(C)]
+pub
+struct
+__Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_raw_Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_raw
+<'a>
+{
+  pub fst: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw <'a>,
+  pub snd: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw <'a>
+}
+
 pub type __Pulse_Lib_Slice_slice_uint8_t_Pulse_Lib_Slice_slice_uint8_t <'a> =
 (&'a [u8], &'a [u8]);
 
@@ -695,8 +1438,145 @@ struct cbor_array <'a>
   pub cbor_array_ptr: &'a [cbor_raw <'a>]
 }
 
+pub fn cbor_array_item <'a>(c: cbor_raw <'a>, i: u64) -> cbor_raw <'a>
+{
+  match c
+  {
+    cbor_raw::case_CBOR_Case_Serialized_Array { v } =>
+      {
+        let c_: cbor_serialized = v;
+        let res: cbor_raw = cbor_serialized_array_item(c_, i);
+        return res
+      },
+    _ =>
+      match c
+      {
+        cbor_raw::case_CBOR_Case_Array { v } =>
+          {
+            let c_: cbor_array = v;
+            return c_.cbor_array_ptr[i as usize]
+          },
+        _ => panic!("")
+      }
+  }
+}
+
 pub type cbor_array_iterator <'a> =
 CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw <'a>;
+
+pub fn cbor_array_iterator_init <'a>(c: cbor_raw <'a>) ->
+    CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw
+    <'a>
+{
+  match c
+  {
+    cbor_raw::case_CBOR_Case_Serialized_Array { v } =>
+      {
+        let c_: cbor_serialized = v;
+        let i_: &[u8] = cbor_serialized_array_iterator_init(c_);
+        return
+        CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw::case_CBOR_Raw_Iterator_Serialized
+        { v: i_ }
+      },
+    _ =>
+      match c
+      {
+        cbor_raw::case_CBOR_Case_Array { v } =>
+          {
+            let c_: cbor_array = v;
+            let s: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw =
+                from_array__CBOR_Pulse_Raw_Type_cbor_raw(
+                  c_.cbor_array_ptr,
+                  c_.cbor_array_length.value as usize
+                );
+            let s0: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw = s;
+            let i: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw = s0;
+            let res: CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw =
+                CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw::case_CBOR_Raw_Iterator_Slice
+                { v: i };
+            return res
+          },
+        _ => panic!("")
+      }
+  }
+}
+
+pub fn cbor_array_iterator_is_empty(
+  c: CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw
+) ->
+    bool
+{
+  match c
+  {
+    CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw::case_CBOR_Raw_Iterator_Slice
+    { v }
+    =>
+      {
+        let c_: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw = v;
+        let res: bool = len__CBOR_Pulse_Raw_Type_cbor_raw(c_) == 0u32 as usize;
+        let res0: bool = res;
+        return res0
+      },
+    _ =>
+      match c
+      {
+        CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw::case_CBOR_Raw_Iterator_Serialized
+        { v }
+        =>
+          {
+            let c_: &[u8] = v;
+            let res: bool = cbor_serialized_array_iterator_is_empty(c_);
+            return res
+          },
+        _ => panic!("")
+      }
+  }
+}
+
+pub fn cbor_array_iterator_next <'a>(
+  pi: &'a mut [CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw <'a>]
+) ->
+    cbor_raw
+    <'a>
+{
+  let i0: CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw = pi[0usize];
+  match i0
+  {
+    CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw::case_CBOR_Raw_Iterator_Slice
+    { v }
+    =>
+      {
+        let i1: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw = v;
+        let res: cbor_raw = op_Array_Access__CBOR_Pulse_Raw_Type_cbor_raw(i1, 0u32 as usize);
+        let
+        sp:
+        __Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_raw_Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_raw
+        =
+            split__CBOR_Pulse_Raw_Type_cbor_raw(i1, 1u32 as usize);
+        let s_: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw = sp.snd;
+        let i11: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw = s_;
+        let i_: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw = i11;
+        pi[0usize] =
+            CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw::case_CBOR_Raw_Iterator_Slice
+            { v: i_ };
+        let res0: cbor_raw = res;
+        return res0
+      },
+    _ =>
+      match i0
+      {
+        CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw::case_CBOR_Raw_Iterator_Serialized
+        { v }
+        =>
+          {
+            let i1: &[u8] = v;
+            let res: cbor_raw = cbor_serialized_array_iterator_next(pi, i1);
+            return res
+          },
+        _ => panic!("")
+      }
+  }
+}
 
 pub type cbor_det_array_iterator_t <'a> =
 CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw <'a>;
@@ -731,6 +1611,158 @@ struct cbor_map_entry <'a>
 
 pub type cbor_map_iterator <'a> =
 CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry <'a>;
+
+pub fn cbor_map_iterator_init <'a>(c: cbor_raw <'a>) ->
+    CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry
+    <'a>
+{
+  match c
+  {
+    cbor_raw::case_CBOR_Case_Serialized_Map { v } =>
+      {
+        let c_: cbor_serialized = v;
+        let i_: &[u8] = cbor_serialized_map_iterator_init(c_);
+        return
+        CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry::case_CBOR_Raw_Iterator_Serialized
+        { v: i_ }
+      },
+    _ =>
+      match c
+      {
+        cbor_raw::case_CBOR_Case_Map { v } =>
+          {
+            let c_: cbor_map = v;
+            let s: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry =
+                from_array__CBOR_Pulse_Raw_Type_cbor_map_entry(
+                  c_.cbor_map_ptr,
+                  c_.cbor_map_length.value as usize
+                );
+            let s0: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry = s;
+            let i: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry = s0;
+            let res: CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry =
+                CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry::case_CBOR_Raw_Iterator_Slice
+                { v: i };
+            return res
+          },
+        _ => panic!("")
+      }
+  }
+}
+
+pub fn cbor_map_iterator_is_empty(
+  c: CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry
+) ->
+    bool
+{
+  match c
+  {
+    CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry::case_CBOR_Raw_Iterator_Slice
+    { v }
+    =>
+      {
+        let c_: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry = v;
+        let res: bool = len__CBOR_Pulse_Raw_Type_cbor_map_entry(c_) == 0u32 as usize;
+        let res0: bool = res;
+        return res0
+      },
+    _ =>
+      match c
+      {
+        CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry::case_CBOR_Raw_Iterator_Serialized
+        { v }
+        =>
+          {
+            let c_: &[u8] = v;
+            let res: bool = cbor_serialized_map_iterator_is_empty(c_);
+            return res
+          },
+        _ => panic!("")
+      }
+  }
+}
+
+pub fn cbor_map_iterator_next <'a>(
+  pi:
+  &'a mut [CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry <'a>]
+) ->
+    cbor_map_entry
+    <'a>
+{
+  let i0: CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry =
+      pi[0usize];
+  match i0
+  {
+    CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry::case_CBOR_Raw_Iterator_Slice
+    { v }
+    =>
+      {
+        let i1: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry = v;
+        let res: cbor_map_entry =
+            op_Array_Access__CBOR_Pulse_Raw_Type_cbor_map_entry(i1, 0u32 as usize);
+        let
+        sp:
+        __Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_map_entry_Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_map_entry
+        =
+            split__CBOR_Pulse_Raw_Type_cbor_map_entry(i1, 1u32 as usize);
+        let s_: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry = sp.snd;
+        let i11: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry = s_;
+        let i_: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry = i11;
+        pi[0usize] =
+            CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry::case_CBOR_Raw_Iterator_Slice
+            { v: i_ };
+        let res0: cbor_map_entry = res;
+        return res0
+      },
+    _ =>
+      match i0
+      {
+        CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry::case_CBOR_Raw_Iterator_Serialized
+        { v }
+        =>
+          {
+            let i1: &[u8] = v;
+            let res: cbor_map_entry = cbor_serialized_map_iterator_next(pi, i1);
+            return res
+          },
+        _ => panic!("")
+      }
+  }
+}
+
+pub fn cbor_match_serialized_tagged_get_payload <'a>(c: cbor_serialized <'a>) -> cbor_raw <'a>
+{
+  let res: cbor_raw = cbor_read(c.cbor_serialized_payload);
+  return res
+}
+
+pub fn cbor_match_tagged_get_payload <'a>(c: cbor_raw <'a>) -> cbor_raw <'a>
+{
+  let mut ite: bool;
+  match c { cbor_raw::case_CBOR_Case_Serialized_Tagged { v } => ite = true, _ => ite = false };
+  if ite
+  {
+    let mut cs: cbor_serialized =
+        cbor_serialized
+        {
+          cbor_serialized_header: CBOR_Spec_Raw_Base_raw_uint64 { size: 0u8, value: 0u64 },
+          cbor_serialized_payload: &[]
+        };
+    match c { cbor_raw::case_CBOR_Case_Serialized_Tagged { v } => cs = v, _ => panic!("") };
+    let res: cbor_raw = cbor_match_serialized_tagged_get_payload(cs);
+    return res
+  }
+  else
+  {
+    let mut ct: cbor_tagged =
+        cbor_tagged
+        {
+          cbor_tagged_tag: CBOR_Spec_Raw_Base_raw_uint64 { size: 0u8, value: 0u64 },
+          cbor_tagged_ptr: &[]
+        };
+    match c { cbor_raw::case_CBOR_Case_Tagged { v } => ct = v, _ => panic!("") };
+    return ct.cbor_tagged_ptr[0usize]
+  }
+}
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum cbor_raw <'a>
@@ -907,6 +1939,332 @@ pub fn cbor_raw_with_perm_get_header(xl: cbor_raw) -> header
   return res
 }
 
+pub fn cbor_read <'a>(input: &'a [u8]) -> cbor_raw <'a>
+{
+  let mut ph: header =
+      header
+      {
+        fst: initial_byte_t { major_type: 7u8, additional_info: 0u8 },
+        snd: long_argument::case_LongArgumentOther
+      };
+  let i0: usize = jump_header(input, 0u32 as usize);
+  let s: (&[u8], &[u8]) = input.split_at(i0);
+  let s1: &[u8] =
+      {
+        let v: &[u8] = s.0;
+        v
+      };
+  let s2: &[u8] =
+      {
+        let v: &[u8] = s.1;
+        v
+      };
+  let res: (&[u8], &[u8]) = (s1,s2);
+  let input1: &[u8] =
+      {
+        let v: &[u8] = res.0;
+        v
+      };
+  let input2: &[u8] =
+      {
+        let v: &[u8] = res.1;
+        v
+      };
+  let spl: (&[u8], &[u8]) = (input1,input2);
+  let ph1: &[u8] =
+      {
+        let v: &[u8] = spl.0;
+        v
+      };
+  let outc: &[u8] =
+      {
+        let v: &[u8] = spl.1;
+        v
+      };
+  let h0: header = read_header(ph1);
+  ph = h0;
+  let pc: &[u8] = outc;
+  let h: header = ph;
+  let typ: u8 = h.fst.major_type;
+  if typ as u32 == 0u32 || typ as u32 == 1u32
+  {
+    let b: initial_byte_t = h.fst;
+    let l: long_argument = h.snd;
+    let mut i: CBOR_Spec_Raw_Base_raw_uint64 = Default::default();
+    match l
+    {
+      long_argument::case_LongArgumentU8 { v } =>
+        {
+          let v1: u8 = v;
+          i = CBOR_Spec_Raw_Base_raw_uint64 { size: 1u8, value: v1 as u64 }
+        },
+      _ =>
+        match l
+        {
+          long_argument::case_LongArgumentU16 { v } =>
+            {
+              let v1: u16 = v;
+              i = CBOR_Spec_Raw_Base_raw_uint64 { size: 2u8, value: v1 as u64 }
+            },
+          _ =>
+            match l
+            {
+              long_argument::case_LongArgumentU32 { v } =>
+                {
+                  let v1: u32 = v;
+                  i = CBOR_Spec_Raw_Base_raw_uint64 { size: 3u8, value: v1 as u64 }
+                },
+              _ =>
+                match l
+                {
+                  long_argument::case_LongArgumentU64 { v } =>
+                    {
+                      let v1: u64 = v;
+                      i = CBOR_Spec_Raw_Base_raw_uint64 { size: 4u8, value: v1 }
+                    },
+                  _ =>
+                    match l
+                    {
+                      long_argument::case_LongArgumentOther =>
+                        i =
+                            CBOR_Spec_Raw_Base_raw_uint64
+                            { size: 0u8, value: b.additional_info as u64 },
+                      _ => panic!("")
+                    }
+                }
+            }
+        }
+    };
+    let resi: cbor_int =
+        cbor_int { cbor_int_type: typ, cbor_int_size: i.size, cbor_int_value: i.value };
+    return cbor_raw::case_CBOR_Case_Int { v: resi }
+  }
+  else if typ as u32 == 3u32 || typ as u32 == 2u32
+  {
+    let b: initial_byte_t = h.fst;
+    let l: long_argument = h.snd;
+    let mut i: CBOR_Spec_Raw_Base_raw_uint64 = Default::default();
+    match l
+    {
+      long_argument::case_LongArgumentU8 { v } =>
+        {
+          let v1: u8 = v;
+          i = CBOR_Spec_Raw_Base_raw_uint64 { size: 1u8, value: v1 as u64 }
+        },
+      _ =>
+        match l
+        {
+          long_argument::case_LongArgumentU16 { v } =>
+            {
+              let v1: u16 = v;
+              i = CBOR_Spec_Raw_Base_raw_uint64 { size: 2u8, value: v1 as u64 }
+            },
+          _ =>
+            match l
+            {
+              long_argument::case_LongArgumentU32 { v } =>
+                {
+                  let v1: u32 = v;
+                  i = CBOR_Spec_Raw_Base_raw_uint64 { size: 3u8, value: v1 as u64 }
+                },
+              _ =>
+                match l
+                {
+                  long_argument::case_LongArgumentU64 { v } =>
+                    {
+                      let v1: u64 = v;
+                      i = CBOR_Spec_Raw_Base_raw_uint64 { size: 4u8, value: v1 }
+                    },
+                  _ =>
+                    match l
+                    {
+                      long_argument::case_LongArgumentOther =>
+                        i =
+                            CBOR_Spec_Raw_Base_raw_uint64
+                            { size: 0u8, value: b.additional_info as u64 },
+                      _ => panic!("")
+                    }
+                }
+            }
+        }
+    };
+    let ress: cbor_string =
+        cbor_string { cbor_string_type: typ, cbor_string_size: i.size, cbor_string_ptr: pc };
+    return cbor_raw::case_CBOR_Case_String { v: ress }
+  }
+  else if typ as u32 == 6u32
+  {
+    let b: initial_byte_t = h.fst;
+    let l: long_argument = h.snd;
+    let mut tag: CBOR_Spec_Raw_Base_raw_uint64 = Default::default();
+    match l
+    {
+      long_argument::case_LongArgumentU8 { v } =>
+        {
+          let v1: u8 = v;
+          tag = CBOR_Spec_Raw_Base_raw_uint64 { size: 1u8, value: v1 as u64 }
+        },
+      _ =>
+        match l
+        {
+          long_argument::case_LongArgumentU16 { v } =>
+            {
+              let v1: u16 = v;
+              tag = CBOR_Spec_Raw_Base_raw_uint64 { size: 2u8, value: v1 as u64 }
+            },
+          _ =>
+            match l
+            {
+              long_argument::case_LongArgumentU32 { v } =>
+                {
+                  let v1: u32 = v;
+                  tag = CBOR_Spec_Raw_Base_raw_uint64 { size: 3u8, value: v1 as u64 }
+                },
+              _ =>
+                match l
+                {
+                  long_argument::case_LongArgumentU64 { v } =>
+                    {
+                      let v1: u64 = v;
+                      tag = CBOR_Spec_Raw_Base_raw_uint64 { size: 4u8, value: v1 }
+                    },
+                  _ =>
+                    match l
+                    {
+                      long_argument::case_LongArgumentOther =>
+                        tag =
+                            CBOR_Spec_Raw_Base_raw_uint64
+                            { size: 0u8, value: b.additional_info as u64 },
+                      _ => panic!("")
+                    }
+                }
+            }
+        }
+    };
+    let rest: cbor_serialized =
+        cbor_serialized { cbor_serialized_header: tag, cbor_serialized_payload: pc };
+    return cbor_raw::case_CBOR_Case_Serialized_Tagged { v: rest }
+  }
+  else if typ as u32 == 4u32
+  {
+    let b: initial_byte_t = h.fst;
+    let l: long_argument = h.snd;
+    let mut len: CBOR_Spec_Raw_Base_raw_uint64 = Default::default();
+    match l
+    {
+      long_argument::case_LongArgumentU8 { v } =>
+        {
+          let v1: u8 = v;
+          len = CBOR_Spec_Raw_Base_raw_uint64 { size: 1u8, value: v1 as u64 }
+        },
+      _ =>
+        match l
+        {
+          long_argument::case_LongArgumentU16 { v } =>
+            {
+              let v1: u16 = v;
+              len = CBOR_Spec_Raw_Base_raw_uint64 { size: 2u8, value: v1 as u64 }
+            },
+          _ =>
+            match l
+            {
+              long_argument::case_LongArgumentU32 { v } =>
+                {
+                  let v1: u32 = v;
+                  len = CBOR_Spec_Raw_Base_raw_uint64 { size: 3u8, value: v1 as u64 }
+                },
+              _ =>
+                match l
+                {
+                  long_argument::case_LongArgumentU64 { v } =>
+                    {
+                      let v1: u64 = v;
+                      len = CBOR_Spec_Raw_Base_raw_uint64 { size: 4u8, value: v1 }
+                    },
+                  _ =>
+                    match l
+                    {
+                      long_argument::case_LongArgumentOther =>
+                        len =
+                            CBOR_Spec_Raw_Base_raw_uint64
+                            { size: 0u8, value: b.additional_info as u64 },
+                      _ => panic!("")
+                    }
+                }
+            }
+        }
+    };
+    let resa: cbor_serialized =
+        cbor_serialized { cbor_serialized_header: len, cbor_serialized_payload: pc };
+    return cbor_raw::case_CBOR_Case_Serialized_Array { v: resa }
+  }
+  else if typ as u32 == 5u32
+  {
+    let b: initial_byte_t = h.fst;
+    let l: long_argument = h.snd;
+    let mut len: CBOR_Spec_Raw_Base_raw_uint64 = Default::default();
+    match l
+    {
+      long_argument::case_LongArgumentU8 { v } =>
+        {
+          let v1: u8 = v;
+          len = CBOR_Spec_Raw_Base_raw_uint64 { size: 1u8, value: v1 as u64 }
+        },
+      _ =>
+        match l
+        {
+          long_argument::case_LongArgumentU16 { v } =>
+            {
+              let v1: u16 = v;
+              len = CBOR_Spec_Raw_Base_raw_uint64 { size: 2u8, value: v1 as u64 }
+            },
+          _ =>
+            match l
+            {
+              long_argument::case_LongArgumentU32 { v } =>
+                {
+                  let v1: u32 = v;
+                  len = CBOR_Spec_Raw_Base_raw_uint64 { size: 3u8, value: v1 as u64 }
+                },
+              _ =>
+                match l
+                {
+                  long_argument::case_LongArgumentU64 { v } =>
+                    {
+                      let v1: u64 = v;
+                      len = CBOR_Spec_Raw_Base_raw_uint64 { size: 4u8, value: v1 }
+                    },
+                  _ =>
+                    match l
+                    {
+                      long_argument::case_LongArgumentOther =>
+                        len =
+                            CBOR_Spec_Raw_Base_raw_uint64
+                            { size: 0u8, value: b.additional_info as u64 },
+                      _ => panic!("")
+                    }
+                }
+            }
+        }
+    };
+    let resa: cbor_serialized =
+        cbor_serialized { cbor_serialized_header: len, cbor_serialized_payload: pc };
+    return cbor_raw::case_CBOR_Case_Serialized_Map { v: resa }
+  }
+  else
+  {
+    let b: initial_byte_t = h.fst;
+    let l: long_argument = h.snd;
+    let mut i: u8;
+    match l
+    {
+      long_argument::case_LongArgumentOther => i = b.additional_info,
+      _ => match l { long_argument::case_LongArgumentSimpleValue { v } => i = v, _ => panic!("") }
+    };
+    return cbor_raw::case_CBOR_Case_Simple { v: i }
+  }
+}
+
 pub fn cbor_serialize(x: cbor_raw, output: &mut [u8]) -> usize
 {
   let res: usize = ser(x, output, 0u32 as usize);
@@ -920,6 +2278,293 @@ struct cbor_serialized <'a>
 {
   pub cbor_serialized_header: CBOR_Spec_Raw_Base_raw_uint64,
   pub cbor_serialized_payload: &'a [u8]
+}
+
+pub fn cbor_serialized_array_item <'a>(c: cbor_serialized <'a>, i: u64) -> cbor_raw <'a>
+{
+  let j: usize = i as usize;
+  let mut pi: usize = 0u32 as usize;
+  let mut pres: &[u8] = c.cbor_serialized_payload;
+  let i10: usize = pi;
+  let mut cond: bool = i10 < j;
+  while
+  cond
+  {
+    let res: &[u8] = pres;
+    let i1: usize = pi;
+    let i2: usize = jump_raw_data_item(res, 0u32 as usize);
+    let s: (&[u8], &[u8]) = res.split_at(i2);
+    let s1: &[u8] =
+        {
+          let v: &[u8] = s.0;
+          v
+        };
+    let s2: &[u8] =
+        {
+          let v: &[u8] = s.1;
+          v
+        };
+    let res1: (&[u8], &[u8]) = (s1,s2);
+    let input10: &[u8] =
+        {
+          let v: &[u8] = res1.0;
+          v
+        };
+    let input20: &[u8] =
+        {
+          let v: &[u8] = res1.1;
+          v
+        };
+    let res10: (&[u8], &[u8]) = (input10,input20);
+    let input1: &[u8] =
+        {
+          let v: &[u8] = res10.0;
+          v
+        };
+    let input2: &[u8] =
+        {
+          let v: &[u8] = res10.1;
+          v
+        };
+    let spl: (&[u8], &[u8]) = (input1,input2);
+    let res11: &[u8] =
+        {
+          let v: &[u8] = spl.1;
+          v
+        };
+    let res2: &[u8] = res11;
+    pi = i1.wrapping_add(1u32 as usize);
+    pres = res2;
+    let i100: usize = pi;
+    cond = i100 < j
+  };
+  let res: &[u8] = pres;
+  let i1: usize = jump_raw_data_item(res, 0u32 as usize);
+  let s: (&[u8], &[u8]) = res.split_at(i1);
+  let s1: &[u8] =
+      {
+        let v: &[u8] = s.0;
+        v
+      };
+  let s2: &[u8] =
+      {
+        let v: &[u8] = s.1;
+        v
+      };
+  let res1: (&[u8], &[u8]) = (s1,s2);
+  let input10: &[u8] =
+      {
+        let v: &[u8] = res1.0;
+        v
+      };
+  let input20: &[u8] =
+      {
+        let v: &[u8] = res1.1;
+        v
+      };
+  let res10: (&[u8], &[u8]) = (input10,input20);
+  let input1: &[u8] =
+      {
+        let v: &[u8] = res10.0;
+        v
+      };
+  let input2: &[u8] =
+      {
+        let v: &[u8] = res10.1;
+        v
+      };
+  let spl: (&[u8], &[u8]) = (input1,input2);
+  let res11: &[u8] =
+      {
+        let v: &[u8] = spl.0;
+        v
+      };
+  let res2: &[u8] = res11;
+  let elt: &[u8] = res2;
+  let res0: cbor_raw = cbor_read(elt);
+  return res0
+}
+
+pub fn cbor_serialized_array_iterator_init <'a>(c: cbor_serialized <'a>) -> &'a [u8]
+{ return c.cbor_serialized_payload }
+
+pub fn cbor_serialized_array_iterator_is_empty(c: &[u8]) -> bool
+{ return len__uint8_t(c) == 0u32 as usize }
+
+pub fn cbor_serialized_array_iterator_next <'a>(
+  pi: &'a mut [CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw <'a>],
+  i: &'a [u8]
+) ->
+    cbor_raw
+    <'a>
+{
+  let i1: usize = jump_raw_data_item(i, 0u32 as usize);
+  let s: (&[u8], &[u8]) = i.split_at(i1);
+  let s10: &[u8] =
+      {
+        let v: &[u8] = s.0;
+        v
+      };
+  let s20: &[u8] =
+      {
+        let v: &[u8] = s.1;
+        v
+      };
+  let res0: (&[u8], &[u8]) = (s10,s20);
+  let input10: &[u8] =
+      {
+        let v: &[u8] = res0.0;
+        v
+      };
+  let input20: &[u8] =
+      {
+        let v: &[u8] = res0.1;
+        v
+      };
+  let res1: (&[u8], &[u8]) = (input10,input20);
+  let input1: &[u8] =
+      {
+        let v: &[u8] = res1.0;
+        v
+      };
+  let input2: &[u8] =
+      {
+        let v: &[u8] = res1.1;
+        v
+      };
+  let sp: (&[u8], &[u8]) = (input1,input2);
+  let s1: &[u8] =
+      {
+        let v: &[u8] = sp.0;
+        v
+      };
+  let s2: &[u8] =
+      {
+        let v: &[u8] = sp.1;
+        v
+      };
+  let res: cbor_raw = cbor_read(s1);
+  let i_: &[u8] = s2;
+  pi[0usize] =
+      CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_raw::case_CBOR_Raw_Iterator_Serialized
+      { v: i_ };
+  return res
+}
+
+pub fn cbor_serialized_map_iterator_init <'a>(c: cbor_serialized <'a>) -> &'a [u8]
+{ return c.cbor_serialized_payload }
+
+pub fn cbor_serialized_map_iterator_is_empty(c: &[u8]) -> bool
+{ return len__uint8_t(c) == 0u32 as usize }
+
+pub fn cbor_serialized_map_iterator_next <'a>(
+  pi:
+  &'a mut [CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry <'a>],
+  i: &'a [u8]
+) ->
+    cbor_map_entry
+    <'a>
+{
+  let off1: usize = jump_raw_data_item(i, 0u32 as usize);
+  let i10: usize = jump_raw_data_item(i, off1);
+  let s: (&[u8], &[u8]) = i.split_at(i10);
+  let s10: &[u8] =
+      {
+        let v: &[u8] = s.0;
+        v
+      };
+  let s20: &[u8] =
+      {
+        let v: &[u8] = s.1;
+        v
+      };
+  let res: (&[u8], &[u8]) = (s10,s20);
+  let input10: &[u8] =
+      {
+        let v: &[u8] = res.0;
+        v
+      };
+  let input20: &[u8] =
+      {
+        let v: &[u8] = res.1;
+        v
+      };
+  let res0: (&[u8], &[u8]) = (input10,input20);
+  let input11: &[u8] =
+      {
+        let v: &[u8] = res0.0;
+        v
+      };
+  let input21: &[u8] =
+      {
+        let v: &[u8] = res0.1;
+        v
+      };
+  let sp: (&[u8], &[u8]) = (input11,input21);
+  let s1: &[u8] =
+      {
+        let v: &[u8] = sp.0;
+        v
+      };
+  let s2: &[u8] =
+      {
+        let v: &[u8] = sp.1;
+        v
+      };
+  let i1: usize = jump_raw_data_item(s1, 0u32 as usize);
+  let s0: (&[u8], &[u8]) = s1.split_at(i1);
+  let s110: &[u8] =
+      {
+        let v: &[u8] = s0.0;
+        v
+      };
+  let s210: &[u8] =
+      {
+        let v: &[u8] = s0.1;
+        v
+      };
+  let res3: (&[u8], &[u8]) = (s110,s210);
+  let input12: &[u8] =
+      {
+        let v: &[u8] = res3.0;
+        v
+      };
+  let input22: &[u8] =
+      {
+        let v: &[u8] = res3.1;
+        v
+      };
+  let res4: (&[u8], &[u8]) = (input12,input22);
+  let input1: &[u8] =
+      {
+        let v: &[u8] = res4.0;
+        v
+      };
+  let input2: &[u8] =
+      {
+        let v: &[u8] = res4.1;
+        v
+      };
+  let sp1: (&[u8], &[u8]) = (input1,input2);
+  let s11: &[u8] =
+      {
+        let v: &[u8] = sp1.0;
+        v
+      };
+  let s21: &[u8] =
+      {
+        let v: &[u8] = sp1.1;
+        v
+      };
+  let res1: cbor_raw = cbor_read(s11);
+  let res2: cbor_raw = cbor_read(s21);
+  let res5: cbor_map_entry =
+      cbor_map_entry { cbor_map_entry_key: res1, cbor_map_entry_value: res2 };
+  let i_: &[u8] = s2;
+  pi[0usize] =
+      CBOR_Pulse_Raw_Iterator_cbor_raw_iterator__CBOR_Pulse_Raw_Type_cbor_map_entry::case_CBOR_Raw_Iterator_Serialized
+      { v: i_ };
+  return res5
 }
 
 pub fn cbor_size(x: cbor_raw, bound: usize) -> usize
@@ -975,6 +2620,25 @@ pub fn dsnd__CBOR_Spec_Raw_EverParse_initial_byte_t_CBOR_Spec_Raw_EverParse_long
   )
 }
 
+pub fn from_array__CBOR_Pulse_Raw_Type_cbor_map_entry <'a>(
+  a: &'a [cbor_map_entry <'a>],
+  alen: usize
+) ->
+    Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry
+    <'a>
+{
+  let ptr: (&[cbor_map_entry], &[cbor_map_entry]) = a.split_at(0usize);
+  return Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry { elt: ptr.1, len: alen }
+}
+
+pub fn from_array__CBOR_Pulse_Raw_Type_cbor_raw <'a>(a: &'a [cbor_raw <'a>], alen: usize) ->
+    Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw
+    <'a>
+{
+  let ptr: (&[cbor_raw], &[cbor_raw]) = a.split_at(0usize);
+  return Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw { elt: ptr.1, len: alen }
+}
+
 pub fn get_bitfield_gen8(x: u8, lo: u32, hi: u32) -> u8
 {
   let op1: u8 = (x as u32).wrapping_shl(8u32.wrapping_sub(hi)) as u8;
@@ -992,6 +2656,84 @@ pub fn get_header_major_type(h: header) -> u8
 pub
 struct header
 { pub fst: initial_byte_t, pub snd: long_argument }
+
+pub fn impl_major_type(x: cbor_raw) -> u8
+{
+  match x
+  {
+    cbor_raw::case_CBOR_Case_Simple { v } => return 7u8,
+    _ =>
+      match x
+      {
+        cbor_raw::case_CBOR_Case_Int { v } =>
+          {
+            let mut c_: cbor_int = Default::default();
+            match x { cbor_raw::case_CBOR_Case_Int { v: v0 } => c_ = v0, _ => panic!("") };
+            return c_.cbor_int_type
+          },
+        _ =>
+          match x
+          {
+            cbor_raw::case_CBOR_Case_String { v } =>
+              {
+                let mut c_: cbor_string =
+                    cbor_string
+                    { cbor_string_type: 0u8, cbor_string_size: 0u8, cbor_string_ptr: &[] };
+                match x { cbor_raw::case_CBOR_Case_String { v: v0 } => c_ = v0, _ => panic!("") };
+                return c_.cbor_string_type
+              },
+            _ =>
+              match x
+              {
+                cbor_raw::case_CBOR_Case_Tagged { v } => return 6u8,
+                _ =>
+                  match x
+                  {
+                    cbor_raw::case_CBOR_Case_Serialized_Tagged { v } => return 6u8,
+                    _ =>
+                      match x
+                      {
+                        cbor_raw::case_CBOR_Case_Array { v } => return 4u8,
+                        _ =>
+                          match x
+                          {
+                            cbor_raw::case_CBOR_Case_Serialized_Array { v } => return 4u8,
+                            _ =>
+                              match x
+                              {
+                                cbor_raw::case_CBOR_Case_Map { v } => return 5u8,
+                                _ =>
+                                  match x
+                                  {
+                                    cbor_raw::case_CBOR_Case_Serialized_Map { v } => return 5u8,
+                                    _ => panic!("")
+                                  }
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+      }
+  }
+}
+
+pub fn impl_raw_uint64_compare(
+  x1: CBOR_Spec_Raw_Base_raw_uint64,
+  x2: CBOR_Spec_Raw_Base_raw_uint64
+) ->
+    i16
+{
+  let c: i16 = impl_uint8_compare(x1.size, x2.size);
+  if c == 0i32 as i16 { return uint64_compare(x1.value, x2.value) } else { return c }
+}
+
+pub fn impl_uint8_compare(x1: u8, x2: u8) -> i16
+{
+  if x1 < x2
+  { return 0i32.wrapping_sub(1i32) as i16 }
+  else if x1 > x2 { return 1i32 as i16 } else { return 0i32 as i16 }
+}
 
 #[derive(PartialEq, Clone, Copy)]
 #[repr(C)]
@@ -1242,7 +2984,74 @@ pub fn jump_recursive_step_count_leaf(a: &[u8]) -> usize
   else if typ as u32 == 6u32 { return 1u32 as usize } else { return 0u32 as usize }
 }
 
+pub fn len__CBOR_Pulse_Raw_Type_cbor_map_entry(
+  s: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry
+) ->
+    usize
+{ return s.len }
+
+pub fn len__CBOR_Pulse_Raw_Type_cbor_raw(
+  s: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw
+) ->
+    usize
+{ return s.len }
+
 pub fn len__uint8_t(s: &[u8]) -> usize { return s.len() }
+
+pub fn lex_compare_bytes(s1: &[u8], s2: &[u8]) -> i16
+{
+  let sp1: &[u8] = s1;
+  let sp2: &[u8] = s2;
+  let mut pi1: usize = 0u32 as usize;
+  let mut pi2: usize = 0u32 as usize;
+  let n1: usize = len__uint8_t(sp1);
+  let n2: usize = len__uint8_t(sp2);
+  let mut ite: i16;
+  if (0u32 as usize) < n1
+  { if (0u32 as usize) < n2 { ite = 0i32 as i16 } else { ite = 1i32 as i16 } }
+  else if (0u32 as usize) < n2
+  { ite = 0i32.wrapping_sub(1i32) as i16 }
+  else
+  { ite = 0i32 as i16 };
+  let mut pres: i16 = ite;
+  let res: i16 = pres;
+  let i10: usize = pi1;
+  let mut cond: bool = res == 0i32 as i16 && i10 < n1;
+  while
+  cond
+  {
+    let i100: usize = pi1;
+    let x1: u8 = op_Array_Access__uint8_t(sp1, i100);
+    let i2: usize = pi2;
+    let x2: u8 = op_Array_Access__uint8_t(sp2, i2);
+    let res0: i16 = impl_uint8_compare(x1, x2);
+    let c: i16 = res0;
+    if c == 0i32 as i16
+    {
+      let i1_: usize = i100.wrapping_add(1u32 as usize);
+      let i2_: usize = i2.wrapping_add(1u32 as usize);
+      let ci1_: bool = i1_ < n1;
+      let ci2_: bool = i2_ < n2;
+      if ci2_ && ! ci1_
+      { pres = 0i32.wrapping_sub(1i32) as i16 }
+      else if ci1_ && ! ci2_
+      { pres = 1i32 as i16 }
+      else
+      {
+        pi1 = i1_;
+        pi2 = i2_
+      }
+    }
+    else
+    { pres = c };
+    let res00: i16 = pres;
+    let i1: usize = pi1;
+    cond = res00 == 0i32 as i16 && i1 < n1
+  };
+  let res0: i16 = pres;
+  let res1: i16 = res0;
+  return res1
+}
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum long_argument
@@ -1269,6 +3078,22 @@ pub fn mk_raw_uint64(x: u64) -> CBOR_Spec_Raw_Base_raw_uint64
   else if x < 4294967296u64 { size = 3u8 } else { size = 4u8 };
   return CBOR_Spec_Raw_Base_raw_uint64 { size, value: x }
 }
+
+pub fn op_Array_Access__CBOR_Pulse_Raw_Type_cbor_map_entry <'a>(
+  a: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry <'a>,
+  i: usize
+) ->
+    cbor_map_entry
+    <'a>
+{ return a.elt[i] }
+
+pub fn op_Array_Access__CBOR_Pulse_Raw_Type_cbor_raw <'a>(
+  a: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw <'a>,
+  i: usize
+) ->
+    cbor_raw
+    <'a>
+{ return a.elt[i] }
 
 pub fn op_Array_Access__uint8_t(a: &[u8], i: usize) -> u8 { return a[i] }
 
@@ -1629,6 +3454,49 @@ pub fn size_header(x: header, out: &mut [usize]) -> bool
   }
   else
   { return false }
+}
+
+pub fn split__CBOR_Pulse_Raw_Type_cbor_map_entry <'a>(
+  s: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry <'a>,
+  i: usize
+) ->
+    __Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_map_entry_Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_map_entry
+    <'a>
+{
+  let elt_: &[cbor_map_entry] = &s.elt[i..];
+  let s1: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry =
+      Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry { elt: s.elt, len: i };
+  let s2: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry =
+      Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_map_entry
+      { elt: elt_, len: (s.len).wrapping_sub(i) };
+  return
+  __Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_map_entry_Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_map_entry
+  { fst: s1, snd: s2 }
+}
+
+pub fn split__CBOR_Pulse_Raw_Type_cbor_raw <'a>(
+  s: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw <'a>,
+  i: usize
+) ->
+    __Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_raw_Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_raw
+    <'a>
+{
+  let elt_: &[cbor_raw] = &s.elt[i..];
+  let s1: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw =
+      Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw { elt: s.elt, len: i };
+  let s2: Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw =
+      Pulse_Lib_Slice_slice__CBOR_Pulse_Raw_Type_cbor_raw
+      { elt: elt_, len: (s.len).wrapping_sub(i) };
+  return
+  __Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_raw_Pulse_Lib_Slice_slice_CBOR_Pulse_Raw_Type_cbor_raw
+  { fst: s1, snd: s2 }
+}
+
+pub fn uint64_compare(x1: u64, x2: u64) -> i16
+{
+  if x1 < x2
+  { return 0i32.wrapping_sub(1i32) as i16 }
+  else if x1 > x2 { return 1i32 as i16 } else { return 0i32 as i16 }
 }
 
 pub fn validate_header(input: &[u8], poffset: &mut [usize]) -> bool
