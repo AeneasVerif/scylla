@@ -31,6 +31,9 @@ Supported options:|}
       | _ -> failwith "no dots in C to Rust bundles"
     ) pats, attrs
   in
+  (* Boxed types need to be explicitly annotated *)
+  Krml.Options.no_box := true;
+
   let spec =
     [
       "--debug", Arg.String debug, " debug options, to be passed to krml";
@@ -38,6 +41,7 @@ Supported options:|}
       "--ccopts", Arg.String ccopts, " options to be passed to clang, separated by commas";
       "--bundle", Arg.String (fun s -> prepend Krml.Options.bundle (parse_bundle s)), " \
         see krml documentation";
+      "--auto-box", Arg.Clear Krml.Options.no_box, " enable box heuristics for struct translation";
       ( "--errors_as_warnings",
         Arg.Clear Scylla.Options.fatal_errors,
         " unsupported declarations are a fatal error" );
@@ -130,8 +134,6 @@ Supported options:|}
     debug_ast files;
 
   Krml.Options.contained := Scylla.ClangToAst.LidSet.elements container_types |> List.map snd;
-  (* Boxed types need to be explicitly annotated *)
-  Krml.Options.no_box := true;
 
   (* Addition of derives has to be done this way because we have a map from Ast lids to the derives
      we want, and if we try to do this after AstToMiniRust then we have Rust names that we do not

@@ -18,7 +18,7 @@ PQCRYPTO_HOME 	?= ../PQCrypto-LWEKE
 
 # We try to figure out the best include paths, compiler options, etc. from the build system.
 SCYLLA_OPTS += --errors_as_warnings $(SCYLLA_SYSROOT_OPT) --ignore_lib_errors
-HACL_OPTS = --ccopts -DKRML_UNROLL_MAX=0,-I,test/hacl/include,-I,test/hacl/
+HACL_OPTS = --auto-box --ccopts -DKRML_UNROLL_MAX=0,-I,test/hacl/include,-I,test/hacl/
 CBOR_OPTS = --ccopts -I,test/cbor/,-I,test/cbor/krml/include,-I,test/cbor/krml/krmllib/dist/generic
 
 .PHONY: all
