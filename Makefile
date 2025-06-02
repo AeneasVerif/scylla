@@ -17,7 +17,9 @@ BZIP2_HOME 	?= ../bzip2
 PQCRYPTO_HOME 	?= ../PQCrypto-LWEKE
 
 # We try to figure out the best include paths, compiler options, etc. from the build system.
-SCYLLA_OPTS += --ccopts -DKRML_UNROLL_MAX=0,-I,test/hacl/include,-I,test/hacl/ --errors_as_warnings $(SCYLLA_SYSROOT_OPT) --ignore_lib_errors
+SCYLLA_OPTS += --errors_as_warnings $(SCYLLA_SYSROOT_OPT) --ignore_lib_errors
+HACL_OPTS = --auto-box --ccopts -DKRML_UNROLL_MAX=0,-I,test/hacl/include,-I,test/hacl/
+CBOR_OPTS = --ccopts -I,test/cbor/,-I,test/cbor/krml/include,-I,test/cbor/krml/krmllib/dist/generic
 
 .PHONY: all
 all: build format-check
@@ -36,8 +38,9 @@ build: lib/DataModel.ml
 scylla: build
 
 .PHONY: test
-test: regen-outputs test-symcrypt test-pqcrypto test-bzip2
+test: regen-outputs test-cbor test-symcrypt test-pqcrypto test-bzip2
 	cd out/hacl && cargo test
+	cd out/cbor && cargo test
 
 # SYMCRYPT
 # --------
@@ -86,6 +89,12 @@ $(BZIP2_HOME)/bzip2-rs/target/release/libbzip2_rs.a: $(wildcard $(BZIP2_HOME)/*.
 	./scylla --ccopts -I$(BZIP2_HOME),-DSCYLLA --errors_as_warnings --ignore_lib_errors --bundle bzlib_private $(addprefix $(BZIP2_HOME)/,scylla_glue.h bzlib_private.h blocksort.c huffman.c crctable.c randtable.c compress.c) --output $(BZIP2_HOME)/bzip2-rs/src/
 	cd $(BZIP2_HOME)/bzip2-rs && cargo build --release
 
+# CBOR
+
+.PHONY: test-cbor
+test-cbor: test/cbor/CBORDet.c test/cbor/CBORDet.h scylla
+	./scylla $(CBOR_OPTS) $(SCYLLA_OPTS) test/cbor/CBORDet.c --output out/cbor/src
+
 # HACL
 # ----
 
@@ -105,7 +114,7 @@ regen-outputs: test-hacl
 
 .PHONY: test-hacl
 test-hacl: $(addprefix test/hacl/, $(HACL_SOURCES)) scylla
-	./scylla $(SCYLLA_OPTS) $(addprefix test/hacl/, $(HACL_SOURCES)) --output out/hacl/src/
+	./scylla $(HACL_OPTS) $(SCYLLA_OPTS) $(addprefix test/hacl/, $(HACL_SOURCES)) --output out/hacl/src/
 
 
 .PHONY: nix-magic
