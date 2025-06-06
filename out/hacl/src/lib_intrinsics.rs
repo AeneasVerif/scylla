@@ -22,22 +22,16 @@ pub fn Lib_IntTypes_Intrinsics_sub_borrow_u32(cin: u32, x: u32, y: u32, r: &mut 
 
 pub fn Lib_IntTypes_Intrinsics_add_carry_u64(cin: u64, x: u64, y: u64, r: &mut [u64]) -> u64
 {
-    let res: u64 = x.wrapping_add(cin).wrapping_add(y);
-    let c: u64 = (! crate::hacl_krmllib::FStar_UInt64_gte_mask(res, x) | crate::hacl_krmllib::FStar_UInt64_eq_mask(res, x) & cin) & 1u64;
-    r[0usize] = res;
+    let res: u128 = (x as u128).wrapping_add(cin as u128).wrapping_add(y as u128);
+    let c: u64 = res.wrapping_shr(64u32) as u64;
+    r[0usize] = res as u64;
     c
 }
 
 pub fn Lib_IntTypes_Intrinsics_sub_borrow_u64(cin: u64, x: u64, y: u64, r: &mut [u64]) -> u64
 {
-    let res: u64 = x.wrapping_sub(y).wrapping_sub(cin);
-    let c: u64 =
-        (crate::hacl_krmllib::FStar_UInt64_gte_mask(res, x) & ! crate::hacl_krmllib::FStar_UInt64_eq_mask(res, x)
-        |
-        crate::hacl_krmllib::FStar_UInt64_eq_mask(res, x) & cin)
-        &
-        1u64;
-    r[0usize] = res;
+    let res: u128 = (x as u128).wrapping_sub(y as u128).wrapping_sub(cin as u128);
+    let c: u64 = res.wrapping_shr(64u32) as u64 & 1u64;
+    r[0usize] = res as u64;
     c
 }
-

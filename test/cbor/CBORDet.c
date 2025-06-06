@@ -2429,10 +2429,10 @@ static cbor_raw cbor_array_item(cbor_raw c, uint64_t i)
   }
   else
   {
-    // KRML_HOST_EPRINTF("KaRaMeL abort at %s:%d\n%s\n",
-    //   __FILE__,
-    //   __LINE__,
-    //   "unreachable (pattern matches are exhaustive in F*)");
+    KRML_HOST_EPRINTF("KaRaMeL abort at %s:%d\n%s\n",
+      __FILE__,
+      __LINE__,
+      "unreachable (pattern matches are exhaustive in F*)");
     KRML_HOST_EXIT(255U);
   }
 }
@@ -2478,10 +2478,10 @@ cbor_array_iterator_init(cbor_raw c)
   }
   else
   {
-    // KRML_HOST_EPRINTF("KaRaMeL abort at %s:%d\n%s\n",
-    //   __FILE__,
-    //   __LINE__,
-    //   "unreachable (pattern matches are exhaustive in F*)");
+    KRML_HOST_EPRINTF("KaRaMeL abort at %s:%d\n%s\n",
+      __FILE__,
+      __LINE__,
+      "unreachable (pattern matches are exhaustive in F*)");
     KRML_HOST_EXIT(255U);
   }
 }
@@ -2512,10 +2512,10 @@ cbor_array_iterator_is_empty(
   }
   else
   {
-    // KRML_HOST_EPRINTF("KaRaMeL abort at %s:%d\n%s\n",
-    //   __FILE__,
-    //   __LINE__,
-    //   "unreachable (pattern matches are exhaustive in F*)");
+    KRML_HOST_EPRINTF("KaRaMeL abort at %s:%d\n%s\n",
+      __FILE__,
+      __LINE__,
+      "unreachable (pattern matches are exhaustive in F*)");
     KRML_HOST_EXIT(255U);
   }
 }
@@ -2588,10 +2588,10 @@ cbor_array_iterator_next(
   }
   else
   {
-    // KRML_HOST_EPRINTF("KaRaMeL abort at %s:%d\n%s\n",
-    //   __FILE__,
-    //   __LINE__,
-    //   "unreachable (pattern matches are exhaustive in F*)");
+    KRML_HOST_EPRINTF("KaRaMeL abort at %s:%d\n%s\n",
+      __FILE__,
+      __LINE__,
+      "unreachable (pattern matches are exhaustive in F*)");
     KRML_HOST_EXIT(255U);
   }
 }
@@ -2638,10 +2638,10 @@ cbor_map_iterator_init(cbor_raw c)
   }
   else
   {
-    // KRML_HOST_EPRINTF("KaRaMeL abort at %s:%d\n%s\n",
-    //   __FILE__,
-    //   __LINE__,
-    //   "unreachable (pattern matches are exhaustive in F*)");
+    KRML_HOST_EPRINTF("KaRaMeL abort at %s:%d\n%s\n",
+      __FILE__,
+      __LINE__,
+      "unreachable (pattern matches are exhaustive in F*)");
     KRML_HOST_EXIT(255U);
   }
 }
@@ -2674,10 +2674,10 @@ cbor_map_iterator_is_empty(
   }
   else
   {
-    // KRML_HOST_EPRINTF("KaRaMeL abort at %s:%d\n%s\n",
-    //   __FILE__,
-    //   __LINE__,
-    //   "unreachable (pattern matches are exhaustive in F*)");
+    KRML_HOST_EPRINTF("KaRaMeL abort at %s:%d\n%s\n",
+      __FILE__,
+      __LINE__,
+      "unreachable (pattern matches are exhaustive in F*)");
     KRML_HOST_EXIT(255U);
   }
 }
@@ -2751,10 +2751,10 @@ cbor_map_iterator_next(
   }
   else
   {
-    // KRML_HOST_EPRINTF("KaRaMeL abort at %s:%d\n%s\n",
-    //   __FILE__,
-    //   __LINE__,
-    //   "unreachable (pattern matches are exhaustive in F*)");
+    KRML_HOST_EPRINTF("KaRaMeL abort at %s:%d\n%s\n",
+      __FILE__,
+      __LINE__,
+      "unreachable (pattern matches are exhaustive in F*)");
     KRML_HOST_EXIT(255U);
   }
 }
@@ -2797,10 +2797,10 @@ static uint8_t impl_major_type(cbor_raw x)
     return CBOR_MAJOR_TYPE_MAP;
   else
   {
-    // KRML_HOST_EPRINTF("KaRaMeL abort at %s:%d\n%s\n",
-    //   __FILE__,
-    //   __LINE__,
-    //   "unreachable (pattern matches are exhaustive in F*)");
+    KRML_HOST_EPRINTF("KaRaMeL abort at %s:%d\n%s\n",
+      __FILE__,
+      __LINE__,
+      "unreachable (pattern matches are exhaustive in F*)");
     KRML_HOST_EXIT(255U);
   }
 }
@@ -4184,10 +4184,10 @@ uint8_t cbor_det_read_simple_value(cbor_raw x)
     return x.case_CBOR_Case_Simple;
   else
   {
-    // KRML_HOST_EPRINTF("KaRaMeL abort at %s:%d\n%s\n",
-    //   __FILE__,
-    //   __LINE__,
-    //   "unreachable (pattern matches are exhaustive in F*)");
+    KRML_HOST_EPRINTF("KaRaMeL abort at %s:%d\n%s\n",
+      __FILE__,
+      __LINE__,
+      "unreachable (pattern matches are exhaustive in F*)");
     KRML_HOST_EXIT(255U);
   }
 }
