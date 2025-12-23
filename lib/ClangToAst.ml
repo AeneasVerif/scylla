@@ -135,10 +135,15 @@ type env = {
   vars : env_var list;
   (* Expected return typ of the function *)
   ret_t : typ;
+  (* In C, one can do `int x = sizeof(x)` -- but in krml, `x` is not in the scope of `e1` when doing
+     `let x = e1 in e2`. However, we still want to resolve `x` in `e1`, but only for the limited
+     use-case of doing `int *x = malloc(sizeof( *x))`. We use this dedicated field. *)
+  self: (string * typ) option;
 }
 
-let empty_env = { vars = []; ret_t = TAny }
+let empty_env = { vars = []; ret_t = TAny; self = None }
 let add_var env (x, t) = { env with vars = { name = x; t; mut = ref false; case = None} :: env.vars }
+let add_self env (x, t) = { env with self = Some (x, t) }
 
 (* Refines the `case` field corresponding to the variable `x`.
    This updates the first variable `x` in the vars context, corresponding
@@ -259,8 +264,8 @@ let translate_builtin_typ (t : Clang.Ast.builtin_type) =
   | Char_S -> TInt Int8
   | SChar -> failwith "translate_builtin_typ: SChar"
   | WChar -> failwith "translate_builtin_typ: WChar"
-  | Float -> failwith "translate_builtin_typ: Float"
-  | Double -> failwith "translate_builtin_typ: Double"
+  | Float -> TInt Float32
+  | Double -> TInt Float64
   | LongDouble -> failwith "translate_builtin_typ: LongDouble"
   | NullPtr -> failwith "translate_builtin_typ: NullPtr"
   | Overload -> failwith "translate_builtin_typ: Overload"
@@ -539,10 +544,6 @@ module ClangHelpers = struct
     | EBool false -> true
     | _ -> false
 
-  let extract_sizeof_ty = function
-    | ArgumentExpr _ -> failwith "ArgumentExpr not supported"
-    | ArgumentType ty -> translate_typ ty
-
   let extract_constarray_size (ty : qual_type) =
     match ty.desc with
     | ConstantArray { size; _ } -> size, Helpers.mk_uint32 size
@@ -715,7 +716,8 @@ let rank (w: Krml.Constant.width) =
 (* Deal with various discrepancies between C (arithmetic operations work for pointers, too) vs. krml
    AST (arithmetic operations are distinguished) *)
 let mk_binop lhs kind rhs =
-  (* Krml.KPrint.bprintf "mk_binop: lhs=%a, rhs=%a\n" pexpr lhs pexpr rhs; *)
+  if Krml.Options.debug "BinOp" then
+    Krml.KPrint.bprintf "mk_binop: %a: %a { %a } %a: %a\n" pexpr lhs ptyp lhs.typ pop (translate_binop kind) pexpr rhs ptyp rhs.typ;
 
   (* This function first compiles pointer arithmetic *then* defers to this to compile integer
      arithmetic. *)
@@ -741,8 +743,9 @@ let mk_binop lhs kind rhs =
           lhs, rhs
     in
 
-(*     Krml.KPrint.bprintf "After promotions: w=%a lhs=%a, rhs=%a\n" *)
-(*       pwidth (Helpers.assert_tint_or_tbool lhs.typ) pexpr lhs pexpr rhs; *)
+    if Krml.Options.debug "BinOp" then
+      Krml.KPrint.bprintf "After promotions: w=%a lhs=%a, rhs=%a\n"
+        ptyp lhs.typ pexpr lhs pexpr rhs;
 
     let w, lhs, rhs =
       match kind with
@@ -753,12 +756,27 @@ let mk_binop lhs kind rhs =
           let open Krml.Constant in
           let adjust x y = adjust y x in
 
-          (* https://en.cppreference.com/w/c/language/conversion, 5) *)
+          (* https://en.cppreference.com/w/c/language/conversion *)
           let wl = Helpers.assert_tint_or_tbool lhs.typ in
           let wr = Helpers.assert_tint_or_tbool rhs.typ in
 
-          (* "If the types are the same, that type is the common type. " *)
-          if wl = wr then
+          (* 3) Otherwise, if one operand is double, double complex, or double imaginary(since C99),
+             the other operand is implicitly converted as follows:
+             integer or real floating type to double  *)
+          if wl = Float64 || wr = Float64 then
+            wl, adjust (TInt Float64) lhs, adjust (TInt Float64) rhs
+
+          (* 4) Otherwise, if one operand is float, float complex, or float imaginary(since C99),
+             the other operand is implicitly converted as follows: integer type to float (the only
+             real type possible is float, which remains as-is) *)
+          else if wl = Float32 || wr = Float32 then
+            wl, adjust (TInt Float32) lhs, adjust (TInt Float32) rhs
+
+          (* 5) Otherwise, both operands are integers. Both operands undergo integer promotions;
+             then, after integer promotion, one of the following cases applies:
+
+             "If the types are the same, that type is the common type. " *)
+          else if wl = wr then
             wl, lhs, rhs
 
           (*  "If the types have the same signedness (both signed or both unsigned), the operand
@@ -863,7 +881,11 @@ let mk_binop lhs kind rhs =
  - are we trusting the type from clang when we shouldn't? (i.e., is it ok to call typ_from_clang) --
    this should generally be avoided, because it is not true that `(translate_expr e).typ =
    typ_from_clang e`. *)
-let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.expr) : Krml.Ast.expr =
+let rec extract_sizeof_ty env = function
+  | ArgumentExpr e -> (translate_expr env e).typ
+  | ArgumentType ty -> translate_typ ty
+
+and translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.expr) : Krml.Ast.expr =
   if is_null e then
     with_type (TBuf (TAny, false)) EBufNull
   else
@@ -878,7 +900,12 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
             with_type TBool (EConstant (Bool, Clang.Ast.string_of_integer_literal ~signed n))
         | t -> fatal_error "integer literal does not have an int type, it has %a" ptyp t
       end
-    | FloatingLiteral _ -> failwith "translate_expr: floating literal"
+    | FloatingLiteral f ->
+        begin match typ_from_clang e with
+        | TInt w as t ->
+            with_type t (EConstant (w, Clang.Ast.string_of_floating_literal f))
+        | t -> fatal_error "float literal does not have a float type, it has %a" ptyp t
+        end
     | StringLiteral _ -> failwith "translate_expr: string literal"
     | CharacterLiteral _ -> failwith "translate_expr character literal"
     | ImaginaryLiteral _ -> failwith "translate_expr: imaginary literal"
@@ -1029,13 +1056,19 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
                 EAssign (lhs, adjust rhs lhs.typ)
           end
     | BinaryOperator { lhs; kind; rhs } ->
-        let lhs = translate_expr env lhs in
-        let rhs = translate_expr env rhs in
+        let lhs = translate_expr ~must_return_value:true env lhs in
+        let rhs = translate_expr ~must_return_value:true env rhs in
         mk_binop lhs kind rhs
     | DeclRef { name; _ } ->
-        let e, _, _ = get_id_name name |> find_var env in
-        (* Krml.KPrint.bprintf "%a: %a\n" pexpr e ptyp e.typ; *)
-        e
+        let name = get_id_name name in
+        begin match env.self with
+        | Some (name', t) when name = name' ->
+            with_type t (EAbort (Some t, Some ("The definition of " ^ name ^ " refers to itself")))
+        | _ ->
+            let e, _, _ = find_var env name in
+            (* Krml.KPrint.bprintf "%a: %a\n" pexpr e ptyp e.typ; *)
+            e
+        end
     | Call { callee; args } when is_scylla_reset callee -> begin
         match args with
         | [ e ] -> Helpers.push_ignore (translate_expr env e)
@@ -1075,7 +1108,7 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
                   ->
                     (* We recognize the case `len = lhs * sizeof (_)` *)
                     let len = adjust (translate_expr env lhs) (TInt SizeT) in
-                    let ty = extract_sizeof_ty argument in
+                    let ty = extract_sizeof_ty env argument in
                     assert (ty = assert_tbuf_or_tarray dst.typ);
                     len
                 | _, TBuf (TInt UInt8, _) ->
@@ -1101,7 +1134,7 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
                     _
                   ->
                     let len = adjust (translate_expr env lhs) (TInt SizeT) in
-                    let ty = extract_sizeof_ty argument in
+                    let ty = extract_sizeof_ty env argument in
                     assert (ty = assert_tbuf_or_tarray dst.typ);
                     len
                 | _, TBuf (TInt UInt8, _) ->
@@ -1127,9 +1160,9 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
            translate it to EAbort, which will become a `panic` *)
         with_type TAny (EAbort (None, Some ""))
     | Call { callee; args } ->
-        (* Format.printf "Trying to translate function call %a@." Clang.Expr.pp callee; *)
+        Format.printf "Trying to translate function call %a@." Clang.Expr.pp callee;
         let callee = translate_expr env callee in
-        (* Krml.KPrint.bprintf "calle is %a and has type %a\n" pexpr callee ptyp callee.typ; *)
+        Krml.KPrint.bprintf "callee is %a and has type %a\n" pexpr callee ptyp callee.typ;
         let t, ts = Helpers.flatten_arrow callee.typ in
         let args = List.map2 (fun x t -> adjust (translate_expr env x) t) args ts in
         with_type t (EApp (callee, args))
@@ -1256,13 +1289,14 @@ let rec translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.exp
             | Some _ -> fatal_error "Taking a field of %a which is not a struct, tuple, slice, nor a tagged union" plid lid
             | None -> fatal_error "Taking a field of %a which is not in the map" plid lid
         end
-    | UnaryExpr { kind = SizeOf; argument = ArgumentType t; _ } -> begin
-        match translate_typ t with
+    | UnaryExpr { kind = SizeOf; argument; _ } -> begin
+        match extract_sizeof_ty env argument with
         | TInt w -> Helpers.mk_sizet (Krml.Constant.bytes_of_width w)
         | _ ->
             Format.printf "Trying to translate unary expr %a@." Clang.Expr.pp e;
             failwith "translate_expr: unary expr"
       end
+
     | _ ->
         Format.eprintf "Trying to translate expression %a@." Clang.Expr.pp e;
         failwith "translate_expr: unsupported expression"
@@ -1388,6 +1422,8 @@ let create_default_value typ =
   match typ with
   | _ -> Krml.Ast.with_type typ EAny
 
+(* Translate a variable declaration, returning an updated environment, the binder `b` and the body of
+   the let `e1`, in order to support creating `ELet (b, e1, ...)` *)
 let translate_vardecl (env : env) (vdecl : var_decl_desc) : env * binder * Krml.Ast.expr =
   let vname = vdecl.var_name in
   let typ = translate_typ vdecl.var_type in
@@ -1396,10 +1432,10 @@ let translate_vardecl (env : env) (vdecl : var_decl_desc) : env * binder * Krml.
       (* If there is no associated definition, we attempt to craft
            a default initialization value *)
       add_var env (vname, typ), Helpers.fresh_binder vname typ, create_default_value typ
-  (* Intializing a constant array with a list of elements.
-     For instance, uint32[2] = { 0 };
-  *)
   | Some { desc = InitList l; _ } when is_constantarray vdecl.var_type ->
+      (* Intializing a constant array with a list of elements.
+         For instance, uint32[2] = { 0 };
+      *)
       let size, size_e = extract_constarray_size vdecl.var_type in
       if List.length l = 1 then
         (* One element initializer, possibly repeated *)
@@ -1416,21 +1452,21 @@ let translate_vardecl (env : env) (vdecl : var_decl_desc) : env * binder * Krml.
         ( add_var env (vname, typ),
           Helpers.fresh_binder vname typ,
           Krml.Ast.with_type typ (EBufCreateL (Krml.Common.Stack, es)) ))
-  (* Initializing a struct value.
-     TODO: We should check that the declaration type indeed corresponds to a struct type *)
   | Some { desc = InitList l; _ } ->
+      (* Initializing a struct value.
+         TODO: We should check that the declaration type indeed corresponds to a struct type *)
       add_var env (vname, typ), Helpers.fresh_binder vname typ, translate_fields env typ l
   | Some { desc = Call { callee; args }; _ }
-  (* There commonly is a cast around calloc to the type of the variable. We omit it when translating it to Rust,
-     as the allocation will be typed *)
   | Some { desc = Cast { operand = { desc = Call { callee; args }; _ }; _ }; _ }
     when is_calloc callee -> begin
+      (* There commonly is a cast around calloc to the type of the variable. We omit it when translating it to Rust,
+         as the allocation will be typed *)
       match args with
       | [ len; { desc = UnaryExpr { kind = SizeOf; argument }; _ } ] ->
           let len = adjust (translate_expr env len) (TInt SizeT) in
           (* Sanity check: calloc is of the right type *)
           let ty = Helpers.assert_tbuf typ in
-          assert (extract_sizeof_ty argument = ty);
+          assert (extract_sizeof_ty env argument = ty);
           let w = Helpers.assert_tint ty in
           ( add_var env (vname, typ),
             Helpers.fresh_binder vname typ,
@@ -1448,7 +1484,9 @@ let translate_vardecl (env : env) (vdecl : var_decl_desc) : env * binder * Krml.
         | _ -> var
       in
       add_var env (vname, typ), Helpers.fresh_binder vname typ, e
-  | Some e -> add_var env (vname, typ), Helpers.fresh_binder vname typ, translate_expr env e
+  | Some e ->
+      (* TODO insert call to adjust here *)
+      add_var env (vname, typ), Helpers.fresh_binder vname typ, translate_expr (add_self env (vname, typ)) e
 
 (* Translation of a variable declaration, followed by a memset of [args] *)
 let translate_vardecl_with_memset (env : env) (vdecl : var_decl_desc) (args : expr list) :
@@ -1484,7 +1522,7 @@ let translate_vardecl_with_memset (env : env) (vdecl : var_decl_desc) (args : ex
         match len.desc with
         | BinaryOperator
             { lhs; kind = Mul; rhs = { desc = UnaryExpr { kind = SizeOf; argument }; _ } }
-          when extract_sizeof_ty argument = Helpers.assert_tbuf typ -> lhs
+          when extract_sizeof_ty env argument = Helpers.assert_tbuf typ -> lhs
         | _ -> failwith "memset length is not of the shape `N * sizeof(ty)`"
       in
       let v = translate_expr env v in
@@ -1528,7 +1566,7 @@ let translate_vardecl_malloc (env : env) (vdecl : var_decl_desc) (s : stmt_desc)
     match args with
     | [ { desc = UnaryExpr { kind = SizeOf; argument }; _ } ] ->
         (* Sanity-check: The sizeof argument correponds to the type of the pointer being malloc'ed *)
-        assert (extract_sizeof_ty argument = Helpers.assert_tbuf typ)
+        assert (extract_sizeof_ty env argument = Helpers.assert_tbuf typ)
     | [ _ ] -> failwith "argument of malloc if not of the shape `sizeof(type)`"
     | _ -> failwith "Too many arguments for malloc"
   end;
