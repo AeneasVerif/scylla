@@ -1968,12 +1968,13 @@ let has_prefix_in filename lib_dirs =
   List.exists (fun x -> String.starts_with ~prefix:x filename) lib_dirs
 
 let decl_error_handler ?(ignored_dirs=[]) (decl : decl) default f =
+  if Krml.Options.debug "Verbose" then
+    Format.printf "Visiting declaration %s\n%a@." (name_of_decl decl) Clang.Decl.pp decl;
   try f ()
   with e ->
     if not (has_prefix_in (filename_of_decl decl) ignored_dirs) then begin
       Format.eprintf "%!@.";
       Format.printf "%!@.";
-      (* Format.printf "Declaration %s not supported\n%a@." (name_of_decl decl) Clang.Decl.pp decl; *)
       let loc = Clang.Ast.location_of_node decl |> Clang.Ast.concrete_of_source_location File in
       Format.printf "Declaration %s (in file %s) not supported\n@." (name_of_decl decl) loc.filename;
       if !ScyllaOptions.fatal_errors then
@@ -2139,7 +2140,7 @@ let prepopulate_type_maps (ignored_dirs: string list) (decls: deduplicated_decls
       (* Krml.KPrint.bprintf "typedef %s --> %a\n" tdecl.name plid lid; *)
       let def =
         match tdecl.underlying_type.desc with
-        | Elaborated { keyword = Struct; named_type = { desc = Record { name; _ }; _ }; _ } ->
+        | Elaborated { keyword = Struct; named_type = { cxtype; desc = Record { name; _ }; _ }; _ } ->
             (* When writing `typedef struct S { ... } T;` in C, we actually see two declarations:
               - first, one for the `struct S { ... }` part (case RecordDecl)
               - second, one for the the `typedef struct S T;` part (case TypedefDecl).
@@ -2147,10 +2148,23 @@ let prepopulate_type_maps (ignored_dirs: string list) (decls: deduplicated_decls
               informative version of the former, we can look it up to get the definition.
             *)
 
-            (* We record a mapping `struct S` ~~> `T` in our map, so that occurrence of the type
-               `struct S` in the Clang AST become nominal types `T` in the krml Ast. *)
-            assert ((get_id_name name) <> "");
-            elaborated_map := ElaboratedMap.add (name, `Struct) lid !elaborated_map;
+            let def =
+              if (get_id_name name) <> "" then begin
+                (* `typedef struct foo_s { ... } foo;`: clang processes this as two separate
+                   declarations, and references to `foo` later on appear as references to `struct
+                   foo_s` -- thus, we record a mapping `struct S` ~~> `T` in our map, so that
+                   occurrences of the type `struct S` in the Clang AST become nominal types `T` in
+                   the krml Ast. *)
+                elaborated_map := ElaboratedMap.add (name, `Struct) lid !elaborated_map;
+                fst (StringMap.find (get_id_name name) decls)
+              end else
+                (* `typedef struct { ... } foo;`: clang processes this as two separate declarations,
+                   except now we can't refer to the struct by its name (meaning, we can't find it in
+                   the map! instead, we use the cursor; further references to this type will appear as
+                   `foo` *)
+                let cx = Clang.get_type_declaration cxtype in
+                Clang.Decl.of_cxcursor cx
+            in
 
             (* This function executes as part of `fill_type_maps`, which is
                 performed after declarations have been grouped and deduplicated.
@@ -2159,11 +2173,11 @@ let prepopulate_type_maps (ignored_dirs: string list) (decls: deduplicated_decls
                 need the lazy for the translation of type definitions, e.g.,
                 when a struct field refers to another type.
             *)
-            (match StringMap.find (get_id_name name) decls with
-                | { desc = RecordDecl { fields; attributes; _ }; _ }, _
+            (match def with
+                | { desc = RecordDecl { fields; attributes; _ }; _ }
                       when Attributes.has_tuple_attr attributes ->
                     Some (CTuple (lazy (List.map translate_field fields)))
-                | { desc = RecordDecl { fields; attributes; _ }; _ }, _
+                | { desc = RecordDecl { fields; attributes; _ }; _ }
                       when Attributes.has_slice_attr attributes ->
 
                     Some (CSlice (lazy (
@@ -2174,7 +2188,7 @@ let prepopulate_type_maps (ignored_dirs: string list) (decls: deduplicated_decls
                           fatal_error "A slice type should have two fields called elt and len"
                     )))
 
-                | { desc = RecordDecl { fields; attributes; _ }; _ }, _
+                | { desc = RecordDecl { fields; attributes; _ }; _ }
                       when Attributes.has_adt_attr attributes ->
                     Some (CVariant (lazy (match fields with
                     | [tag; union] ->
@@ -2187,7 +2201,7 @@ let prepopulate_type_maps (ignored_dirs: string list) (decls: deduplicated_decls
                         variant
                     | _ -> failwith "Tagged union translation to an ADT assumes that the structs contains two field: the tag, and the union"
                     )))
-                | { desc = RecordDecl { fields; attributes; _ }; _ }, _ ->
+                | { desc = RecordDecl { fields; attributes; _ }; _ } ->
                     Some (CFlat (lazy (
                       let fields = List.map translate_field fields in
 
