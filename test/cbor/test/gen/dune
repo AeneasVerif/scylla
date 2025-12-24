@@ -1,10 +1,9 @@
 (include_subdirs unqualified)
+
 (executable
  (name GenCBORDetTest)
  (public_name GenCBORDetTest)
- (libraries
-    yojson
- )
+ (libraries yojson)
  (modes native)
- (flags (:standard -w -A))
-)
+ (flags
+  (:standard -w -A)))

@@ -10,8 +10,7 @@ module Helpers = Krml.Helpers
 
 let fatal_error = Krml.Warn.fatal_error
 
-module StringMap = Map.Make(String)
-
+module StringMap = Map.Make (String)
 module LidMap = Krml.AstToMiniRust.LidMap
 module LidSet = Krml.AstToMiniRust.LidSet
 
@@ -26,10 +25,10 @@ end)
 (* A map from C names to the file stem (i.e. `foo` for `bar/foo.c`) they belong to. It is filled
    at the beginning of the translation, when exploring the translation unit. It allows converting a
    C name to a krml `lident`. *)
-let name_map: string StringMap.t ref = ref StringMap.empty
+let name_map : string StringMap.t ref = ref StringMap.empty
 
 (* This domain of this map is functions and global variables. *)
-let global_type_map: typ StringMap.t ref = ref StringMap.empty
+let global_type_map : typ StringMap.t ref = ref StringMap.empty
 
 (* A map from an elaborated type reference (e.g. `struct S`) to the lid it has been assigned in the
  translation -- we always eliminate elaborated types in favor of lids. *)
@@ -73,7 +72,8 @@ type type_def_lazy =
   | CAbbrev of Krml.Ast.typ Lazy.t
   | CEnum of (lident * Krml.Ast.z option) list Lazy.t
 
-let force_type_def_lazy (t: type_def_lazy) : Krml.Ast.type_def = match t with
+let force_type_def_lazy (t : type_def_lazy) : Krml.Ast.type_def =
+  match t with
   | CVariant branches -> Variant (Lazy.force branches)
   | CFlat fields -> Flat (Lazy.force fields)
   | CTuple fields ->
@@ -91,18 +91,14 @@ let force_type_def_lazy (t: type_def_lazy) : Krml.Ast.type_def = match t with
    in order to type-check -- every synthesized type goes through `normalize_type` which inlines
    abbreviations away. Finally, it also allows resolving proper type information for field
    operations. *)
-let type_def_map : type_def_lazy LidMap.t ref  = ref LidMap.empty
+let type_def_map : type_def_lazy LidMap.t ref = ref LidMap.empty
 
 (* A map from top-level declaration to additional traits that they ought to derive *)
-let deriving_traits: string list LidMap.t ref =
-  ref LidMap.empty
+let deriving_traits : string list LidMap.t ref = ref LidMap.empty
 
 (* A map from top-level declarations to additional attributes they may have *)
-let attributes_map: string list LidMap.t ref =
-  ref LidMap.empty
-
-let exposed_globals: LidSet.t ref =
-  ref LidSet.empty
+let attributes_map : string list LidMap.t ref = ref LidMap.empty
+let exposed_globals : LidSet.t ref = ref LidSet.empty
 
 (* add_to_list is only available starting from OCaml 5.1 *)
 let add_to_list x data m =
@@ -123,12 +119,12 @@ let add_to_list_lid x data m =
 
 (* For a given tagged union variable, we store the case (variant name) it is currently
   in, as well as the variable corresponding to the constructor contents pattern *)
-type tagged_case = { case: string; var: string }
+type tagged_case = { case : string; var : string }
 
 (* A variable in the context. It contains its name, type, a reference to tell
    whether they end up being mutated at some point, and meta information about
    whether they are a tagged union, and if so their current state *)
-type env_var = { name: string; t: typ; mut: bool ref; case: tagged_case option }
+type env_var = { name : string; t : typ; mut : bool ref; case : tagged_case option }
 
 type env = {
   (* Variables in the context *)
@@ -138,11 +134,14 @@ type env = {
   (* In C, one can do `int x = sizeof(x)` -- but in krml, `x` is not in the scope of `e1` when doing
      `let x = e1 in e2`. However, we still want to resolve `x` in `e1`, but only for the limited
      use-case of doing `int *x = malloc(sizeof( *x))`. We use this dedicated field. *)
-  self: (string * typ) option;
+  self : (string * typ) option;
 }
 
 let empty_env = { vars = []; ret_t = TAny; self = None }
-let add_var env (x, t) = { env with vars = { name = x; t; mut = ref false; case = None} :: env.vars }
+
+let add_var env (x, t) =
+  { env with vars = { name = x; t; mut = ref false; case = None } :: env.vars }
+
 let add_self env (x, t) = { env with self = Some (x, t) }
 
 (* Refines the `case` field corresponding to the variable `x`.
@@ -153,7 +152,8 @@ let refine_var_case env x case =
     | [] -> fatal_error "Did not find variable %s in list" x
     | hd :: tl when hd.name = x -> { hd with case } :: tl
     | hd :: tl -> hd :: aux tl
-  in {env with vars = aux env.vars }
+  in
+  { env with vars = aux env.vars }
 
 let add_binders env binders =
   List.fold_left
@@ -200,8 +200,7 @@ let get_id_name (dname : declaration_name) =
 let lid_of_name name =
   match StringMap.find_opt name !name_map with
   | Some path -> Some ([ path ], name)
-  | None ->
-      None
+  | None -> None
 
 let translate_typ_name = function
   | "size_t" -> Helpers.usize
@@ -393,13 +392,13 @@ let rec translate_typ (typ : qual_type) =
   | Typedef { name; _ } -> get_id_name name |> translate_typ_name
   | BuiltinType t -> translate_builtin_typ t
   | Elaborated { keyword = Struct; named_type = { desc = Record { name; _ }; _ }; _ } -> begin
-      assert ((get_id_name name) <> "");
+      assert (get_id_name name <> "");
       try TQualified (ElaboratedMap.find (name, `Struct) !elaborated_map)
       with Not_found ->
-        failwith (Format.asprintf "translate_typ: unsupported elaborated type %a\n@." Clang.Type.pp typ)
+        failwith
+          (Format.asprintf "translate_typ: unsupported elaborated type %a\n@." Clang.Type.pp typ)
     end
-  | _ ->
-      failwith (Format.asprintf "translate_typ: unsupported type %a\n@." Clang.Type.pp typ)
+  | _ -> failwith (Format.asprintf "translate_typ: unsupported type %a\n@." Clang.Type.pp typ)
 
 let rec normalize_type t =
   match t with
@@ -419,9 +418,10 @@ let rec normalize_type t =
 
 let translate_typ t = normalize_type (translate_typ t)
 let translate_typ_name t = normalize_type (translate_typ_name t)
+
 let find_var env name =
   match find_var env name with
-  | { node = EQualified _; _ } as e, mut, case -> { e with typ = normalize_type e.typ }, mut, case
+  | ({ node = EQualified _; _ } as e), mut, case -> { e with typ = normalize_type e.typ }, mut, case
   | e -> e
 
 (* Indicate that we synthesize the type of an expression based on the information provided by
@@ -436,11 +436,13 @@ let typ_from_clang (e : Clang.Ast.expr) : typ = Clang.Type.of_node e |> translat
    Note, we cannot simply normalize slice types as we need to know
    a given type is a slice to rewrite "len" and "elt" field accesses
    accordingly *)
-let assert_tbuf_or_tarray t = match t with
-  | TQualified lid -> begin match LidMap.find lid !type_def_map with
+let assert_tbuf_or_tarray t =
+  match t with
+  | TQualified lid -> begin
+      match LidMap.find lid !type_def_map with
       | CSlice (lazy t) -> t
       | _ -> fatal_error "Type %a is not a tbuf or tarray" ptyp t
-  end
+    end
   | _ -> Helpers.assert_tbuf_or_tarray t
 
 let is_tbuf_tarray_tslice t =
@@ -488,16 +490,15 @@ module ClangHelpers = struct
   (* Check whether a given Clang expression is an exit callee *)
   let is_exit = is_known_name "exit"
 
-  (* Check whether a variable declaration has a malloc initializer. If so,
-     we will rewrite it based on the initializer that follows *)
+  (* Check whether a variable is initialized with a call to `malloc`. *)
   let is_malloc_vdecl (vdecl : var_decl_desc) =
-    match vdecl.var_init with
-    | Some { desc = Call { callee; _ }; _ }
     (* There commonly is a cast around malloc to the type of the variable. We omit it when translating it to Rust,
        as the allocation will be typed *)
-    | Some { desc = Cast { operand = { desc = Call { callee; _ }; _ }; _ }; _ }
-      when is_malloc callee -> true
-    | _ -> false
+    match vdecl.var_init with
+    | Some { desc = Call { callee; args; _ }; _ }
+    | Some { desc = Cast { operand = { desc = Call { callee; args; _ }; _ }; _ }; _ }
+      when is_malloc callee -> Some args
+    | _ -> None
 
   (* Check whether expression [e] is a pointer *)
   let has_pointer_type (e : expr) =
@@ -516,6 +517,7 @@ module ClangHelpers = struct
         } -> true
     | _ -> false
 
+  (* Matches `var_name != NULL` *)
   let is_null_check var_name (e : expr) =
     match e.desc with
     | BinaryOperator { lhs = { desc = DeclRef { name; _ }; _ }; kind = NE; rhs } ->
@@ -525,14 +527,11 @@ module ClangHelpers = struct
           false
     | _ -> false
 
-  (* Check whether statement [s] corresponds to a malloc initializer for
-     , which
-      will therefore be rewritten in combination with malloc to generate
-      a standard array or Vec declaration in Rust *)
-  let is_malloc_initializer (vdecl : var_decl_desc) (s : stmt_desc) =
-    match s with
-    | If { cond; _ } when is_null_check vdecl.var_name cond ->
-        true (* {cond; then_branch; else_branch; _} -> true *)
+  let is_zero_access (e : expr) var_name =
+    match e.desc with
+    | ArraySubscript
+        { base = { desc = DeclRef { name; _ }; _ }; index = { desc = IntegerLiteral (Int 0); _ } }
+      -> get_id_name name = var_name
     | _ -> false
 
   (* Simple heuristics to detect whether a loop condition is always false, in this case we can omit the loop.
@@ -653,43 +652,36 @@ let adjust e t =
   | _, _, TBool ->
       if e.typ <> t then
         match e.typ with
-        | TInt w ->
-            Helpers.mk_neq e (Helpers.zero w)
-        | _ ->
-            fatal_error "Cannot adjust %a: %a to have type bool" pexpr e ptyp e.typ
+        | TInt w -> Helpers.mk_neq e (Helpers.zero w)
+        | _ -> fatal_error "Cannot adjust %a: %a to have type bool" pexpr e ptyp e.typ
       else
         e
   (* Conversions via expected return type of the function (return NULL) *)
   | EBufNull, _, TBuf _ -> with_type t e.node
-
   (* Array decay in C -- it's ok *)
-  | _, TArray (t, _), TBuf (t', _) when t = t' ->
-      e
-
+  | _, TArray (t, _), TBuf (t', _) when t = t' -> e
   (* Casting to const -- also ok *)
-  | _, TBuf (t, false), TBuf (t', true) when t = t' ->
-      e
-
+  | _, TBuf (t, false), TBuf (t', true) when t = t' -> e
   (* Special handling for slice types *)
-  | _, TBuf (t, _), TQualified lid | _, TQualified lid, TBuf (t, _) ->
-      begin match LidMap.find_opt lid !type_def_map with
+  | _, TBuf (t, _), TQualified lid | _, TQualified lid, TBuf (t, _) -> begin
+      match LidMap.find_opt lid !type_def_map with
       (* The second case of the when is to handle null pointers *)
       | Some (CSlice (lazy t')) when t = t' || t = TAny ->
           (* Nothing to do, this will be erased at a later phase *)
           e
       | _ ->
-        fatal_error "Could not convert expression %a: %a to have type %a" pexpr e ptyp e.typ ptyp t;
-      end
-
-  | _, TTuple [t1; t2], TQualified lid | _, TQualified lid, TTuple [t1; t2] ->
-      begin match LidMap.find_opt lid !type_def_map with
-      | Some (CTuple (lazy [(_, (t1', _)); (_, (t2', _))])) when t1 = t1' && t2 = t2' ->
+          fatal_error "Could not convert expression %a: %a to have type %a" pexpr e ptyp e.typ ptyp
+            t
+    end
+  | _, TTuple [ t1; t2 ], TQualified lid | _, TQualified lid, TTuple [ t1; t2 ] -> begin
+      match LidMap.find_opt lid !type_def_map with
+      | Some (CTuple (lazy [ (_, (t1', _)); (_, (t2', _)) ])) when t1 = t1' && t2 = t2' ->
           (* Nothing to do, this will be erased at a later phase *)
           e
       | _ ->
-        fatal_error "Could not convert expression %a: %a to have type %a" pexpr e ptyp e.typ ptyp t;
-      end
-
+          fatal_error "Could not convert expression %a: %a to have type %a" pexpr e ptyp e.typ ptyp
+            t
+    end
   (* TODO: tag indices *)
   | _ ->
       if e.typ <> t then
@@ -703,7 +695,7 @@ let mark_mut_if_variable env e =
 
 (* A function that behaves like compare, but implements C's notion of rank
    See https://en.cppreference.com/w/c/language/conversion#Integer_promotions *)
-let rank (w: Krml.Constant.width) =
+let rank (w : Krml.Constant.width) =
   match w with
   | Bool -> 1
   | UInt8 | Int8 -> 8
@@ -717,7 +709,8 @@ let rank (w: Krml.Constant.width) =
    AST (arithmetic operations are distinguished) *)
 let mk_binop lhs kind rhs =
   if Krml.Options.debug "BinOp" then
-    Krml.KPrint.bprintf "mk_binop: %a: %a { %a } %a: %a\n" pexpr lhs ptyp lhs.typ pop (translate_binop kind) pexpr rhs ptyp rhs.typ;
+    Krml.KPrint.bprintf "mk_binop: %a: %a { %a } %a: %a\n" pexpr lhs ptyp lhs.typ pop
+      (translate_binop kind) pexpr rhs ptyp rhs.typ;
 
   (* This function first compiles pointer arithmetic *then* defers to this to compile integer
      arithmetic. *)
@@ -739,20 +732,16 @@ let mk_binop lhs kind rhs =
               e
           in
           integer_promotion Int32 lhs, integer_promotion UInt32 rhs (* krml wants u32 here *)
-      | _ ->
-          lhs, rhs
+      | _ -> lhs, rhs
     in
 
     if Krml.Options.debug "BinOp" then
-      Krml.KPrint.bprintf "After promotions: w=%a lhs=%a, rhs=%a\n"
-        ptyp lhs.typ pexpr lhs pexpr rhs;
+      Krml.KPrint.bprintf "After promotions: w=%a lhs=%a, rhs=%a\n" ptyp lhs.typ pexpr lhs pexpr rhs;
 
     let w, lhs, rhs =
       match kind with
       (* "The arguments of the following arithmetic operators undergo implicit conversions... " *)
-      | Mult | Div | Mod | Add | Sub
-      | Lt | Gt | Lte | Gte | Eq | Neq
-      | BAnd | BXor | BOr ->
+      | Mult | Div | Mod | Add | Sub | Lt | Gt | Lte | Gte | Eq | Neq | BAnd | BXor | BOr ->
           let open Krml.Constant in
           let adjust x y = adjust y x in
 
@@ -765,21 +754,18 @@ let mk_binop lhs kind rhs =
              integer or real floating type to double  *)
           if wl = Float64 || wr = Float64 then
             wl, adjust (TInt Float64) lhs, adjust (TInt Float64) rhs
-
-          (* 4) Otherwise, if one operand is float, float complex, or float imaginary(since C99),
+            (* 4) Otherwise, if one operand is float, float complex, or float imaginary(since C99),
              the other operand is implicitly converted as follows: integer type to float (the only
              real type possible is float, which remains as-is) *)
           else if wl = Float32 || wr = Float32 then
             wl, adjust (TInt Float32) lhs, adjust (TInt Float32) rhs
-
-          (* 5) Otherwise, both operands are integers. Both operands undergo integer promotions;
+            (* 5) Otherwise, both operands are integers. Both operands undergo integer promotions;
              then, after integer promotion, one of the following cases applies:
 
              "If the types are the same, that type is the common type. " *)
           else if wl = wr then
             wl, lhs, rhs
-
-          (*  "If the types have the same signedness (both signed or both unsigned), the operand
+            (*  "If the types have the same signedness (both signed or both unsigned), the operand
               whose type has the lesser conversion rank is implicitly converted to the
               other type." *)
           else if is_signed wl = is_signed wr then
@@ -787,35 +773,35 @@ let mk_binop lhs kind rhs =
               wr, adjust (TInt wr) lhs, rhs
             else
               wl, lhs, adjust (TInt wl) rhs
-
-          else
+          else if
             (* "If the unsigned type has conversion rank greater than or equal to the rank of the
                signed type, then the operand with the signed type is implicitly converted to the
                unsigned type." *)
-            if is_unsigned wl && rank wl >= rank wr then
-              wl, lhs, adjust (TInt wl) rhs
-            else if is_unsigned wr && rank wr >= rank wl then
-              wr, adjust (TInt wr) lhs, rhs
-
-            else
-              (* "If the signed type can represent all values of the unsigned type, then the operand
+            is_unsigned wl && rank wl >= rank wr
+          then
+            wl, lhs, adjust (TInt wl) rhs
+          else if is_unsigned wr && rank wr >= rank wl then
+            wr, adjust (TInt wr) lhs, rhs
+          else
+            (* "If the signed type can represent all values of the unsigned type, then the operand
                  with the unsigned type is implicitly converted to the signed type."
                  ^^^ This doesn't happen here -- I presume this is for the case where e.g. long and
                  long long have the same size. *)
-
-              (* "Else, both operands undergo implicit conversion to the unsigned type counterpart of
+            (* "Else, both operands undergo implicit conversion to the unsigned type counterpart of
                  the signed operand's type." *)
-              let w = if is_signed wl then unsigned_of_signed wl else unsigned_of_signed wr in
-              w, adjust (TInt w) lhs, adjust (TInt w) rhs
-
-      | _ ->
-          Helpers.assert_tint_or_tbool lhs.typ, lhs, rhs
+            let w =
+              if is_signed wl then
+                unsigned_of_signed wl
+              else
+                unsigned_of_signed wr
+            in
+            w, adjust (TInt w) lhs, adjust (TInt w) rhs
+      | _ -> Helpers.assert_tint_or_tbool lhs.typ, lhs, rhs
     in
 
     (* Krml.KPrint.bprintf "After conversions: w=%a w=%a lhs=%a, rhs=%a\n" *)
     (*   pwidth w *)
     (*   pwidth (Helpers.assert_tint_or_tbool lhs.typ) pexpr lhs pexpr rhs; *)
-
     match kind with
     | And | Or | Xor | Not ->
         (* Monomorphic boolean operators *)
@@ -830,7 +816,6 @@ let mk_binop lhs kind rhs =
         let rhs = adjust rhs (List.nth t_args 1) in
 
         (* Krml.KPrint.bprintf "Result: %a\n" pexpr (with_type t_ret (EApp (op, [ lhs; rhs ]))); *)
-
         with_type t_ret (EApp (op, [ lhs; rhs ]))
   in
 
@@ -885,7 +870,7 @@ let rec extract_sizeof_ty env = function
   | ArgumentExpr e -> (translate_expr env e).typ
   | ArgumentType ty -> translate_typ ty
 
-and translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.expr) : Krml.Ast.expr =
+and translate_expr (env : env) ?(must_return_value = false) (e : Clang.Ast.expr) : Krml.Ast.expr =
   if is_null e then
     with_type (TBuf (TAny, false)) EBufNull
   else
@@ -900,12 +885,11 @@ and translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.expr) :
             with_type TBool (EConstant (Bool, Clang.Ast.string_of_integer_literal ~signed n))
         | t -> fatal_error "integer literal does not have an int type, it has %a" ptyp t
       end
-    | FloatingLiteral f ->
-        begin match typ_from_clang e with
-        | TInt w as t ->
-            with_type t (EConstant (w, Clang.Ast.string_of_floating_literal f))
+    | FloatingLiteral f -> begin
+        match typ_from_clang e with
+        | TInt w as t -> with_type t (EConstant (w, Clang.Ast.string_of_floating_literal f))
         | t -> fatal_error "float literal does not have a float type, it has %a" ptyp t
-        end
+      end
     | StringLiteral _ -> failwith "translate_expr: string literal"
     | CharacterLiteral _ -> failwith "translate_expr character literal"
     | ImaginaryLiteral _ -> failwith "translate_expr: imaginary literal"
@@ -918,7 +902,7 @@ and translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.expr) :
        be a struct initialization *)
     | CompoundLiteral { init = { desc = InitList l; _ }; _ } | InitList l ->
         translate_fields env (typ_from_clang e) l
-    | UnaryOperator { kind = PostInc | PreInc as kind; operand } ->
+    | UnaryOperator { kind = (PostInc | PreInc) as kind; operand } ->
         (* This is a special case for loop increments. The current Karamel
            extraction pipeline only supports a specific case of loops *)
         let o = translate_expr env operand in
@@ -943,11 +927,13 @@ and translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.expr) :
         else if kind = PreInc then
           with_type o.typ (ESequence [ assignment; o ])
         else
-          with_type o.typ (ELet (Helpers.fresh_binder "old_value" o.typ,
-            o,
-            with_type o.typ (ESequence [ Krml.DeBruijn.lift 1 assignment; with_type o.typ (EBound 0) ])))
-
-    | UnaryOperator { kind = PostDec | PreDec as kind; operand } ->
+          with_type o.typ
+            (ELet
+               ( Helpers.fresh_binder "old_value" o.typ,
+                 o,
+                 with_type o.typ
+                   (ESequence [ Krml.DeBruijn.lift 1 assignment; with_type o.typ (EBound 0) ]) ))
+    | UnaryOperator { kind = (PostDec | PreDec) as kind; operand } ->
         (* This is a special case for loop increments. The current Karamel
            extraction pipeline only supports a specific case of loops *)
         let o = translate_expr env operand in
@@ -956,17 +942,20 @@ and translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.expr) :
         (* We rewrite `name++` into `name := name + 1` *)
         let assignment =
           with_type TUnit
-          @@ EAssign (o, Krml.Ast.with_type o.typ (EApp (Helpers.mk_op K.Sub w, [ o; Helpers.one w ])))
+          @@ EAssign
+               (o, Krml.Ast.with_type o.typ (EApp (Helpers.mk_op K.Sub w, [ o; Helpers.one w ])))
         in
         if not must_return_value then
           assignment
         else if kind = PreDec then
           with_type o.typ (ESequence [ assignment; o ])
         else
-          with_type o.typ (ELet (Helpers.fresh_binder "old_value" o.typ,
-            o,
-            with_type o.typ (ESequence [ Krml.DeBruijn.lift 1 assignment; with_type o.typ (EBound 0) ])))
-
+          with_type o.typ
+            (ELet
+               ( Helpers.fresh_binder "old_value" o.typ,
+                 o,
+                 with_type o.typ
+                   (ESequence [ Krml.DeBruijn.lift 1 assignment; with_type o.typ (EBound 0) ]) ))
     | UnaryOperator { kind = Not; operand } ->
         (* Bitwise not: ~ syntax, operates on integers *)
         let o = translate_expr env operand in
@@ -975,14 +964,11 @@ and translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.expr) :
         (* Logical not: The operand should be a boolean *)
         let o = translate_expr env operand in
         Helpers.mk_not (adjust o TBool)
-
     | UnaryOperator { kind = Minus; operand } ->
         (* No unary minus in krml ast *)
         let o = translate_expr env operand in
         let w = Helpers.assert_tint o.typ in
-        with_type o.typ (EApp (Helpers.mk_op Sub w,
-          [ Helpers.zero w; o ]))
-
+        with_type o.typ (EApp (Helpers.mk_op Sub w, [ Helpers.zero w; o ]))
     | UnaryOperator { kind = Deref; operand } ->
         let o = translate_expr env operand in
         let t = Helpers.assert_tbuf_or_tarray o.typ in
@@ -993,14 +979,11 @@ and translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.expr) :
     | UnaryOperator _ ->
         Format.printf "Trying to translate unary operator %a@." Clang.Expr.pp e;
         failwith "translate_expr: unary operator"
-
     | BinaryOperator { lhs; kind = Assign; rhs } ->
-        let rec find_extra_lhs lhss (rhs: expr) =
+        let rec find_extra_lhs lhss (rhs : expr) =
           match rhs.desc with
-          | BinaryOperator { lhs; kind = Assign; rhs } ->
-              find_extra_lhs (lhs :: lhss) rhs
-          | _ ->
-              List.rev lhss, rhs
+          | BinaryOperator { lhs; kind = Assign; rhs } -> find_extra_lhs (lhs :: lhss) rhs
+          | _ -> List.rev lhss, rhs
         in
         let lhs, rhs = find_extra_lhs [ lhs ] rhs in
         let lhs = List.map (translate_expr env) lhs in
@@ -1028,7 +1011,6 @@ and translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.expr) :
           assignment
         else
           with_type (List.hd lhs).typ (ESequence [ assignment; List.hd lhs ])
-
     | BinaryOperator { lhs; kind; rhs } when is_assign_op kind ->
         (* FIXME this is not correct if the lhs is not a value -- consider, for instance:
           int x;
@@ -1061,13 +1043,15 @@ and translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.expr) :
         mk_binop lhs kind rhs
     | DeclRef { name; _ } ->
         let name = get_id_name name in
-        begin match env.self with
-        | Some (name', t) when name = name' ->
-            with_type t (EAbort (Some t, Some ("The definition of " ^ name ^ " refers to itself")))
-        | _ ->
-            let e, _, _ = find_var env name in
-            (* Krml.KPrint.bprintf "%a: %a\n" pexpr e ptyp e.typ; *)
-            e
+        begin
+          match env.self with
+          | Some (name', t) when name = name' ->
+              with_type t
+                (EAbort (Some t, Some ("The definition of " ^ name ^ " refers to itself")))
+          | _ ->
+              let e, _, _ = find_var env name in
+              (* Krml.KPrint.bprintf "%a: %a\n" pexpr e ptyp e.typ; *)
+              e
         end
     | Call { callee; args } when is_scylla_reset callee -> begin
         match args with
@@ -1081,9 +1065,9 @@ and translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.expr) :
             (* Sanity-check: The argument should be a pointer *)
             let _ = assert_tbuf_or_tarray e.typ in
             let i = translate_expr env i in
-            let split_fn = with_type TAny (EQualified (["Pulse"; "Lib"; "Slice"], "split")) in
-            let split_call = with_type TAny (ETApp (split_fn, [], [], [e.typ]) ) in
-            with_type (TTuple ([e.typ; e.typ])) (EApp (split_call, [e; i]))
+            let split_fn = with_type TAny (EQualified ([ "Pulse"; "Lib"; "Slice" ], "split")) in
+            let split_call = with_type TAny (ETApp (split_fn, [], [], [ e.typ ])) in
+            with_type (TTuple [ e.typ; e.typ ]) (EApp (split_call, [ e; i ]))
         | _ -> failwith "wrong number of arguments for scylla_split"
       end
     | Call { callee; args } when is_memcpy callee ->
@@ -1097,15 +1081,14 @@ and translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.expr) :
               let dst = translate_expr env dst in
               let src = translate_expr env src in
               if assert_tbuf_or_tarray dst.typ <> assert_tbuf_or_tarray src.typ then
-                fatal_error "in this memcpy, source and destination types differ: memcpy(%a: %a, %a: %a, ...)"
-                  pexpr dst ptyp dst.typ
-                  pexpr src ptyp src.typ;
+                fatal_error
+                  "in this memcpy, source and destination types differ: memcpy(%a: %a, %a: %a, ...)"
+                  pexpr dst ptyp dst.typ pexpr src ptyp src.typ;
               let len =
                 match len.desc, src.typ with
-                | BinaryOperator
-                    { lhs; kind = Mul; rhs = { desc = UnaryExpr { kind = SizeOf; argument }; _ } },
-                    _
-                  ->
+                | ( BinaryOperator
+                      { lhs; kind = Mul; rhs = { desc = UnaryExpr { kind = SizeOf; argument }; _ } },
+                    _ ) ->
                     (* We recognize the case `len = lhs * sizeof (_)` *)
                     let len = adjust (translate_expr env lhs) (TInt SizeT) in
                     let ty = extract_sizeof_ty env argument in
@@ -1114,8 +1097,7 @@ and translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.expr) :
                 | _, TBuf (TInt UInt8, _) ->
                     (* Unless it's a UInt8 in which case we may omit the sizeof *)
                     adjust (translate_expr env len) (TInt SizeT)
-                | _ ->
-                    fatal_error "ill-formed memcpy; type is %a" ptyp src.typ
+                | _ -> fatal_error "ill-formed memcpy; type is %a" ptyp src.typ
               in
               with_type TUnit @@ EBufBlit (src, Helpers.zerou32, dst, Helpers.zerou32, len)
           | _ -> failwith "memcpy does not have the right number of arguments"
@@ -1129,10 +1111,9 @@ and translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.expr) :
               let len =
                 match len.desc, dst.typ with
                 (* We recognize the case `len = lhs * sizeof (_)` *)
-                | BinaryOperator
-                    { lhs; kind = Mul; rhs = { desc = UnaryExpr { kind = SizeOf; argument }; _ } },
-                    _
-                  ->
+                | ( BinaryOperator
+                      { lhs; kind = Mul; rhs = { desc = UnaryExpr { kind = SizeOf; argument }; _ } },
+                    _ ) ->
                     let len = adjust (translate_expr env lhs) (TInt SizeT) in
                     let ty = extract_sizeof_ty env argument in
                     assert (ty = assert_tbuf_or_tarray dst.typ);
@@ -1140,8 +1121,7 @@ and translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.expr) :
                 | _, TBuf (TInt UInt8, _) ->
                     (* Unless it's a UInt8 in which case we may omit the sizeof *)
                     adjust (translate_expr env len) (TInt SizeT)
-                | _ ->
-                    failwith "ill-formed memset"
+                | _ -> failwith "ill-formed memset"
               in
               let elt = adjust (translate_expr env v) (assert_tbuf_or_tarray dst.typ) in
               with_type TUnit @@ EBufFill (dst, elt, len)
@@ -1160,10 +1140,15 @@ and translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.expr) :
            translate it to EAbort, which will become a `panic` *)
         with_type TAny (EAbort (None, Some ""))
     | Call { callee; args } ->
-        Format.printf "Trying to translate function call %a@." Clang.Expr.pp callee;
+        (* Format.printf "Trying to translate function call %a@." Clang.Expr.pp callee; *)
         let callee = translate_expr env callee in
-        Krml.KPrint.bprintf "callee is %a and has type %a\n" pexpr callee ptyp callee.typ;
-        let t, ts = Helpers.flatten_arrow callee.typ in
+        (* Krml.KPrint.bprintf "callee is %a and has type %a\n" pexpr callee ptyp callee.typ; *)
+        let t, ts =
+          Helpers.flatten_arrow
+            (match callee.typ with
+            | TBuf (t, _) -> t
+            | t -> t)
+        in
         let args = List.map2 (fun x t -> adjust (translate_expr env x) t) args ts in
         with_type t (EApp (callee, args))
     | Cast { qual_type; operand; _ } ->
@@ -1171,23 +1156,23 @@ and translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.expr) :
         let typ = translate_typ qual_type in
         let e = translate_expr env operand in
         with_type typ (ECast (e, typ))
-
     | ArraySubscript { base; index } ->
         let base = translate_expr env base in
         let index = adjust (translate_expr env ~must_return_value:true index) (TInt SizeT) in
         (* Is this only called on rvalues? Otherwise, might need EBufWrite *)
         with_type (assert_tbuf_or_tarray base.typ) (EBufRead (base, index))
-
     | ConditionalOperator { cond; then_branch; else_branch } ->
         let cond = translate_expr env cond in
         let else_branch = translate_expr env else_branch in
-        let then_branch = match then_branch with
-          | None -> assert (else_branch.typ = TUnit); Helpers.eunit
+        let then_branch =
+          match then_branch with
+          | None ->
+              assert (else_branch.typ = TUnit);
+              Helpers.eunit
           | Some e -> adjust (translate_expr env e) else_branch.typ
         in
         with_type else_branch.typ (EIfThenElse (cond, then_branch, else_branch))
     | Paren _ -> failwith "translate_expr: paren"
-
     | Member { base; arrow; field } ->
         let base =
           match base with
@@ -1207,38 +1192,45 @@ and translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.expr) :
         let f =
           match field with
           | FieldName { desc; _ } -> get_id_name desc.name
-        | _ -> failwith "member node: only field accesses supported"
+          | _ -> failwith "member node: only field accesses supported"
         in
 
-        begin match LidMap.find_opt lid !type_def_map with
+        begin
+          match LidMap.find_opt lid !type_def_map with
           | Some (CVariant lazy_branches) ->
-              let branch = match List.find_opt (fun b -> fst b = f) (Lazy.force lazy_branches) with
+              let branch =
+                match List.find_opt (fun b -> fst b = f) (Lazy.force lazy_branches) with
                 | Some b -> b
                 | None -> fatal_error "Field %s of %a not found in tagged union" f plid lid
               in
 
               begin
-              match snd branch with
-              | [_] ->
-                  let var = match base.node with | EBound n -> List.nth env.vars n | _ -> failwith "Tagged union access is only supported on a variable" in
-                  begin match var.case with
-                  | Some { case; var } when case = f ->
-                      let e, _, _ = find_var env var in
-                      e
-                  | _ -> failwith "Tagged union variable is not in the correct case"
-                  end
-              | _ -> failwith "More than one field in tagged union case"
+                match snd branch with
+                | [ _ ] ->
+                    let var =
+                      match base.node with
+                      | EBound n -> List.nth env.vars n
+                      | _ -> failwith "Tagged union access is only supported on a variable"
+                    in
+                    begin
+                      match var.case with
+                      | Some { case; var } when case = f ->
+                          let e, _, _ = find_var env var in
+                          e
+                      | _ -> failwith "Tagged union variable is not in the correct case"
+                    end
+                | _ -> failwith "More than one field in tagged union case"
               end
           | Some (CFlat lazy_fields) ->
-
               let fields = Lazy.force lazy_fields in
               let field_t =
                 if List.mem_assoc (Some f) fields then
                   fst (List.assoc (Some f) fields)
                 else
-                  fatal_error "Field %s of %a not found in struct def (available fields are: %s)"
-                    f plid lid
-                    (String.concat ", " (List.map (fun (f, _) -> Option.value ~default:"<noname>" f) fields))
+                  fatal_error "Field %s of %a not found in struct def (available fields are: %s)" f
+                    plid lid
+                    (String.concat ", "
+                       (List.map (fun (f, _) -> Option.value ~default:"<noname>" f) fields))
               in
               if not arrow then
                 (* base.f *)
@@ -1249,45 +1241,61 @@ and translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.expr) :
                   Helpers.(with_type (assert_tbuf base.typ) (EBufRead (base, Helpers.zero_usize)))
                 in
                 with_type field_t (EField (deref_base, f))
-
-            | Some (CTuple lazy_fields) ->
-                if arrow then
-                  fatal_error "Arrow access on tuple struct not supported";
-                let fields = Lazy.force lazy_fields in
-                let field_t =
-                  if List.mem_assoc (Some f) fields then
-                    fst (List.assoc (Some f) fields)
-                  else
-                    fatal_error "Field %s of %a not found in struct def (available fields are: %s)"
-                      f plid lid
-                      (String.concat ", " (List.map (fun (f, _) -> Option.value ~default:"<noname>" f) fields))
-                in
-                (* Retrieve the position of the field in the tuple *)
-                let idx = Krml.KList.index (fun x -> fst x = (Some f)) fields in
-
-                let binder = Helpers.fresh_binder "v" field_t in
-                let tuple_pat = PTuple (
-                  List.mapi (fun i (_, (t, _)) -> Krml.Ast.with_type t (if i = idx then PBound 0 else PWild)) fields)
-                in
-                let tuple_branch = [binder], Krml.Ast.with_type field_t tuple_pat, Krml.Ast.with_type field_t (EBound 0) in
-                Krml.Ast.with_type field_t (EMatch (Unchecked, base, [tuple_branch]))
-
-            | Some (CSlice t) ->
-                let t = Lazy.force t in
-                if arrow then
-                  fatal_error "Arrow access on slice struct not supported";
-                if f = "elt" then
-                  base
-                else if f = "len" then
-                  let len_fn = Krml.Ast.with_type TAny (EQualified (["Pulse"; "Lib"; "Slice"], "len")) in
-                  let len_call = Krml.Ast.with_type TAny (ETApp (len_fn, [], [], [TBuf (t, false)])) in
-                  Krml.Ast.with_type (TInt K.SizeT) (EApp (len_call, [base]))
+          | Some (CTuple lazy_fields) ->
+              if arrow then
+                fatal_error "Arrow access on tuple struct not supported";
+              let fields = Lazy.force lazy_fields in
+              let field_t =
+                if List.mem_assoc (Some f) fields then
+                  fst (List.assoc (Some f) fields)
                 else
-                  fatal_error "Field %s of slice %a is not elt or len" f plid lid
+                  fatal_error "Field %s of %a not found in struct def (available fields are: %s)" f
+                    plid lid
+                    (String.concat ", "
+                       (List.map (fun (f, _) -> Option.value ~default:"<noname>" f) fields))
+              in
+              (* Retrieve the position of the field in the tuple *)
+              let idx = Krml.KList.index (fun x -> fst x = Some f) fields in
 
-
-            | Some _ -> fatal_error "Taking a field of %a which is not a struct, tuple, slice, nor a tagged union" plid lid
-            | None -> fatal_error "Taking a field of %a which is not in the map" plid lid
+              let binder = Helpers.fresh_binder "v" field_t in
+              let tuple_pat =
+                PTuple
+                  (List.mapi
+                     (fun i (_, (t, _)) ->
+                       Krml.Ast.with_type t
+                         (if i = idx then
+                            PBound 0
+                          else
+                            PWild))
+                     fields)
+              in
+              let tuple_branch =
+                ( [ binder ],
+                  Krml.Ast.with_type field_t tuple_pat,
+                  Krml.Ast.with_type field_t (EBound 0) )
+              in
+              Krml.Ast.with_type field_t (EMatch (Unchecked, base, [ tuple_branch ]))
+          | Some (CSlice t) ->
+              let t = Lazy.force t in
+              if arrow then
+                fatal_error "Arrow access on slice struct not supported";
+              if f = "elt" then
+                base
+              else if f = "len" then
+                let len_fn =
+                  Krml.Ast.with_type TAny (EQualified ([ "Pulse"; "Lib"; "Slice" ], "len"))
+                in
+                let len_call =
+                  Krml.Ast.with_type TAny (ETApp (len_fn, [], [], [ TBuf (t, false) ]))
+                in
+                Krml.Ast.with_type (TInt K.SizeT) (EApp (len_call, [ base ]))
+              else
+                fatal_error "Field %s of slice %a is not elt or len" f plid lid
+          | Some _ ->
+              fatal_error
+                "Taking a field of %a which is not a struct, tuple, slice, nor a tagged union" plid
+                lid
+          | None -> fatal_error "Taking a field of %a which is not in the map" plid lid
         end
     | UnaryExpr { kind = SizeOf; argument; _ } -> begin
         match extract_sizeof_ty env argument with
@@ -1296,7 +1304,6 @@ and translate_expr (env : env) ?(must_return_value=false) (e : Clang.Ast.expr) :
             Format.printf "Trying to translate unary expr %a@." Clang.Expr.pp e;
             failwith "translate_expr: unary expr"
       end
-
     | _ ->
         Format.eprintf "Trying to translate expression %a@." Clang.Expr.pp e;
         failwith "translate_expr: unsupported expression"
@@ -1315,12 +1322,12 @@ and translate_field_expr env (e : expr) field_name =
       | [ _ ] -> failwith "expected a field designator"
       | _ -> failwith "assigning to several fields during struct initialization is not supported"
     end
-  | _ ->
-      Some field_name, translate_expr env e
+  | _ -> Some field_name, translate_expr env e
 
-and translate_variant env branches (tag: expr) (e: expr option) =
-  let tag = match tag.desc with
-    | DesignatedInit { init = { desc = IntegerLiteral n; _}; _ } -> Clang.Ast.int_of_literal n
+and translate_variant env branches (tag : expr) (e : expr option) =
+  let tag =
+    match tag.desc with
+    | DesignatedInit { init = { desc = IntegerLiteral n; _ }; _ } -> Clang.Ast.int_of_literal n
     | _ ->
         Format.eprintf "Expected integer literal for tagged union tag, got %a\n@." Clang.Expr.pp tag;
         failwith "Could not translate tagged union expression"
@@ -1331,89 +1338,102 @@ and translate_variant env branches (tag: expr) (e: expr option) =
   match e with
   (* This is the case of an empty variant *)
   | None -> ECons (name, [])
-  | Some e ->
+  | Some e -> (
       match e.desc with
-        | InitList [{ desc = DesignatedInit { designators = [FieldDesignator f]; init }; _ }]
-        (* Not sure why this case is needed, but there seems to occassionally be an empty FieldDesignator inserted
+      | InitList [ { desc = DesignatedInit { designators = [ FieldDesignator f ]; init }; _ } ]
+      (* Not sure why this case is needed, but there seems to occassionally be an empty FieldDesignator inserted
            during parsing, and the designatedInit is not encapsulated in an InitList *)
-        | DesignatedInit { designators = [FieldDesignator ""; FieldDesignator f]; init }->
-            if f <> name then
-              failwith "incorrect variant type for tagged union";
-            let e = translate_expr env init in
-            ECons (name, [e])
-        | _ ->
-            Format.eprintf "Expected initializer, got %a\n@." Clang.Expr.pp e;
-            failwith "Incorrect expression for tagged union"
-
+      | DesignatedInit { designators = [ FieldDesignator ""; FieldDesignator f ]; init } ->
+          if f <> name then
+            failwith "incorrect variant type for tagged union";
+          let e = translate_expr env init in
+          ECons (name, [ e ])
+      | _ ->
+          Format.eprintf "Expected initializer, got %a\n@." Clang.Expr.pp e;
+          failwith "Incorrect expression for tagged union")
 
 and translate_fields env t es =
-   match LidMap.find (Helpers.assert_tlid t) !type_def_map with
-    | CFlat lazy_fields ->
-        let fields = Lazy.force lazy_fields in
-        let field_names = List.map (fun x -> Option.get (fst x)) fields in
-        if List.length field_names <> List.length es then
-          fatal_error "TODO: partial initializers (%s but %d initializers)" (String.concat ", " field_names) (List.length es);
-        Krml.Ast.with_type t (EFlat (List.map2 (translate_field_expr env) es field_names))
-    | CVariant lazy_branches ->
-        let branches = Lazy.force lazy_branches in
-        begin match es with
-        | [tag] -> Krml.Ast.with_type t (translate_variant env branches tag None)
-        | [tag; e] -> Krml.Ast.with_type t (translate_variant env branches tag (Some e))
-        | _ ->
-          fatal_error "Expected two arguments for tagged union initializer";
-        end
-
-    | CTuple lazy_fields ->
-        let fields = Lazy.force lazy_fields in
-        let field_names = List.map (fun x -> Option.get (fst x)) fields in
-        if List.length field_names <> List.length es then
-          fatal_error "TODO: partial initializers (%s but %d initializers)" (String.concat ", " field_names) (List.length es);
-        (* We go through translate_field_expr to ensure that the order of the
+  match LidMap.find (Helpers.assert_tlid t) !type_def_map with
+  | CFlat lazy_fields ->
+      let fields = Lazy.force lazy_fields in
+      let field_names = List.map (fun x -> Option.get (fst x)) fields in
+      if List.length field_names <> List.length es then
+        fatal_error "TODO: partial initializers (%s but %d initializers)"
+          (String.concat ", " field_names) (List.length es);
+      Krml.Ast.with_type t (EFlat (List.map2 (translate_field_expr env) es field_names))
+  | CVariant lazy_branches ->
+      let branches = Lazy.force lazy_branches in
+      begin
+        match es with
+        | [ tag ] -> Krml.Ast.with_type t (translate_variant env branches tag None)
+        | [ tag; e ] -> Krml.Ast.with_type t (translate_variant env branches tag (Some e))
+        | _ -> fatal_error "Expected two arguments for tagged union initializer"
+      end
+  | CTuple lazy_fields ->
+      let fields = Lazy.force lazy_fields in
+      let field_names = List.map (fun x -> Option.get (fst x)) fields in
+      if List.length field_names <> List.length es then
+        fatal_error "TODO: partial initializers (%s but %d initializers)"
+          (String.concat ", " field_names) (List.length es);
+      (* We go through translate_field_expr to ensure that the order of the
            fields matches the initializers *)
-        let fields = List.map2 (translate_field_expr env) es field_names in
-        Krml.Ast.with_type t (ETuple (List.map snd fields))
+      let fields = List.map2 (translate_field_expr env) es field_names in
+      Krml.Ast.with_type t (ETuple (List.map snd fields))
+  | CSlice _ ->
+      if List.length es <> 2 then
+        fatal_error "Expected two initializers for slice type for fields elt and len";
+      (* Ensuring the right order and names of initializers *)
+      let fields = List.map2 (translate_field_expr env) es [ "elt"; "len" ] in
+      snd (List.hd fields)
+  | _ -> failwith "impossible"
 
-    | CSlice _ ->
-        if List.length es <> 2 then
-          fatal_error "Expected two initializers for slice type for fields elt and len";
-        (* Ensuring the right order and names of initializers *)
-        let fields = List.map2 (translate_field_expr env) es ["elt"; "len"] in
-        snd (List.hd fields)
-
-    | _ -> failwith "impossible"
-
-let is_tag_check env (cond : expr) = match cond.desc with
-  | BinaryOperator {
-    lhs = { desc = Member {base = Some {desc = DeclRef {name; _}; _}; arrow = false; field = FieldName { desc; _}}; _} ;
-       kind = EQ;
-       rhs = {desc = IntegerLiteral _; _}
-     } ->
+let is_tag_check env (cond : expr) =
+  match cond.desc with
+  | BinaryOperator
+      {
+        lhs =
+          {
+            desc =
+              Member
+                {
+                  base = Some { desc = DeclRef { name; _ }; _ };
+                  arrow = false;
+                  field = FieldName { desc; _ };
+                };
+            _;
+          };
+        kind = EQ;
+        rhs = { desc = IntegerLiteral _; _ };
+      } -> (
       (* We assume that the tag field will always be called "tag" *)
-       get_id_name desc.name = "tag" && (
+      get_id_name desc.name = "tag"
+      &&
       (* And we check whether the variable has been registered as a tagged union *)
-         let var, _, _ = get_id_name name |> find_var env in
-         let lid = Helpers.assert_tlid var.typ in
-         match LidMap.find_opt lid !type_def_map with
-         | Some (CVariant _) -> true
-         | _ -> false
-      )
+      let var, _, _ = get_id_name name |> find_var env in
+      let lid = Helpers.assert_tlid var.typ in
+      match LidMap.find_opt lid !type_def_map with
+      | Some (CVariant _) -> true
+      | _ -> false)
   | _ -> false
 
-let deconstruct_tag_check env (cond : expr) = match cond.desc with
-  | BinaryOperator {
-    lhs = { desc = Member {base = Some {desc = DeclRef {name; _}; _}; _}; _} ;
-       kind = EQ;
-       rhs = {desc = IntegerLiteral (Int n); _}
-     } ->
-       let name = get_id_name name in
-       let e, _, _ = find_var env name in
-       e, n, name
+let deconstruct_tag_check env (cond : expr) =
+  match cond.desc with
+  | BinaryOperator
+      {
+        lhs = { desc = Member { base = Some { desc = DeclRef { name; _ }; _ }; _ }; _ };
+        kind = EQ;
+        rhs = { desc = IntegerLiteral (Int n); _ };
+      } ->
+      let name = get_id_name name in
+      let e, _, _ = find_var env name in
+      e, n, name
   | _ -> failwith "not a tag_check"
 
 (* Assuming that [lid] corresponds to a tagged union type, which was
    therefore translated to a variant type, retrieves the branch
    corresponding to the [n]-th constructor (starting count at 0) *)
-let lookup_nth_branch lid n = match LidMap.find_opt lid !type_def_map with
+let lookup_nth_branch lid n =
+  match LidMap.find_opt lid !type_def_map with
   | Some (CVariant lazy_branches) -> List.nth (Lazy.force lazy_branches) n
   | _ -> fatal_error "Expected a tagged union expression"
 
@@ -1486,7 +1506,9 @@ let translate_vardecl (env : env) (vdecl : var_decl_desc) : env * binder * Krml.
       add_var env (vname, typ), Helpers.fresh_binder vname typ, e
   | Some e ->
       (* TODO insert call to adjust here *)
-      add_var env (vname, typ), Helpers.fresh_binder vname typ, translate_expr (add_self env (vname, typ)) e
+      ( add_var env (vname, typ),
+        Helpers.fresh_binder vname typ,
+        translate_expr (add_self env (vname, typ)) e )
 
 (* Translation of a variable declaration, followed by a memset of [args] *)
 let translate_vardecl_with_memset (env : env) (vdecl : var_decl_desc) (args : expr list) :
@@ -1543,67 +1565,83 @@ let translate_vardecl_with_memset (env : env) (vdecl : var_decl_desc) (args : ex
           size
   | _ -> failwith "memset does not have the right number of arguments"
 
-(* Translation of a variable declaration through malloc, followed by an initialization through [s] *)
-let translate_vardecl_malloc (env : env) (vdecl : var_decl_desc) (s : stmt_desc) :
-    env * binder * Krml.Ast.expr =
+(* This function translates `t *x = (t* ) malloc(...); stmts...` to krml's internal representation of heap
+   allocations, which requires an initial value. This function thus assumes `is_malloc_vdecl vdecl <> None`.
+   The cast `(t* )` is optional. 
+
+   We recognize a few distinguished patterns:
+   - if the first statement is `if (x != NULL) { x[0] = e_init } else { ... }`, then `e_init` is a
+     suitable initial value; the user then will need to tweak the produced Rust code if there was
+     some meaningful error handling in the `else` branch
+   - for other cases, we try to come up with a default value, and error out otherwise
+
+   The function returns the remainder of the statements to be translated. *)
+let translate_vardecl_malloc (env : env) (vdecl : var_decl_desc) (s : stmt list) :
+    env * binder * Krml.Ast.expr * stmt list =
   let vname = vdecl.var_name in
+
+  (* Assert that the variable has a pointer type *)
   let typ =
     match vdecl.var_type.desc with
     | Pointer ty -> TBuf (translate_typ ty, false)
-    | _ -> failwith "The variable being malloc'ed is not a pointer"
+    | _ -> failwith ("The variable being malloc'ed is not a pointer: " ^ vname)
   in
 
-  let args =
-    match vdecl.var_init with
-    | Some { desc = Call { args; _ }; _ }
-    (* There commonly is a cast around malloc to the type of the variable. We omit it when translating it to Rust,
-     as the allocation will be typed *)
-    | Some { desc = Cast { operand = { desc = Call { args; _ }; _ }; _ }; _ } -> args
-    | _ -> failwith "impossible: calling translate_vardecl_malloc on a non-malloc initializer"
+  (* Analyze the argument to malloc.
+     - `sizeof(t)`, `sizeof(x[0])`: size = 1
+     - `e * sizeof(t)`, `e * sizeof(x[0])`: size = e 
+     - `e` when `sizeof(t)` is known statically (e.g. `t = TInt w`): size = `e/sizeof(t)` (TODO)
+  *)
+  let n_elements =
+    let env = add_self env (vname, typ) in
+
+    let is_correct_sizeof (x: expr) =
+      match x with
+      | { desc = UnaryExpr { kind = SizeOf; argument }; _ } ->
+          (* Sanity-check: The sizeof argument correponds to the type of the pointer being malloc'ed *)
+          assert (extract_sizeof_ty env argument = Helpers.assert_tbuf typ);
+          true
+      | _ ->
+          false
+    in
+
+    match Krml.KList.one (Option.get (is_malloc_vdecl vdecl)) with
+    | e when is_correct_sizeof e ->
+        Krml.Helpers.mk_sizet 1
+    | { desc = BinaryOperator { lhs; kind = Mul; rhs }; _ } when is_correct_sizeof rhs ->
+        translate_expr env lhs
+    | { desc = BinaryOperator { lhs; kind = Mul; rhs }; _ } when is_correct_sizeof lhs ->
+        translate_expr env rhs
+    | _ ->
+        failwith ("argument of malloc if not of the shape `sizeof(type)` or `e * sizeof(type)` for " ^ vname)
   in
 
-  begin
-    match args with
-    | [ { desc = UnaryExpr { kind = SizeOf; argument }; _ } ] ->
-        (* Sanity-check: The sizeof argument correponds to the type of the pointer being malloc'ed *)
-        assert (extract_sizeof_ty env argument = Helpers.assert_tbuf typ)
-    | [ _ ] -> failwith "argument of malloc if not of the shape `sizeof(type)`"
-    | _ -> failwith "Too many arguments for malloc"
-  end;
-
-  (* Check if expression [e] corresponds to accessing the 0-th element of array [var_name] *)
-  let is_zero_access (e : expr) var_name =
-    match e.desc with
-    | ArraySubscript
-        { base = { desc = DeclRef { name; _ }; _ }; index = { desc = IntegerLiteral (Int 0); _ } }
-      -> get_id_name name = var_name
-    | _ -> false
-  in
-
-  let init_val =
-    match s with
-    (* We previously checked that this had shape 'if ptr != NULL { ... }`. *)
-    | If { then_branch; _ } -> begin
-        match then_branch.desc with
-        | Compound [ { desc = Expr { desc = BinaryOperator { lhs; kind = Assign; rhs }; _ }; _ } ]
-          when is_zero_access lhs vname -> translate_expr env rhs
-        | _ -> failwith "ill-formed malloc initializer"
-      end
-    | _ -> failwith "ill-formed malloc initializer"
+  (* Try to find a default value; fallback to synthesizing one, if the type permits. *)
+  let init_val, rest =
+    match s, Helpers.assert_tbuf typ with
+    | { desc = If { cond; then_branch = { desc =
+      Compound [ { desc = Expr { desc = BinaryOperator { lhs; kind = Assign; rhs }; _ }; _ } ]; _
+    }; _ }; _ } :: s, _
+    when is_null_check vname cond && is_zero_access lhs vname ->
+        (* if (vname != NULL) { vname[0] = init_val; } else { ... } *)
+        translate_expr env rhs, s
+    | _, TInt w ->
+        with_type typ (EConstant (w, "0")), s
+    | _ ->
+        fatal_error "cannot find a default value of type %a for malloc, when initializing %s" ptyp typ vname
   in
 
   let init_val = adjust init_val (Helpers.assert_tbuf typ) in
 
   ( add_var env (vname, typ),
     Helpers.fresh_binder vname typ,
-    Krml.Ast.with_type typ (EBufCreate (Krml.Common.Heap, init_val, Helpers.oneu32)) )
+    Krml.Ast.with_type typ (EBufCreate (Krml.Common.Heap, init_val, n_elements)),
+    rest )
 
-let maybe_align attributes (b: binder) =
+let maybe_align attributes (b : binder) =
   match Attributes.retrieve_alignment attributes with
-  | Some n ->
-      { b with node = { b.node with meta = Align n :: b.node.meta } }
-  | None ->
-      b
+  | Some n -> { b with node = { b.node with meta = Align n :: b.node.meta } }
+  | None -> b
 
 (* Same as translate_expr: we try to avoid relying on Clang-provided type information as much as
    possible *)
@@ -1621,23 +1659,20 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
       | hd :: tl -> begin
           match hd.desc, (List.hd tl).desc with
           (* Special case when we have a variable declaration followed by a
-         memset: this likely corresponds to an array initialization *)
+             memset: this likely corresponds to an array initialization *)
           | Decl [ { desc = Var vdecl; _ } ], Expr { desc = Call { callee; args }; _ }
             when is_memset callee ->
               let env', b, e = translate_vardecl_with_memset env vdecl args in
               let e2 = translate_stmt env' (Compound (List.tl tl)) in
               with_type e2.typ (ELet (maybe_align vdecl.attributes b, e, e2))
-          (* Special case when we have a malloc followed by an initializer
-         for the corresponding pointer: we rewrite this into a heap array
-         initialization *)
-          | Decl [ { desc = Var vdecl; _ } ], stmt
-            when is_malloc_vdecl vdecl && is_malloc_initializer vdecl stmt ->
-              let env', b, e = translate_vardecl_malloc env vdecl stmt in
-              let e2 = translate_stmt env' (Compound (List.tl tl)) in
+          (* We have a few special cases for `malloc`, hoisted in a separate function. *)
+          | Decl [ { desc = Var vdecl; _ } ], _ when is_malloc_vdecl vdecl <> None ->
+              let env', b, e, rest = translate_vardecl_malloc env vdecl tl in
+              let e2 = translate_stmt env' (Compound rest) in
               with_type e2.typ (ELet (maybe_align vdecl.attributes b, e, e2))
           (* Regular variable declaration case *)
           | Decl ds, _ ->
-              let rec translate_one_decl env (decls: decl list) =
+              let rec translate_one_decl env (decls : decl list) =
                 match decls with
                 | { desc = Var vdecl; _ } :: decls ->
                     let env, b, e = translate_vardecl env vdecl in
@@ -1650,10 +1685,8 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
                         b
                     in
                     with_type e2.typ (ELet (maybe_align vdecl.attributes b, adjust e b.typ, e2))
-                | _ :: _ ->
-                    failwith "This decl is not a var declaration"
-                | [] ->
-                    translate_stmt env (Compound tl)
+                | _ :: _ -> failwith "This decl is not a var declaration"
+                | [] -> translate_stmt env (Compound tl)
               in
               translate_one_decl env ds
           | stmt, _ ->
@@ -1663,7 +1696,7 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
                 with_type e2.typ (ELet (Helpers.sequence_binding (), s, e2))
               else
                 with_type e2.typ (ELet (Helpers.fresh_binder "_ignored_stmt" s.typ, s, e2))
-      end
+        end
     end
   | For { init; condition_variable; cond; inc; body } ->
       assert (condition_variable = None);
@@ -1678,20 +1711,29 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
             let body = translate_stmt env body.desc in
             with_type TUnit (EFor (b, init, cond, inc, body))
         | _ ->
-            let init = match init with None -> Helpers.eunit | Some init -> translate_stmt env init.desc in
-            let cond = match cond with None -> Helpers.etrue | Some cond -> translate_expr env cond in
-            let inc = match inc with None -> Helpers.eunit | Some inc -> translate_stmt env inc.desc in
+            let init =
+              match init with
+              | None -> Helpers.eunit
+              | Some init -> translate_stmt env init.desc
+            in
+            let cond =
+              match cond with
+              | None -> Helpers.etrue
+              | Some cond -> translate_expr env cond
+            in
+            let inc =
+              match inc with
+              | None -> Helpers.eunit
+              | Some inc -> translate_stmt env inc.desc
+            in
             let body = translate_stmt env body.desc in
-            with_type TUnit (ESequence [
-              init;
-              with_type TUnit (EWhile (
-                adjust cond TBool,
-                with_type TUnit (ESequence [
-                  body;
-                  inc
-                ])
-              ))
-            ])
+            with_type TUnit
+              (ESequence
+                 [
+                   init;
+                   with_type TUnit
+                     (EWhile (adjust cond TBool, with_type TUnit (ESequence [ body; inc ])));
+                 ])
       end
   | ForRange _ -> failwith "translate_stmt: for range"
   (* There is no null pointer in Rust. We remove branching based on null-pointer
@@ -1704,7 +1746,6 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
     end
   | If { cond = { desc = BinaryOperator { lhs; kind = NE; rhs }; _ }; then_branch; _ }
     when has_pointer_type lhs && is_null rhs -> translate_stmt env then_branch.desc
-
   (* We recognize here patterns of the shape `if x.tag == i`, when x is
      a variable whose type `typ` was annotated with the scylla_adt attribute.
      This type was previously checked to be a tagged union, with shape
@@ -1745,32 +1786,33 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
       let lid = Helpers.assert_tlid var.typ in
       let case, fs = lookup_nth_branch lid variant in
 
-      begin match fs with
-      | [] ->
-          (* This case corresponds to a constructor with an empty payload,
+      begin
+        match fs with
+        | [] ->
+            (* This case corresponds to a constructor with an empty payload,
              specified through the [empty_variant_attr] attribute *)
-          let then_e = translate_stmt env then_branch.desc in
-          let else_e = match else_branch with
-            | None -> Helpers.eunit
-            (* We translate the else branch with the old environment, without
+            let then_e = translate_stmt env then_branch.desc in
+            let else_e =
+              match else_branch with
+              | None -> Helpers.eunit
+              (* We translate the else branch with the old environment, without
                adding a binder for the pattern *)
-            | Some el -> translate_stmt env el.desc
-          in
-          let t =
-            match then_e.typ, else_e.typ with
-            | TAny, t -> t
-            | t, TAny -> t
-            | _ -> then_e.typ
-          in
+              | Some el -> translate_stmt env el.desc
+            in
+            let t =
+              match then_e.typ, else_e.typ with
+              | TAny, t -> t
+              | t, TAny -> t
+              | _ -> then_e.typ
+            in
 
-          let then_branch = [], Krml.Ast.with_type t (PCons (case, [])), then_e in
-          let else_branch = [], Krml.Ast.with_type t PWild, else_e in
-          Krml.Ast.with_type t (EMatch (Unchecked, var, [then_branch; else_branch]))
-
-      | [(name, (case_t, _))] ->
-          let binder = Helpers.fresh_binder name case_t in
-          let pat = Krml.Ast.with_type case_t (PBound 0) in
-          (* We need to add the new binder to the environment before translating
+            let then_branch = [], Krml.Ast.with_type t (PCons (case, [])), then_e in
+            let else_branch = [], Krml.Ast.with_type t PWild, else_e in
+            Krml.Ast.with_type t (EMatch (Unchecked, var, [ then_branch; else_branch ]))
+        | [ (name, (case_t, _)) ] ->
+            let binder = Helpers.fresh_binder name case_t in
+            let pat = Krml.Ast.with_type case_t (PBound 0) in
+            (* We need to add the new binder to the environment before translating
              the branches.
              We also need to be able to later retrieve the content of the variant
              constructor when accessing the corresponding field.
@@ -1781,36 +1823,35 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
              Importantly, `v!!{atom}` is not a valid variable name, and therefore does
              not conflict with existing variables.
           *)
-          let env_binder_name = binder.node.name ^ "!!" ^ show_atom_t binder.node.atom in
-          let new_env = add_var env (env_binder_name, case_t) in
-          let new_env = refine_var_case new_env varname (Some {case; var = env_binder_name}) in
+            let env_binder_name = binder.node.name ^ "!!" ^ show_atom_t binder.node.atom in
+            let new_env = add_var env (env_binder_name, case_t) in
+            let new_env = refine_var_case new_env varname (Some { case; var = env_binder_name }) in
 
-          (* We only change the state of the tagged union case to translate the if branch,
+            (* We only change the state of the tagged union case to translate the if branch,
              which is the one where we checked the tag of the variable *)
-          (* TODO: Should we sanity-check that old is None? As, if we are already in
+            (* TODO: Should we sanity-check that old is None? As, if we are already in
              a tagged union case, there is no need for rechecking the tag? *)
-          let then_e = translate_stmt new_env then_branch.desc in
+            let then_e = translate_stmt new_env then_branch.desc in
 
-          let else_e = match else_branch with
-            | None -> Helpers.eunit
-            (* We translate the else branch with the old environment, without
+            let else_e =
+              match else_branch with
+              | None -> Helpers.eunit
+              (* We translate the else branch with the old environment, without
                adding a binder for the pattern *)
-            | Some el -> translate_stmt env el.desc
-          in
-          let t =
-            match then_e.typ, else_e.typ with
-            | TAny, t -> t
-            | t, TAny -> t
-            | _ -> then_e.typ
-          in
+              | Some el -> translate_stmt env el.desc
+            in
+            let t =
+              match then_e.typ, else_e.typ with
+              | TAny, t -> t
+              | t, TAny -> t
+              | _ -> then_e.typ
+            in
 
-          let then_branch = [binder], Krml.Ast.with_type t (PCons (case, [pat])), then_e in
-          let else_branch = [], Krml.Ast.with_type t PWild, else_e in
-          Krml.Ast.with_type t (EMatch (Unchecked, var, [then_branch; else_branch]))
-
-      | _ -> failwith "Tagged union variant has more than one value in payload"
+            let then_branch = [ binder ], Krml.Ast.with_type t (PCons (case, [ pat ])), then_e in
+            let else_branch = [], Krml.Ast.with_type t PWild, else_e in
+            Krml.Ast.with_type t (EMatch (Unchecked, var, [ then_branch; else_branch ]))
+        | _ -> failwith "Tagged union variant has more than one value in payload"
       end
-
   | If { init; condition_variable; cond; then_branch; else_branch } ->
       (* These two fields should be specific to C++ *)
       assert (init = None);
@@ -1869,8 +1910,7 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
         | None -> EReturn Helpers.eunit
         | Some e -> EReturn (adjust (translate_expr env e) env.ret_t))
   | Decl _ -> failwith "translate_stmt: decl"
-  | Expr e ->
-      translate_expr env e
+  | Expr e -> translate_expr env e
   | Try _ -> failwith "translate_stmt: try"
   | AttributedStmt _ -> failwith "translate_stmt: AttributedStmt"
   | UnknownStmt _ -> failwith "translate_stmt: UnknownStmt"
@@ -1882,7 +1922,7 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
    [t] corresponds to the type of the expression we are pattern-matching on, to
    direct the translation
    *)
-and translate_branches (env : env) (t: typ) (s : stmt_desc) : Krml.Ast.branches =
+and translate_branches (env : env) (t : typ) (s : stmt_desc) : Krml.Ast.branches =
   match s with
   | Compound [ { desc = Default body; _ } ] ->
       let body = translate_stmt env body.desc in
@@ -1942,8 +1982,9 @@ let translate_fundecl (fdecl : function_decl) =
       let lid = Option.get (lid_of_name name) in
       let binders =
         List.map2
-          (fun (b : binder) { mut ; _ } ->
-              let m = !mut in { b with node = { b.node with mut = m } })
+          (fun (b : binder) { mut; _ } ->
+            let m = !mut in
+            { b with node = { b.node with mut = m } })
           binders (List.rev env.vars)
       in
 
@@ -1953,7 +1994,6 @@ let translate_fundecl (fdecl : function_decl) =
       let decl = Krml.Ast.(DFunction (None, flags, 0, 0, ret_type, lid, binders, body)) in
       (* Krml.KPrint.bprintf "Resulting decl %a\n" Krml.PrintAst.pdecl decl; *)
       Some decl
-
 
 (* Translate a field declaration inside a struct type declaration *)
 let translate_field (decl : decl) =
@@ -1969,18 +2009,18 @@ let translate_field (decl : decl) =
   | _ -> failwith "Struct declarations should only contain fields"
 
 (* Translate a union field to a variant *)
-let translate_variant (decl: decl) : Krml.Ast.branch_t =
+let translate_variant (decl : decl) : Krml.Ast.branch_t =
   let name, t_mut = translate_field decl in
-  Option.get name, [("v", t_mut)]
+  Option.get name, [ "v", t_mut ]
 
 (* Translate a union field into variant branches.
    [empty_ctr_names] corresponds to a list of additional
    constructors with no payload, appended at the end of the
    datatype.
  *)
-let translate_field_union (decl: decl) (empty_ctr_names: string list) =
+let translate_field_union (decl : decl) (empty_ctr_names : string list) =
   match decl.desc with
-  | RecordDecl {keyword = Union; fields; _} ->
+  | RecordDecl { keyword = Union; fields; _ } ->
       let branches = List.map translate_variant fields in
       let empty_ctrs = List.map (fun s -> s, []) empty_ctr_names in
       branches @ empty_ctrs
@@ -1998,14 +2038,14 @@ let name_of_decl (decl : decl) : string =
 
 exception Unsupported
 
-let filename_of_decl (decl: decl) =
+let filename_of_decl (decl : decl) =
   let loc = Clang.Ast.location_of_node decl |> Clang.Ast.concrete_of_source_location File in
   loc.filename
 
 let has_prefix_in filename lib_dirs =
   List.exists (fun x -> String.starts_with ~prefix:x filename) lib_dirs
 
-let decl_error_handler ?(ignored_dirs=[]) (decl : decl) default f =
+let decl_error_handler ?(ignored_dirs = []) (decl : decl) default f =
   if Krml.Options.debug "Verbose" then
     Format.printf "Visiting declaration %s\n%a@." (name_of_decl decl) Clang.Decl.pp decl;
   try f ()
@@ -2023,7 +2063,8 @@ let decl_error_handler ?(ignored_dirs=[]) (decl : decl) default f =
         Format.eprintf "%s\n@." (String.make 80 '-');
         default
       end
-    end else
+    end
+    else
       default
 
 (* Computes the argument and return types of a function potentially marked as [[scylla_opaque]],
@@ -2046,7 +2087,8 @@ let compute_external_type (fdecl : function_decl) : binder list * typ =
     | Some (muts, mut_ret) ->
         (* In Ast, the flag set to true represents a constant, immutable array.
          The mutability flag is the converse, so we need to take the negation *)
-        List.map2 (fun mut arg -> { arg with typ = set_const arg.typ (not mut) }) muts binders, set_const ret_type (not mut_ret)
+        ( List.map2 (fun mut arg -> { arg with typ = set_const arg.typ (not mut) }) muts binders,
+          set_const ret_type (not mut_ret) )
   in
   binders, ret_type
 
@@ -2081,11 +2123,11 @@ let translate_decl (decl : decl) =
         if Attributes.has_expose_attr vdecl.attributes then
           exposed_globals := LidSet.add lid !exposed_globals;
         Some (DGlobal (flags, lid, 0 (* no polymorphic constant *), typ, e))
-  | RecordDecl _ ->
-      None
+  | RecordDecl _ -> None
   | TypedefDecl { name; _ } ->
       let lid = Option.get (lid_of_name name) in
-      if Attributes.decl_is_container decl then container_types := LidSet.add lid !container_types;
+      if Attributes.decl_is_container decl then
+        container_types := LidSet.add lid !container_types;
       begin
         match LidMap.find_opt lid !type_def_map with
         | Some def -> Some (DType (lid, [], 0, 0, force_type_def_lazy def))
@@ -2142,10 +2184,7 @@ let prepopulate_type_map ignored_dirs (decl : decl) =
             translate_params fdecl, translate_typ fdecl.function_type.result
         in
         Helpers.fold_arrow (List.map (fun x -> x.typ) binders) ret_type
-
-    | Var vdecl ->
-        translate_typ vdecl.var_type
-
+    | Var vdecl -> translate_typ vdecl.var_type
     | _ -> TAny (* FIXME: should be in a separate map since types have no types *)
   in
   (* Krml.KPrint.bprintf "Adding into type map %s --> %a\n" name ptyp t; *)
@@ -2157,7 +2196,7 @@ type filename = string
    to. *)
 type deduplicated_decls = (decl * filename) StringMap.t
 
-let prepopulate_type_maps (ignored_dirs: string list) (decls: deduplicated_decls) (decl: decl) =
+let prepopulate_type_maps (ignored_dirs : string list) (decls : deduplicated_decls) (decl : decl) =
   decl_error_handler ~ignored_dirs decl () @@ fun () ->
   let lid = Option.get (lid_of_name (name_of_decl decl)) in
 
@@ -2178,16 +2217,16 @@ let prepopulate_type_maps (ignored_dirs: string list) (decls: deduplicated_decls
       (* Krml.KPrint.bprintf "typedef %s --> %a\n" tdecl.name plid lid; *)
       let def =
         match tdecl.underlying_type.desc with
-        | Elaborated { keyword = Struct; named_type = { cxtype; desc = Record { name; _ }; _ }; _ } ->
+        | Elaborated { keyword = Struct; named_type = { cxtype; desc = Record { name; _ }; _ }; _ }
+          -> (
             (* When writing `typedef struct S { ... } T;` in C, we actually see two declarations:
               - first, one for the `struct S { ... }` part (case RecordDecl)
               - second, one for the the `typedef struct S T;` part (case TypedefDecl).
               We are now visiting the latter. Because our deduplicated map contains the most
               informative version of the former, we can look it up to get the definition.
             *)
-
             let def =
-              if (get_id_name name) <> "" then begin
+              if get_id_name name <> "" then begin
                 (* `typedef struct foo_s { ... } foo;`: clang processes this as two separate
                    declarations, and references to `foo` later on appear as references to `struct
                    foo_s` -- thus, we record a mapping `struct S` ~~> `T` in our map, so that
@@ -2195,7 +2234,8 @@ let prepopulate_type_maps (ignored_dirs: string list) (decls: deduplicated_decls
                    the krml Ast. *)
                 elaborated_map := ElaboratedMap.add (name, `Struct) lid !elaborated_map;
                 fst (StringMap.find (get_id_name name) decls)
-              end else
+              end
+              else
                 (* `typedef struct { ... } foo;`: clang processes this as two separate declarations,
                    except now we can't refer to the struct by its name (meaning, we can't find it in
                    the map! instead, we use the cursor; further references to this type will appear as
@@ -2211,86 +2251,89 @@ let prepopulate_type_maps (ignored_dirs: string list) (decls: deduplicated_decls
                 need the lazy for the translation of type definitions, e.g.,
                 when a struct field refers to another type.
             *)
-            (match def with
-                | { desc = RecordDecl { fields; attributes; _ }; _ }
-                      when Attributes.has_tuple_attr attributes ->
-                    Some (CTuple (lazy (List.map translate_field fields)))
-                | { desc = RecordDecl { fields; attributes; _ }; _ }
-                      when Attributes.has_slice_attr attributes ->
+            match def with
+            | { desc = RecordDecl { fields; attributes; _ }; _ }
+              when Attributes.has_tuple_attr attributes ->
+                Some (CTuple (lazy (List.map translate_field fields)))
+            | { desc = RecordDecl { fields; attributes; _ }; _ }
+              when Attributes.has_slice_attr attributes ->
+                Some
+                  (CSlice
+                     (lazy
+                       (let fields = List.map translate_field fields in
+                        match fields with
+                        | [ (Some "elt", (TBuf (t, _), _)); (Some "len", (TInt _, _)) ] -> t
+                        | _ -> fatal_error "A slice type should have two fields called elt and len")))
+            | { desc = RecordDecl { fields; attributes; _ }; _ }
+              when Attributes.has_adt_attr attributes ->
+                Some
+                  (CVariant
+                     (lazy
+                       (match fields with
+                       | [ tag; union ] ->
+                           let name, (ty, _) = translate_field tag in
+                           if name <> Some "tag" then
+                             failwith "Tag of tagged union must be called tag";
+                           begin
+                             match ty with
+                             | TInt _ -> ()
+                             | _ -> failwith "tag must be an integer"
+                           end;
+                           let empty_ctr_names = Attributes.retrieve_empty_variants attributes in
+                           let variant = translate_field_union union empty_ctr_names in
+                           variant
+                       | _ ->
+                           failwith
+                             "Tagged union translation to an ADT assumes that the structs contains \
+                              two field: the tag, and the union")))
+            | { desc = RecordDecl { fields; attributes; _ }; _ } ->
+                Some
+                  (CFlat
+                     (lazy
+                       (let fields = List.map translate_field fields in
 
-                    Some (CSlice (lazy (
-                      let fields = List.map translate_field fields in
-                      match fields with
-                      | [(Some "elt", (TBuf (t, _), _)) ; (Some "len", (TInt _, _)) ] -> t
-                      | _ ->
-                          fatal_error "A slice type should have two fields called elt and len"
-                    )))
+                        if Attributes.has_box_attr attributes then
+                          boxed_types := LidSet.add lid !boxed_types;
 
-                | { desc = RecordDecl { fields; attributes; _ }; _ }
-                      when Attributes.has_adt_attr attributes ->
-                    Some (CVariant (lazy (match fields with
-                    | [tag; union] ->
-                        let name, (ty, _) = translate_field tag in
-                        if name <> Some "tag" then
-                          failwith "Tag of tagged union must be called tag";
-                        begin match ty with | TInt _ -> () | _ -> failwith "tag must be an integer" end;
-                        let empty_ctr_names = Attributes.retrieve_empty_variants attributes in
-                        let variant = translate_field_union union empty_ctr_names in
-                        variant
-                    | _ -> failwith "Tagged union translation to an ADT assumes that the structs contains two field: the tag, and the union"
-                    )))
-                | { desc = RecordDecl { fields; attributes; _ }; _ } ->
-                    Some (CFlat (lazy (
-                      let fields = List.map translate_field fields in
-
-                      if Attributes.has_box_attr attributes then
-                        boxed_types := LidSet.add lid !boxed_types;
-
-                      (* By default, we compile C structs to Rust structs with a C layout. This could
+                        (* By default, we compile C structs to Rust structs with a C layout. This could
                          be changed, for instance, either with a command-line flag, or by defining a
                          new attribute __attribute__((annotate("scylla_c_layout"))) *)
-                      attributes_map := add_to_list_lid lid (Printf.sprintf "repr(C)") !attributes_map;
+                        attributes_map :=
+                          add_to_list_lid lid (Printf.sprintf "repr(C)") !attributes_map;
 
-                      (* Carry alignment down to Rust *)
-                      begin match Attributes.retrieve_alignment attributes with
-                      | Some n ->
-                          attributes_map := add_to_list_lid lid (Printf.sprintf "repr(align(%d))" n) !attributes_map
-                      | None ->
-                          ()
-                      end;
+                        (* Carry alignment down to Rust *)
+                        begin
+                          match Attributes.retrieve_alignment attributes with
+                          | Some n ->
+                              attributes_map :=
+                                add_to_list_lid lid
+                                  (Printf.sprintf "repr(align(%d))" n)
+                                  !attributes_map
+                          | None -> ()
+                        end;
 
-                      fields
-                    )))
-                | _ ->
-                    fatal_error "unknown struct definition: %s" (get_id_name name)
-                )
+                        fields)))
+            | _ -> fatal_error "unknown struct definition: %s" (get_id_name name))
         | Pointer t ->
-            Some (CAbbrev
-              (lazy
-                (let ty = translate_typ t in
-                  (TBuf (ty, t.const)))))
-        | BuiltinType t ->
-            Some (CAbbrev (lazy (translate_builtin_typ t)))
-        | Typedef { name; _ } ->
-            Some (CAbbrev (lazy
-                (get_id_name name |> translate_typ_name)))
+            Some
+              (CAbbrev
+                 (lazy
+                   (let ty = translate_typ t in
+                    TBuf (ty, t.const))))
+        | BuiltinType t -> Some (CAbbrev (lazy (translate_builtin_typ t)))
+        | Typedef { name; _ } -> Some (CAbbrev (lazy (get_id_name name |> translate_typ_name)))
         | _ ->
             (* Unsupported *)
             (* Krml.KPrint.bprintf "%a is unsupported\n" plid lid; *)
             None
       in
       Option.iter (fun def -> type_def_map := LidMap.add lid def !type_def_map) def
+  | _ -> ()
 
-  | _ ->
-      ()
+let stem_of_file f = f |> Filename.basename |> Filename.remove_extension
+let file_of_loc (loc : Clang.concrete_location) = loc.filename |> stem_of_file
 
-let stem_of_file f =
-  f |> Filename.basename |> Filename.remove_extension
-
-let file_of_loc (loc: Clang.concrete_location) =
-  loc.filename |> stem_of_file
-
-let decl_is_better ~(old_decl:decl) (decl: decl) =
+let decl_is_better ~(old_decl : decl) (decl : decl) =
   (* TODO: we are assuming global consistency, i.e. that for all the translation units passed on the
      command-line, it is never the case that two definitions exist in two translation units, with
      identical names, but with different meanings. This is of course not true (static inline, extern
@@ -2305,32 +2348,33 @@ let decl_is_better ~(old_decl:decl) (decl: decl) =
   | RecordDecl { fields = []; _ }, RecordDecl { fields = _ :: _; _ } -> true
   | _ -> false
 
-let assign_file (file: translation_unit) (decl: decl) =
+let assign_file (file : translation_unit) (decl : decl) =
   match decl.desc with
-  | Function fdecl when fdecl.body <> None && not fdecl.inline_specified ->
-      file.desc.filename
-  | _ ->
-      filename_of_decl decl
+  | Function fdecl when fdecl.body <> None && not fdecl.inline_specified -> file.desc.filename
+  | _ -> filename_of_decl decl
 
 (* A first pass that considers all possible declarations for a given name, then retains the most
    precise one. For instance, the prototype for `f` might be in header Foo.h but its
    definition might be in Bar.c -- this first pass considers all possible declarations for a given
    name then keeps the "best" one. *)
-let pick_most_suitable (files: translation_unit list): deduplicated_decls =
-  List.fold_left (fun map (file: translation_unit) ->
-    List.fold_left (fun map (decl: decl) ->
-      let name = name_of_decl decl in
-      StringMap.update name (fun old_entry ->
-        match old_entry with
-        | None -> Some (decl, assign_file file decl)
-        | Some ((old_decl, _) as old_entry) ->
-            if decl_is_better ~old_decl decl then
-              Some (decl, assign_file file decl)
-            else
-              Some old_entry
-      ) map
-    ) map file.desc.items
-  ) StringMap.empty files
+let pick_most_suitable (files : translation_unit list) : deduplicated_decls =
+  List.fold_left
+    (fun map (file : translation_unit) ->
+      List.fold_left
+        (fun map (decl : decl) ->
+          let name = name_of_decl decl in
+          StringMap.update name
+            (fun old_entry ->
+              match old_entry with
+              | None -> Some (decl, assign_file file decl)
+              | Some ((old_decl, _) as old_entry) ->
+                  if decl_is_better ~old_decl decl then
+                    Some (decl, assign_file file decl)
+                  else
+                    Some old_entry)
+            map)
+        map file.desc.items)
+    StringMap.empty files
 
 (* Declarations, grouped by filename *)
 type grouped_decls = (string * decl list) list
@@ -2339,14 +2383,17 @@ type grouped_decls = (string * decl list) list
    relying on the fact that we now know the "best" location for a definition (first pass). This also
    groups declarations by file. Note that we have totally lost the order of declarations within a
    file here. *)
-let split_into_files (lib_dirs : string list) (decls : deduplicated_decls): grouped_decls =
+let split_into_files (lib_dirs : string list) (decls : deduplicated_decls) : grouped_decls =
   (* If this belongs to the C library, do not extract it. *)
-  let decls = StringMap.filter (fun _ (_, filename) ->
-    if has_prefix_in filename lib_dirs then
-      false
-    else
-      true
-  ) decls in
+  let decls =
+    StringMap.filter
+      (fun _ (_, filename) ->
+        if has_prefix_in filename lib_dirs then
+          false
+        else
+          true)
+      decls
+  in
 
   let add_decl _ (decl, loc) acc =
     (* Remember the file that this declaration is conceptually associated to *)
@@ -2361,25 +2408,24 @@ let split_into_files (lib_dirs : string list) (decls : deduplicated_decls): grou
 (* Third pass. Now that names can be resolved properly, we fill various type maps, and precompute type
    definitions while we're at it -- this makes sure type aliases are known, since they need to be
    substituted away (normalized) prior to doing the type-directed expression translation. *)
-let fill_type_maps (ignored_dirs : string list) (decls: deduplicated_decls) =
-  StringMap.iter (fun _ (decl, _) ->
-    prepopulate_type_maps ignored_dirs decls decl
-  ) decls;
+let fill_type_maps (ignored_dirs : string list) (decls : deduplicated_decls) =
+  StringMap.iter (fun _ (decl, _) -> prepopulate_type_maps ignored_dirs decls decl) decls;
   (* This can only be done AFTER abbreviations are recorded, otherwise, the annotations cannot be
      applied properly. *)
-  StringMap.iter (fun _ (decl, _) ->
-    prepopulate_type_map ignored_dirs decl
-  ) decls
+  StringMap.iter (fun _ (decl, _) -> prepopulate_type_map ignored_dirs decl) decls
 
 (* Final pass. Actually emit definitions. *)
 let translate_compil_units (ast : grouped_decls) (command_line_args : string list) =
   let file_args = List.map stem_of_file command_line_args in
-  !boxed_types, !container_types, List.map (fun (file, decls) ->
-    if List.mem file file_args then
-      file, List.filter_map translate_decl decls
-    else
-      file, List.filter_map translate_external_decl decls
-  ) ast
+  ( !boxed_types,
+    !container_types,
+    List.map
+      (fun (file, decls) ->
+        if List.mem file file_args then
+          file, List.filter_map translate_decl decls
+        else
+          file, List.filter_map translate_external_decl decls)
+      ast )
 
 let read_file (filename : string) : translation_unit =
   Format.printf "Clang version is %s\n@." (Clang.get_clang_version ());

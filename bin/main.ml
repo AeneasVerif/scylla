@@ -26,10 +26,13 @@ Supported options:|}
   let parse_bundle s =
     let open Krml.Bundle in
     let apis, pats, attrs = Krml.Parsers.bundle s in
-    apis, List.map (function
-      | Lid ([], m) -> Module [m]
-      | _ -> failwith "no dots in C to Rust bundles"
-    ) pats, attrs
+    ( apis,
+      List.map
+        (function
+          | Lid ([], m) -> Module [ m ]
+          | _ -> failwith "no dots in C to Rust bundles")
+        pats,
+      attrs )
   in
   (* Boxed types need to be explicitly annotated *)
   Krml.Options.no_box := true;
@@ -39,8 +42,9 @@ Supported options:|}
       "--debug", Arg.String debug, " debug options, to be passed to krml";
       "--output", Arg.Set_string Krml.Options.tmpdir, " output directory in which to write files";
       "--ccopts", Arg.String ccopts, " options to be passed to clang, separated by commas";
-      "--bundle", Arg.String (fun s -> prepend Krml.Options.bundle (parse_bundle s)), " \
-        see krml documentation";
+      ( "--bundle",
+        Arg.String (fun s -> prepend Krml.Options.bundle (parse_bundle s)),
+        " see krml documentation" );
       "--auto-box", Arg.Clear Krml.Options.no_box, " enable box heuristics for struct translation";
       ( "--errors_as_warnings",
         Arg.Clear Scylla.Options.fatal_errors,
@@ -87,15 +91,27 @@ Supported options:|}
   let deduped_files = Scylla.ClangToAst.pick_most_suitable files in
   let lib_dirs = get_sdkroot () @ Clang.default_include_directories () in
   let files = Scylla.ClangToAst.split_into_files lib_dirs deduped_files in
-  Scylla.ClangToAst.fill_type_maps (if !Scylla.Options.ignore_lib_errors then lib_dirs else []) deduped_files;
-  let boxed_types, container_types, files = Scylla.ClangToAst.translate_compil_units files command_line_args in
+  Scylla.ClangToAst.fill_type_maps
+    (if !Scylla.Options.ignore_lib_errors then
+       lib_dirs
+     else
+       [])
+    deduped_files;
+  let boxed_types, container_types, files =
+    Scylla.ClangToAst.translate_compil_units files command_line_args
+  in
   (* Needed to handle tuples and slices *)
   let files = Krml.Inlining.inline_type_abbrevs files in
 
-  let pulse_builtin = "Pulse_Lib_Slice", [
-    Krml.Builtin.mk_val ~nvars:1 [ "Pulse"; "Lib"; "Slice" ] "len" Krml.Ast.(TArrow (TBound 0, TInt SizeT)) ;
-    Krml.Builtin.mk_val ~nvars:1 [ "Pulse"; "Lib"; "Slice" ] "split" Krml.Ast.(TArrow (TBound 0, TArrow (TInt SizeT, TTuple [TBound 0; TBound 0]))) ;
-  ] in
+  let pulse_builtin =
+    ( "Pulse_Lib_Slice",
+      [
+        Krml.Builtin.mk_val ~nvars:1 [ "Pulse"; "Lib"; "Slice" ] "len"
+          Krml.Ast.(TArrow (TBound 0, TInt SizeT));
+        Krml.Builtin.mk_val ~nvars:1 [ "Pulse"; "Lib"; "Slice" ] "split"
+          Krml.Ast.(TArrow (TBound 0, TArrow (TInt SizeT, TTuple [ TBound 0; TBound 0 ])));
+      ] )
+  in
 
   let files = pulse_builtin :: Krml.Builtin.lowstar_ignore :: files in
 
@@ -138,13 +154,19 @@ Supported options:|}
   (* Addition of derives has to be done this way because we have a map from Ast lids to the derives
      we want, and if we try to do this after AstToMiniRust then we have Rust names that we do not
      know how to match with Ast names. *)
-  let files = Krml.AstToMiniRust.translate_files_with_metadata files {
-    boxed_types;
-    derives = Krml.Idents.LidMap.map (fun x -> List.map (fun x -> Krml.MiniRust.Custom x) x) !Scylla.ClangToAst.deriving_traits;
-    attributes = !Scylla.ClangToAst.attributes_map;
-    static = !Scylla.ClangToAst.exposed_globals;
-    no_mangle = !Scylla.ClangToAst.exposed_globals;
-  } in
+  let files =
+    Krml.AstToMiniRust.translate_files_with_metadata files
+      {
+        boxed_types;
+        derives =
+          Krml.Idents.LidMap.map
+            (fun x -> List.map (fun x -> Krml.MiniRust.Custom x) x)
+            !Scylla.ClangToAst.deriving_traits;
+        attributes = !Scylla.ClangToAst.attributes_map;
+        static = !Scylla.ClangToAst.exposed_globals;
+        no_mangle = !Scylla.ClangToAst.exposed_globals;
+      }
+  in
   let files = Krml.OptimizeMiniRust.cleanup_minirust files in
   let files = Krml.OptimizeMiniRust.infer_mut_borrows files in
   let files = Krml.OptimizeMiniRust.simplify_minirust files in
