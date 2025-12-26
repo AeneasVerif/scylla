@@ -1,7 +1,10 @@
+#include "enum.h"
+
 typedef enum E {
   A, B
 } E;
 
 int _main() {
-  return A == B;
+  F c = C;
+  return A == B || c == D;
 }
