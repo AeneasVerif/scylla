@@ -240,9 +240,12 @@ let find_var env name =
 (* TYPES *)
 
 let lid_of_name name =
-  match DeclMap.find_opt (Ordinary, name) !name_map with
-  | Some path -> Some ([ path ], name)
+  match DeclMap.find_opt name !name_map with
+  | Some path -> Some ([ path ], snd name)
   | None -> None
+
+let lid_of_ordinary_name name =
+  lid_of_name (Ordinary, name)
 
 let translate_typ_name = function
   | "size_t" -> Helpers.usize
@@ -256,7 +259,7 @@ let translate_typ_name = function
   | "uint64_t" -> Helpers.uint64
   | s -> (
       (* We first try to find the type name in the environment *)
-      match lid_of_name s with
+      match lid_of_ordinary_name s with
       | Some lid -> TQualified lid
       | None ->
           (* If the type is not found in the environment, we assume
@@ -2021,7 +2024,7 @@ let translate_fundecl (fdecl : function_decl) =
         else
           []
       in
-      let lid = Option.get (lid_of_name name) in
+      let lid = Option.get (lid_of_ordinary_name name) in
       let binders =
         List.map2
           (fun (b : binder) { mut; _ } ->
@@ -2129,7 +2132,7 @@ let translate_external_fundecl (fdecl : function_decl) =
   let name = get_id_name fdecl.name in
   let binders, ret_type = compute_external_type fdecl in
   let fn_type = Helpers.fold_arrow (List.map (fun x -> x.typ) binders) ret_type in
-  let lid = Option.get (lid_of_name name) in
+  let lid = Option.get (lid_of_ordinary_name name) in
 
   Krml.Ast.(
     DExternal (None, [], 0, 0, lid, fn_type, List.map (fun x -> Krml.Ast.(x.node.name)) binders))
@@ -2149,7 +2152,7 @@ let translate_decl (decl : decl) =
         None
       else
         let _, _, e = translate_vardecl empty_env vdecl in
-        let lid = Option.get (lid_of_name vdecl.var_name) in
+        let lid = Option.get (lid_of_ordinary_name vdecl.var_name) in
         let typ = translate_typ vdecl.var_type in
         (* TODO: Flags *)
         let flags = [] in
@@ -2158,7 +2161,7 @@ let translate_decl (decl : decl) =
         Some (DGlobal (flags, lid, 0 (* no polymorphic constant *), typ, e))
   | RecordDecl _ -> None
   | TypedefDecl { name; _ } ->
-      let lid = Option.get (lid_of_name name) in
+      let lid = Option.get (lid_of_ordinary_name name) in
       if Attributes.decl_is_container decl then
         container_types := LidSet.add lid !container_types;
       begin
@@ -2232,7 +2235,7 @@ type deduplicated_decls = (decl * filename) DeclMap.t
 
 let prepopulate_type_maps (ignored_dirs : string list) (decls : deduplicated_decls) (decl : decl) =
   decl_error_handler ~ignored_dirs decl () @@ fun () ->
-  let lid = Option.get (lid_of_name (snd (DeclName.of_decl decl))) in
+  let lid = Option.get (lid_of_name (DeclName.of_decl decl)) in
 
   (* declarations may be annotated with scylla_default *)
   if Attributes.decl_has_default decl then
@@ -2247,7 +2250,7 @@ let prepopulate_type_maps (ignored_dirs : string list) (decls : deduplicated_dec
          We substitute type abbreviations on the fly, via normalize_type. This allows us to match
          synthesized type against expected type accurately during the translation, which in turn
          allows us to insert casts in suitable places. *)
-      let lid = Option.get (lid_of_name tdecl.name) in
+      let lid = Option.get (lid_of_ordinary_name tdecl.name) in
       (* Krml.KPrint.bprintf "typedef %s --> %a\n" tdecl.name plid lid; *)
       let def =
         match tdecl.underlying_type.desc with
