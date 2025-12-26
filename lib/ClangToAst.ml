@@ -54,6 +54,9 @@ module DeclName = struct
     | Var desc -> Ordinary, desc.var_name
     | _ -> Ordinary, "unknown"
 
+  let of_enum_constant (constant: enum_constant): t =
+    Ordinary, constant.desc.constant_name
+
   (* For use with Format *)
   let pp (fmt: Format.formatter) (ns, n) =
     match ns with
@@ -81,7 +84,7 @@ module DeclMap = Map.Make(DeclName)
 let name_map : string DeclMap.t ref = ref DeclMap.empty
 
 (* This domain of this map is functions and global variables. *)
-let global_type_map : typ StringMap.t ref = ref StringMap.empty
+let global_type_map : (typ * [ `Enum | `GlobalOrFun ]) StringMap.t ref = ref StringMap.empty
 
 (* A map from an elaborated type reference (e.g. `struct S`) to the lid it has been assigned in the
  translation -- we always eliminate elaborated types in favor of lids. *)
@@ -230,9 +233,11 @@ let find_var env name =
   | Not_found -> (
       try
         let path = DeclMap.find (Ordinary, name) !name_map in
-        let t = StringMap.find name !global_type_map in
+        let t, kind = StringMap.find name !global_type_map in
         (* FIXME handle mutable globals *)
-        with_type t (EQualified ([ path ], name)), ref false, None
+        match kind with
+        | `GlobalOrFun -> with_type t (EQualified ([ path ], name)), ref false, None
+        | `Enum -> with_type t (EEnum ([ path ], name)), ref false, None
       with Not_found ->
         Printf.eprintf "Could not find variable %s\n" name;
         raise Not_found)
@@ -436,7 +441,7 @@ let rec translate_typ (typ : qual_type) =
   | Record _ -> failwith "translate_typ: record"
   | Typedef { name; _ } -> get_id_name name |> translate_typ_name
   | BuiltinType t -> translate_builtin_typ t
-  | Elaborated { keyword = Struct; named_type = { desc = Record { name; _ }; _ }; _ } -> begin
+  | Elaborated { keyword = Struct | Enum; named_type = { desc = (Record { name; _ } | Enum { name; _ }); _ }; _ } -> begin
       assert (get_id_name name <> "");
       try TQualified (ElaboratedMap.find (name, `Struct) !elaborated_map)
       with Not_found ->
@@ -2169,6 +2174,7 @@ let translate_decl (decl : decl) =
         | Some def -> Some (DType (lid, [], 0, 0, force_type_def_lazy def))
         | None -> None
       end
+  | EnumDecl _ -> None
   | _ -> raise Unsupported
 
 (* We are traversing an external module. We filter it to only preserve
@@ -2220,12 +2226,14 @@ let prepopulate_type_map ignored_dirs (decl : decl) =
           else
             translate_params fdecl, translate_typ fdecl.function_type.result
         in
-        Helpers.fold_arrow (List.map (fun x -> x.typ) binders) ret_type
-    | Var vdecl -> translate_typ vdecl.var_type
-    | _ -> TAny (* FIXME: should be in a separate map since types have no types *)
+        Some (Helpers.fold_arrow (List.map (fun x -> x.typ) binders) ret_type)
+    | Var vdecl -> Some (translate_typ vdecl.var_type)
+    | _ -> None
   in
   (* Krml.KPrint.bprintf "Adding into type map %s --> %a\n" name ptyp t; *)
-  global_type_map := StringMap.add name t !global_type_map
+  Option.iter (fun t ->
+    global_type_map := StringMap.add name (t, `GlobalOrFun) !global_type_map
+  ) t
 
 type filename = string
 
@@ -2254,7 +2262,7 @@ let prepopulate_type_maps (ignored_dirs : string list) (decls : deduplicated_dec
       (* Krml.KPrint.bprintf "typedef %s --> %a\n" tdecl.name plid lid; *)
       let def =
         match tdecl.underlying_type.desc with
-        | Elaborated { keyword = Struct; named_type = { cxtype; desc = Record { name; _ }; _ }; _ }
+        | Elaborated { keyword = (Struct | Enum); named_type = { cxtype; desc = (Record { name; _ } | Enum { name; _ }); _ }; _ }
           -> (
             (* When writing `typedef struct S { ... } T;` in C, we actually see two declarations:
               - first, one for the `struct S { ... }` part (case RecordDecl)
@@ -2350,6 +2358,14 @@ let prepopulate_type_maps (ignored_dirs : string list) (decls : deduplicated_dec
                         end;
 
                         fields)))
+            | { desc = EnumDecl { constants; attributes = _; _ }; _ } ->
+                Some (CEnum (lazy (List.map (fun (constant: enum_constant)  ->
+                  Option.get (lid_of_ordinary_name constant.desc.constant_name), Option.map (fun (e: expr) ->
+                    match e.desc with
+                    | IntegerLiteral n -> Z.of_string (Clang.Ast.string_of_integer_literal n)
+                    | _ -> fatal_error "unsupport default value for enum case"
+                  ) constant.desc.constant_init
+                ) constants)))
             | _ -> fatal_error "unknown struct definition: %s" (get_id_name name))
         | Pointer t ->
             Some
@@ -2436,6 +2452,12 @@ let split_into_files (lib_dirs : string list) (decls : deduplicated_decls) : gro
     (* Remember the file that this declaration is conceptually associated to *)
     (* Krml.KPrint.bprintf "Declaration %s goes into file %s\n" (name_of_decl decl) (stem_of_file loc); *)
     name_map := DeclMap.add (DeclName.of_decl decl) (stem_of_file loc) !name_map;
+    (* Enum constants also get a name allocated, in the ordinary namespace, too *)
+    match decl.desc with
+    | EnumDecl { constants; _ } ->
+        List.iter (fun c -> name_map := DeclMap.add (DeclName.of_enum_constant c) (stem_of_file loc) !name_map) constants
+    | _ -> ()
+    ; ;
     (* Group this declaration with others that also "belong" to this file *)
     add_to_list (stem_of_file loc) decl acc
   in
