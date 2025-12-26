@@ -2248,7 +2248,7 @@ let prepopulate_type_maps (ignored_dirs : string list) (decls : deduplicated_dec
          synthesized type against expected type accurately during the translation, which in turn
          allows us to insert casts in suitable places. *)
       let lid = Option.get (lid_of_name tdecl.name) in
-      Krml.KPrint.bprintf "typedef %s --> %a\n" tdecl.name plid lid;
+      (* Krml.KPrint.bprintf "typedef %s --> %a\n" tdecl.name plid lid; *)
       let def =
         match tdecl.underlying_type.desc with
         | Elaborated { keyword = Struct; named_type = { cxtype; desc = Record { name; _ }; _ }; _ }
