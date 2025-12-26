@@ -905,6 +905,11 @@ let mk_binop lhs kind rhs =
               EBufDiff (lhs', apply_op Add rhs' rhs)
           | _ -> EBufDiff (lhs, rhs)
         end
+  | _, (EQ | NE) when lhs.typ = rhs.typ ->
+      let applied_typ = Helpers.fold_arrow [ lhs.typ; rhs.typ ] TBool in
+      let poly_op = match kind with EQ -> Krml.Constant.PEq | NE -> PNeq | _ -> assert false in
+      let op = with_type applied_typ (EPolyComp (poly_op, lhs.typ)) in
+      with_type TBool (EApp (op, [ lhs; rhs ]))
   | _ -> apply_op kind lhs rhs
 
 (* Translate expression [e].
@@ -2360,6 +2365,7 @@ let prepopulate_type_maps (ignored_dirs : string list) (decls : deduplicated_dec
                         fields)))
             | { desc = EnumDecl { constants; attributes = _; _ }; _ } ->
                 Some (CEnum (lazy (List.map (fun (constant: enum_constant)  ->
+                  global_type_map := StringMap.add constant.desc.constant_name (TQualified lid, `Enum) !global_type_map;
                   Option.get (lid_of_ordinary_name constant.desc.constant_name), Option.map (fun (e: expr) ->
                     match e.desc with
                     | IntegerLiteral n -> Z.of_string (Clang.Ast.string_of_integer_literal n)
