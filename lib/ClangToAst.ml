@@ -2364,8 +2364,11 @@ let prepopulate_type_maps (ignored_dirs : string list) (decls : deduplicated_dec
 
                         fields)))
             | { desc = EnumDecl { constants; attributes = _; _ }; _ } ->
-                Some (CEnum (lazy (List.map (fun (constant: enum_constant)  ->
+                List.iter (fun (constant: enum_constant) ->
                   global_type_map := StringMap.add constant.desc.constant_name (TQualified lid, `Enum) !global_type_map;
+                ) constants;
+
+                Some (CEnum (lazy (List.map (fun (constant: enum_constant)  ->
                   Option.get (lid_of_ordinary_name constant.desc.constant_name), Option.map (fun (e: expr) ->
                     match e.desc with
                     | IntegerLiteral n -> Z.of_string (Clang.Ast.string_of_integer_literal n)

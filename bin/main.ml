@@ -97,6 +97,8 @@ Supported options:|}
      else
        [])
     deduped_files;
+  Format.printf "%!";
+  Format.eprintf "%!";
   let boxed_types, container_types, files =
     Scylla.ClangToAst.translate_compil_units files command_line_args
   in
