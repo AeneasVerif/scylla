@@ -12,5 +12,16 @@ pub enum E
   B
 }
 
-pub fn _main() -> i32 { return (E::A == E::B) as i32 }
+#[derive(PartialEq, Clone, Copy)]
+pub enum F
+{
+  C,
+  D
+}
+
+pub fn _main() -> i32
+{
+  let c: F = F::C;
+  return (E::A == E::B || c == F::D) as i32
+}
 fn main() { assert_eq!(0, _main()) }

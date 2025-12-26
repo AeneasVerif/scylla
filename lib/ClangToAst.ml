@@ -238,9 +238,9 @@ let find_var env name =
         match kind with
         | `GlobalOrFun -> with_type t (EQualified ([ path ], name)), ref false, None
         | `Enum -> with_type t (EEnum ([ path ], name)), ref false, None
-      with Not_found ->
+      with Not_found as e->
         Printf.eprintf "Could not find variable %s\n" name;
-        raise Not_found)
+        raise e)
 
 (* TYPES *)
 
@@ -910,6 +910,11 @@ let mk_binop lhs kind rhs =
       let poly_op = match kind with EQ -> Krml.Constant.PEq | NE -> PNeq | _ -> assert false in
       let op = with_type applied_typ (EPolyComp (poly_op, lhs.typ)) in
       with_type TBool (EApp (op, [ lhs; rhs ]))
+  | _, NE when rhs.node = EBufNull ->
+      (* No null-checks in Rust -- TODO: assert lhs is a name (and not NULL!) *)
+      Helpers.etrue
+  | _, EQ when rhs.node = EBufNull ->
+      Helpers.efalse
   | _ -> apply_op kind lhs rhs
 
 (* Translate expression [e].
@@ -1152,6 +1157,10 @@ and translate_expr (env : env) ?(must_return_value = false) (e : Clang.Ast.expr)
                 | _, TBuf (TInt UInt8, _) ->
                     (* Unless it's a UInt8 in which case we may omit the sizeof *)
                     adjust (translate_expr env len) (TInt SizeT)
+                | UnaryExpr { kind = SizeOf; argument }, _ ->
+                    let ty = extract_sizeof_ty env argument in
+                    assert (ty = assert_tbuf_or_tarray dst.typ);
+                    Helpers.mk_sizet 1
                 | _ -> fatal_error "ill-formed memcpy; type is %a" ptyp src.typ
               in
               with_type TUnit @@ EBufBlit (src, Helpers.zerou32, dst, Helpers.zerou32, len)
@@ -1409,6 +1418,8 @@ and translate_variant env branches (tag : expr) (e : expr option) =
 
 and translate_fields env t es =
   match LidMap.find (Helpers.assert_tlid t) !type_def_map with
+  | exception Not_found ->
+      fatal_error "No fields for type %a" ptyp t
   | CFlat lazy_fields ->
       let fields = Lazy.force lazy_fields in
       let field_names = List.map (fun x -> Option.get (fst x)) fields in
@@ -2459,13 +2470,25 @@ let split_into_files (lib_dirs : string list) (decls : deduplicated_decls) : gro
 
   let add_decl _ (decl, loc) (acc: _ StringMap.t) =
     (* Remember the file that this declaration is conceptually associated to *)
-    (* Krml.KPrint.bprintf "Declaration %s goes into file %s\n" (name_of_decl decl) (stem_of_file loc); *)
+    (* Krml.KPrint.bprintf "Declaration %a goes into file %s\n" DeclName.p (DeclName.of_decl decl) (stem_of_file loc); *)
     name_map := DeclMap.add (DeclName.of_decl decl) (stem_of_file loc) !name_map;
     (* Enum constants also get a name allocated, in the ordinary namespace, too *)
     match decl.desc with
     | EnumDecl { constants; _ } ->
         List.iter (fun c -> name_map := DeclMap.add (DeclName.of_enum_constant c) (stem_of_file loc) !name_map) constants
-    | _ -> ()
+    | TypedefDecl { underlying_type = { desc = Elaborated { keyword = Enum; named_type = { cxtype; desc = Enum { name; _ }; _ }; _ }; _ }; _ } -> 
+        if get_id_name name = "" then
+          (* See prepopulate_type_maps; sometimes, `typedef enum { ... } t;` is represented this way
+             (as opposed to seeing an EnumDecl above), but I don't know under which circumstances,
+             and I have yet to exercise this codepath with a unit test. *)
+          begin match Clang.(Decl.of_cxcursor (get_type_declaration cxtype)).desc with
+          | EnumDecl { constants; _ } ->
+              List.iter (fun c -> name_map := DeclMap.add (DeclName.of_enum_constant c) (stem_of_file loc) !name_map) constants
+          | _ -> failwith "enum typedef is not an enum after all"
+          end
+    | _ ->
+        Krml.KPrint.bprintf "This is NOT an EnumDecl\n";
+        ()
     ; ;
     (* Group this declaration with others that also "belong" to this file *)
     add_to_list (stem_of_file loc) decl acc
