@@ -38,7 +38,7 @@ build: lib/DataModel.ml
 scylla: build
 
 .PHONY: test
-test: regen-outputs test-cbor test-symcrypt test-pqcrypto test-bzip2
+test: regen-outputs test-cbor test-symcrypt test-pqcrypto test-bzip2 unit-tests
 	cd out/hacl && cargo test
 	cd out/cbor && cargo test
 
@@ -116,6 +116,25 @@ regen-outputs: test-hacl
 test-hacl: $(addprefix test/hacl/, $(HACL_SOURCES)) scylla
 	./scylla $(HACL_OPTS) $(SCYLLA_OPTS) $(addprefix test/hacl/, $(HACL_SOURCES)) --output out/hacl/src/
 
+# UNIT TESTS
+# ----------
+
+UNIT_TESTS = $(patsubst %.c,%.test,$(wildcard unit-tests/*.c))
+
+unit-tests: $(UNIT_TESTS)
+
+unit-tests/%.test: unit-tests/%.exe
+	$<
+
+unit-tests/%.exe: unit-tests/%.rs
+	rustc $< -o $@
+
+unit-tests/%.rs: unit-tests/%.c build
+	./scylla --output $(dir $@) $<
+	echo "fn main() { assert_eq!(0, _main()) }" >> $@
+
+# MISC
+# ----
 
 .PHONY: nix-magic
 nix-magic:
@@ -128,3 +147,4 @@ format-check:
 .PHONY: format-apply
 format-apply:
 	dune fmt >/dev/null || true
+
