@@ -803,12 +803,12 @@ let mk_binop lhs kind rhs =
              the other operand is implicitly converted as follows:
              integer or real floating type to double  *)
           if wl = Float64 || wr = Float64 then
-            wl, adjust (TInt Float64) lhs, adjust (TInt Float64) rhs
+            Float64, adjust (TInt Float64) lhs, adjust (TInt Float64) rhs
             (* 4) Otherwise, if one operand is float, float complex, or float imaginary(since C99),
              the other operand is implicitly converted as follows: integer type to float (the only
              real type possible is float, which remains as-is) *)
           else if wl = Float32 || wr = Float32 then
-            wl, adjust (TInt Float32) lhs, adjust (TInt Float32) rhs
+            Float32, adjust (TInt Float32) lhs, adjust (TInt Float32) rhs
             (* 5) Otherwise, both operands are integers. Both operands undergo integer promotions;
              then, after integer promotion, one of the following cases applies:
 
@@ -2487,7 +2487,6 @@ let split_into_files (lib_dirs : string list) (decls : deduplicated_decls) : gro
           | _ -> failwith "enum typedef is not an enum after all"
           end
     | _ ->
-        Krml.KPrint.bprintf "This is NOT an EnumDecl\n";
         ()
     ; ;
     (* Group this declaration with others that also "belong" to this file *)
