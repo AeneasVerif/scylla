@@ -1469,7 +1469,7 @@ and translate_initializer_list env t es =
           if List.length es <> 2 then
             fatal_error "Expected two initializers for slice type for fields elt and len";
           (* Ensuring the right order and names of initializers *)
-          let fields = List.map2 (fun e (f, t) -> translate_initializer_field env t e f) es [ "elt", Lazy.force t_slice; "len", TInt SizeT ] in
+          let fields = List.map2 (fun e (f, t) -> translate_initializer_field env t e f) es [ "elt", TBuf (Lazy.force t_slice, false); "len", TInt SizeT ] in
           snd (List.hd fields)
       | _ -> failwith "impossible"
       end
