@@ -934,11 +934,20 @@ and translate_expr (env : env) ?(must_return_value = false) (e : Clang.Ast.expr)
   if is_null e then
     with_type (TBuf (TAny, false)) EBufNull
   else
+    (* Unclear whether this fix belongs here on in krml *)
+    let avoid_trailing_dot s =
+      if s.[String.length s - 1] = '.' then
+        s ^ "0"
+      else
+        s
+    in
     match e.desc with
     | IntegerLiteral n -> begin
         match typ_from_clang e with
         | TInt w as t ->
-            let signed = K.is_signed w in
+            (* We sometimes get integer constants for float types -- but only if unsigned. Not sure
+               why. *)
+            let signed = match w with Float32 | Float64 -> false | _ -> K.is_signed w in
             with_type t (EConstant (w, Clang.Ast.string_of_integer_literal ~signed n))
         | TBool ->
             let signed = false in
@@ -947,7 +956,7 @@ and translate_expr (env : env) ?(must_return_value = false) (e : Clang.Ast.expr)
       end
     | FloatingLiteral f -> begin
         match typ_from_clang e with
-        | TInt w as t -> with_type t (EConstant (w, Clang.Ast.string_of_floating_literal f))
+        | TInt w as t -> with_type t (EConstant (w, avoid_trailing_dot (Clang.Ast.string_of_floating_literal f)))
         | t -> fatal_error "float literal does not have a float type, it has %a" ptyp t
       end
     | StringLiteral _ -> failwith "translate_expr: string literal"

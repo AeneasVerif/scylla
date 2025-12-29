@@ -7,6 +7,7 @@
 
 pub fn _main() -> i32
 {
-  let f: f32 = 1.f32;
-  return (f as f64 != 1.f64) as i32
+  let f: f32 = 1f32;
+  return (f as f64 != 1.0f64) as i32
 }
+fn main() { assert_eq!(0, _main()) }
