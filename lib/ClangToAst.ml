@@ -2050,10 +2050,23 @@ and translate_pat env t (expr: stmt) =
 and translate_branches (env : env) (t : typ) (curr_branch: (Krml.Ast.pattern list * Krml.Ast.expr list) option)
   (acc: Krml.Ast.branches) (s : stmt): Krml.Ast.branches
 =
+  let error_out msg =
+    Format.printf "Failure translating switch branch: %a\n" Clang.Stmt.pp s;
+    failwith msg
+  in
   let flush_curr_branch_into_acc curr_branch: Krml.Ast.branches =
     let curr_branches: Krml.Ast.branches =
       match curr_branch with
       | Some (curr_pats, curr_body) ->
+          let curr_body =
+            match curr_body with
+            | { node = EBreak; _ } :: curr_body ->
+                curr_body
+            | { node = EReturn _; _ } :: _ ->
+                curr_body
+            | _ ->
+                error_out "One of the branches does not end with break or return";
+          in
           (* We distribute multiple cases/default as multiple branches -- TODO, extend krml to support
              or-patterns without binders in them *)
           List.map (fun p ->
@@ -2066,8 +2079,7 @@ and translate_branches (env : env) (t : typ) (curr_branch: (Krml.Ast.pattern lis
   let extend_curr_branch (hd: stmt) =
     match curr_branch with
     | None -> 
-        Format.printf "Failure translating switch branch: %a\n" Clang.Stmt.pp s;
-        failwith "The switch begins with a statement that is neither a case or a default"
+        error_out "The switch begins with a statement that is neither a case or a default"
     | Some (curr_pats, curr_body) ->
         let hd =  translate_stmt env hd.desc in
         Some (curr_pats, hd :: curr_body)
@@ -2102,8 +2114,7 @@ and translate_branches (env : env) (t : typ) (curr_branch: (Krml.Ast.pattern lis
       List.rev (flush_curr_branch_into_acc curr_branch)
 
   | Case _ | Default _ ->
-      Format.printf "Failure translating switch branch: %a\n" Clang.Stmt.pp s;
-      failwith "Standalone case or default at the very end!"
+      error_out "Standalone case or default at the very end!"
 
   | _ ->
       (* Composition of the two cases above: extend current branch, then flush. *)
