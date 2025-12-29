@@ -92,6 +92,7 @@ Supported options:|}
   let lib_dirs = get_sdkroot () @ Clang.default_include_directories () in
   let files = Scylla.ClangToAst.split_into_files lib_dirs deduped_files in
   Scylla.ClangToAst.fill_type_maps
+    ~lib_dirs
     (if !Scylla.Options.ignore_lib_errors then
        lib_dirs
      else

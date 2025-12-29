@@ -2267,15 +2267,16 @@ let translate_file wanted_c_file file =
    successful, we run a first pass that pre-allocates names and types of functions, and records type
    definitions so that we can have enough type information accessible to generate a well-typed krml
    AST. This phase does not produce any declarations -- it merely fills some maps. *)
-let prepopulate_type_map ignored_dirs (decl : decl) =
+let prepopulate_type_map ~lib_dirs ignored_dirs (decl : decl) =
   decl_error_handler ~ignored_dirs decl () @@ fun () ->
   (* Always in the ordinary namespace *)
   let name = snd (DeclName.of_decl decl) in
   let t =
     match decl.desc with
     | Function fdecl ->
+        let is_in_lib_dir = has_prefix_in (filename_of_decl decl) lib_dirs in
         let binders, ret_type =
-          if Attributes.has_opaque_attr fdecl.attributes then
+          if Attributes.has_opaque_attr fdecl.attributes || is_in_lib_dir then
             compute_external_type fdecl
           else
             translate_params fdecl, translate_typ fdecl.function_type.result
@@ -2495,40 +2496,32 @@ type grouped_decls = (string * Clang.Ast.decl list) list
    groups declarations by file. Note that we have totally lost the order of declarations within a
    file here. *)
 let split_into_files (lib_dirs : string list) (decls : deduplicated_decls) : grouped_decls =
-  (* If this belongs to the C library, do not extract it. *)
-  let decls =
-    DeclMap.filter
-      (fun _ (_, filename) ->
-        if has_prefix_in filename lib_dirs then
-          false
-        else
-          true)
-      decls
-  in
-
   let add_decl _ (decl, loc) (acc: _ StringMap.t) =
     (* Remember the file that this declaration is conceptually associated to *)
     (* Krml.KPrint.bprintf "Declaration %a goes into file %s\n" DeclName.p (DeclName.of_decl decl) (stem_of_file loc); *)
     name_map := DeclMap.add (DeclName.of_decl decl) (stem_of_file loc) !name_map;
-    (* Enum constants also get a name allocated, in the ordinary namespace, too *)
-    match decl.desc with
-    | EnumDecl { constants; _ } ->
-        List.iter (fun c -> name_map := DeclMap.add (DeclName.of_enum_constant c) (stem_of_file loc) !name_map) constants
-    | TypedefDecl { underlying_type = { desc = Elaborated { keyword = Enum; named_type = { cxtype; desc = Enum { name; _ }; _ }; _ }; _ }; _ } -> 
-        if get_id_name name = "" then
-          (* See prepopulate_type_maps; sometimes, `typedef enum { ... } t;` is represented this way
-             (as opposed to seeing an EnumDecl above), but I don't know under which circumstances,
-             and I have yet to exercise this codepath with a unit test. *)
-          begin match Clang.(Decl.of_cxcursor (get_type_declaration cxtype)).desc with
-          | EnumDecl { constants; _ } ->
-              List.iter (fun c -> name_map := DeclMap.add (DeclName.of_enum_constant c) (stem_of_file loc) !name_map) constants
-          | _ -> failwith "enum typedef is not an enum after all"
-          end
-    | _ ->
-        ()
-    ; ;
-    (* Group this declaration with others that also "belong" to this file *)
-    add_to_list (stem_of_file loc) decl acc
+    if not (has_prefix_in loc lib_dirs) then begin
+      (* Enum constants also get a name allocated, in the ordinary namespace, too *)
+      match decl.desc with
+      | EnumDecl { constants; _ } ->
+          List.iter (fun c -> name_map := DeclMap.add (DeclName.of_enum_constant c) (stem_of_file loc) !name_map) constants
+      | TypedefDecl { underlying_type = { desc = Elaborated { keyword = Enum; named_type = { cxtype; desc = Enum { name; _ }; _ }; _ }; _ }; _ } -> 
+          if get_id_name name = "" then
+            (* See prepopulate_type_maps; sometimes, `typedef enum { ... } t;` is represented this way
+               (as opposed to seeing an EnumDecl above), but I don't know under which circumstances,
+               and I have yet to exercise this codepath with a unit test. *)
+            begin match Clang.(Decl.of_cxcursor (get_type_declaration cxtype)).desc with
+            | EnumDecl { constants; _ } ->
+                List.iter (fun c -> name_map := DeclMap.add (DeclName.of_enum_constant c) (stem_of_file loc) !name_map) constants
+            | _ -> failwith "enum typedef is not an enum after all"
+            end
+      | _ ->
+          ()
+      ; ;
+      (* Group this declaration with others that also "belong" to this file *)
+      add_to_list (stem_of_file loc) decl acc
+    end else
+      acc
   in
   let decl_map = DeclMap.fold add_decl decls StringMap.empty in
   StringMap.bindings decl_map |> List.map (fun (k, l) -> k, List.rev l)
@@ -2536,11 +2529,11 @@ let split_into_files (lib_dirs : string list) (decls : deduplicated_decls) : gro
 (* Third pass. Now that names can be resolved properly, we fill various type maps, and precompute type
    definitions while we're at it -- this makes sure type aliases are known, since they need to be
    substituted away (normalized) prior to doing the type-directed expression translation. *)
-let fill_type_maps (ignored_dirs : string list) (decls : deduplicated_decls) =
+let fill_type_maps ~lib_dirs (ignored_dirs : string list) (decls : deduplicated_decls) =
   DeclMap.iter (fun _ (decl, _) -> prepopulate_type_maps ignored_dirs decls decl) decls;
   (* This can only be done AFTER abbreviations are recorded, otherwise, the annotations cannot be
      applied properly. *)
-  DeclMap.iter (fun _ (decl, _) -> prepopulate_type_map ignored_dirs decl) decls
+  DeclMap.iter (fun _ (decl, _) -> prepopulate_type_map ~lib_dirs ignored_dirs decl) decls
 
 (* Final pass. Actually emit definitions. *)
 let translate_compil_units (ast : grouped_decls) (command_line_args : string list) =
