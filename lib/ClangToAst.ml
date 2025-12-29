@@ -1973,7 +1973,7 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
       let cond = translate_expr env cond in
 
       (* TODO most likely adjust *)
-      let branches = translate_branches env cond.typ body in
+      let branches = translate_branches env cond.typ None [] body in
       with_type (thd3 (List.hd branches)).typ (EMatch (Unchecked, cond, branches))
   | Case _ -> failwith "case not encapsulated in a switch"
   | Default _ -> failwith "default not encapsulated in a switch"
@@ -2010,43 +2010,105 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
   | AttributedStmt _ -> failwith "translate_stmt: AttributedStmt"
   | UnknownStmt _ -> failwith "translate_stmt: UnknownStmt"
 
-(* Translate case and default statements inside a switch to a list of branches for
-   structured pattern-matching.
-   The original C branches must consist of a list of `case` statements, terminated by
-   a `default` statement.
-   [t] corresponds to the type of the expression we are pattern-matching on, to
-   direct the translation
-   *)
-and translate_branches (env : env) (t : typ) (s : stmt) : Krml.Ast.branches =
-  match s.desc with
-  | Compound [ { desc = Default body; _ } ] ->
-      let body = translate_stmt env body.desc in
-      (* The last case is a fallback, the pattern corresponds to a wildcard *)
-      [ [], Krml.Ast.with_type TAny PWild, body ]
-  | Compound ({ desc = Case { lhs; rhs; body }; _ } :: tl) ->
+(* Translate a single statement, which starts with `case` or `default`, as a pattern, and return the
+ rest of the `case` / `default` block. Note that this is ENTIRELY syntactic, meaning that:
+
+   case A:     \ first statement
+     r = 0;    / 
+     break;    > second statement
+
+  appears as a case with a singlement statement underneath, FOLLOWED by another statement. *)
+and translate_pat env t (expr: stmt) =
+  match expr.desc with
+  | Default body ->
+      Krml.Ast.with_type t PWild, body
+  | Case { lhs; rhs; body } ->
       (* Unsupported GCC extension *)
       assert (rhs = None);
-      (* TODO: translate_pat *)
       let pat = adjust (translate_expr env lhs) t in
-      let body = translate_stmt env body.desc in
-      (* We only support pattern-matching on constants here.
-         This allows to translate switches corresponding to pattern
-         matching on a tagged union *)
-      begin
+      let pat =
+        (* We only support pattern-matching on constants here.
+           This allows to translate switches corresponding to pattern
+           matching on a tagged union *)
         match pat.node with
-        | EConstant n -> [], Krml.Ast.with_type pat.typ (PConstant n), body
-        | EEnum n -> [], Krml.Ast.with_type pat.typ (PEnum n), body
+        | EConstant n -> Krml.Ast.with_type pat.typ (PConstant n)
+        | EEnum n -> Krml.Ast.with_type pat.typ (PEnum n)
         | _ ->
             Format.printf "LHS is: %a\n" Clang.Expr.pp lhs;
             failwith "Only constant patterns supported"
-      end
-      :: translate_branches env t { s with desc = Compound tl }
-  | Compound [] ->
-      (* No default case found at the end -- c'est la vie *)
-      []
+      in
+      pat, body
   | _ ->
+      failwith "invalid argument for translate_pat"
+
+(* Translate case and default statements inside a switch to a list of branches for
+   structured pattern-matching.
+   [t] corresponds to the type of the expression we are pattern-matching on, to
+   direct the translation
+   Because of the subtlety, above, we have to keep the current branch as an accumulator.
+   *)
+and translate_branches (env : env) (t : typ) (curr_branch: (Krml.Ast.pattern list * Krml.Ast.expr list) option)
+  (acc: Krml.Ast.branches) (s : stmt): Krml.Ast.branches
+=
+  let flush_curr_branch_into_acc curr_branch: Krml.Ast.branches =
+    let curr_branches: Krml.Ast.branches =
+      match curr_branch with
+      | Some (curr_pats, curr_body) ->
+          (* We distribute multiple cases/default as multiple branches -- TODO, extend krml to support
+             or-patterns without binders in them *)
+          List.map (fun p ->
+            [], p, Krml.Ast.(with_type TUnit (ESequence (List.rev curr_body)))
+          ) curr_pats
+      | None -> []
+    in
+    List.rev_append curr_branches acc
+  in
+  let extend_curr_branch (hd: stmt) =
+    match curr_branch with
+    | None -> 
+        Format.printf "Failure translating switch branch: %a\n" Clang.Stmt.pp s;
+        failwith "The switch begins with a statement that is neither a case or a default"
+    | Some (curr_pats, curr_body) ->
+        let hd =  translate_stmt env hd.desc in
+        Some (curr_pats, hd :: curr_body)
+  in
+  match s.desc with
+  | Compound ({ desc = Case _ | Default _; _ } as head_case :: tl) ->
+      (* Starting a new case (i.e., a new branch): collect all the case/default statements at the
+         top of this branch. *)
+      let rec chop_cases acc (case: stmt) =
+        match case with
+        | { desc = Case _ | Default _; _ } ->
+            let lhs, body = translate_pat env t case in
+            chop_cases (lhs :: acc) body
+        | body ->
+            List.rev acc, body
+      in
+      let pats, body = chop_cases [] head_case in
+      (* Then, translate the statement directly under that (compound statement, single statement,
+         who knows...) *)
+      let body = translate_stmt env body.desc in
+      (* Wrap up the previous branch, push it into the accumulator, then... *)
+      let acc = flush_curr_branch_into_acc curr_branch in
+      (* ... start a new current branch *)
+      translate_branches env t (Some (pats, [ body ])) acc { s with desc = Compound tl }
+
+  | Compound (hd :: tl) ->
+      (* Not a case/default: this statement belongs to the current branch *)
+      translate_branches env t (extend_curr_branch hd) acc { s with desc = Compound tl }
+
+  | Compound [] ->
+      (* Nothing left to translate: flush current branch, return *)
+      List.rev (flush_curr_branch_into_acc curr_branch)
+
+  | Case _ | Default _ ->
       Format.printf "Failure translating switch branch: %a\n" Clang.Stmt.pp s;
-      failwith "Ill-formed switch branches: Expected a case or a default"
+      failwith "Standalone case or default at the very end!"
+
+  | _ ->
+      (* Composition of the two cases above: extend current branch, then flush. *)
+      List.rev (flush_curr_branch_into_acc (extend_curr_branch s))
+
 
 let translate_param (p : parameter) : binder =
   let p = p.desc in
