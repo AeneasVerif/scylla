@@ -129,6 +129,7 @@ unit-tests/%.test: unit-tests/%.exe
 unit-tests/%.exe: unit-tests/%.rs
 	rustc $< -o $@
 
+.PRECIOUS: unit-tests/%.rs
 unit-tests/%.rs: unit-tests/%.c build
 	./scylla --output $(dir $@) $<
 	echo "fn main() { assert_eq!(0, _main()) }" >> $@

@@ -970,7 +970,7 @@ and translate_expr (env : env) ?(must_return_value = false) (e : Clang.Ast.expr)
     (* We handled above the case of array initialization, this should
        be a struct initialization *)
     | CompoundLiteral { init = { desc = InitList l; _ }; _ } | InitList l ->
-        translate_fields env (typ_from_clang e) l
+        translate_initializer_list env (typ_from_clang e) l
     | UnaryOperator { kind = (PostInc | PreInc) as kind; operand } ->
         (* This is a special case for loop increments. The current Karamel
            extraction pipeline only supports a specific case of loops *)
@@ -1381,23 +1381,31 @@ and translate_expr (env : env) ?(must_return_value = false) (e : Clang.Ast.expr)
         Format.eprintf "Trying to translate expression %a@." Clang.Expr.pp e;
         failwith "translate_expr: unsupported expression"
 
-and translate_field_expr env (e : expr) field_name =
+(* Translation of initializers: we allow nested structs, arrays, etc. via mutual recursion between
+   translate_initializer_* *)
+and translate_initializer_field env field_type (e : expr) field_name =
+  (* FIXME this is almost certainly incorrect if there is a mix of designated initializers and
+     non-designated initializers *)
   match e.desc with
   | DesignatedInit { designators; init } -> begin
       match designators with
       | [ FieldDesignator name ] ->
-          (* FIXME -- adjust type against expected field type, obtained via a lookup in
-             struct_map *)
-          let e = translate_expr env init in
           if name <> field_name then
             failwith "TODO: out-of-order fields in a designated initializer";
-          Some name, e
+          Some name, translate_initializer_or_expr env field_type init
       | [ _ ] -> failwith "expected a field designator"
       | _ -> failwith "assigning to several fields during struct initialization is not supported"
     end
-  | _ -> Some field_name, translate_expr env e
+  | _ -> Some field_name, translate_initializer_or_expr env field_type e
 
-and translate_variant env branches (tag : expr) (e : expr option) =
+and translate_initializer_or_expr env t e =
+  match e.desc with
+  | InitList es ->
+      translate_initializer_list env t es
+  | DesignatedInit _ -> failwith "impossible"
+  | _ -> adjust (translate_expr env e) t
+
+and translate_initializer_variant env branches (tag : expr) (e : expr option) =
   let tag =
     match tag.desc with
     | DesignatedInit { init = { desc = IntegerLiteral n; _ }; _ } -> Clang.Ast.int_of_literal n
@@ -1425,40 +1433,41 @@ and translate_variant env branches (tag : expr) (e : expr option) =
           Format.eprintf "Expected initializer, got %a\n@." Clang.Expr.pp e;
           failwith "Incorrect expression for tagged union")
 
-and translate_fields env t es =
+and translate_initializer_list env t es =
   match LidMap.find (Helpers.assert_tlid t) !type_def_map with
   | exception Not_found ->
       fatal_error "No fields for type %a" ptyp t
   | CFlat lazy_fields ->
       let fields = Lazy.force lazy_fields in
-      let field_names = List.map (fun x -> Option.get (fst x)) fields in
-      if List.length field_names <> List.length es then
+      let field_names_and_types = List.map (fun (f, (t, _)) -> Option.get f, t) fields in
+      if List.length field_names_and_types <> List.length es then
         fatal_error "TODO: partial initializers (%s but %d initializers)"
-          (String.concat ", " field_names) (List.length es);
-      Krml.Ast.with_type t (EFlat (List.map2 (translate_field_expr env) es field_names))
+          (String.concat ", " (List.map fst field_names_and_types)) (List.length es);
+      Krml.Ast.with_type t (EFlat (List.map2 (fun e (f, t) ->
+        translate_initializer_field env t e f) es field_names_and_types))
   | CVariant lazy_branches ->
       let branches = Lazy.force lazy_branches in
       begin
         match es with
-        | [ tag ] -> Krml.Ast.with_type t (translate_variant env branches tag None)
-        | [ tag; e ] -> Krml.Ast.with_type t (translate_variant env branches tag (Some e))
+        | [ tag ] -> Krml.Ast.with_type t (translate_initializer_variant env branches tag None)
+        | [ tag; e ] -> Krml.Ast.with_type t (translate_initializer_variant env branches tag (Some e))
         | _ -> fatal_error "Expected two arguments for tagged union initializer"
       end
   | CTuple lazy_fields ->
       let fields = Lazy.force lazy_fields in
-      let field_names = List.map (fun x -> Option.get (fst x)) fields in
-      if List.length field_names <> List.length es then
+      let field_names_and_types = List.map (fun (f, (t, _)) -> Option.get f, t) fields in
+      if List.length field_names_and_types <> List.length es then
         fatal_error "TODO: partial initializers (%s but %d initializers)"
-          (String.concat ", " field_names) (List.length es);
+          (String.concat ", " (List.map fst field_names_and_types)) (List.length es);
       (* We go through translate_field_expr to ensure that the order of the
            fields matches the initializers *)
-      let fields = List.map2 (translate_field_expr env) es field_names in
+      let fields = List.map2 (fun e (f, t) -> translate_initializer_field env t e f) es field_names_and_types in
       Krml.Ast.with_type t (ETuple (List.map snd fields))
-  | CSlice _ ->
+  | CSlice t_slice ->
       if List.length es <> 2 then
         fatal_error "Expected two initializers for slice type for fields elt and len";
       (* Ensuring the right order and names of initializers *)
-      let fields = List.map2 (translate_field_expr env) es [ "elt"; "len" ] in
+      let fields = List.map2 (fun e (f, t) -> translate_initializer_field env t e f) es [ "elt", Lazy.force t_slice; "len", TInt SizeT ] in
       snd (List.hd fields)
   | _ -> failwith "impossible"
 
@@ -1548,9 +1557,9 @@ let translate_vardecl (env : env) (vdecl : var_decl_desc) : env * binder * Krml.
           Helpers.fresh_binder vname typ,
           Krml.Ast.with_type typ (EBufCreateL (Krml.Common.Stack, es)) ))
   | Some { desc = InitList l; _ } ->
-      (* Initializing a struct value.
+      (* Initializing a struct value or an array.
          TODO: We should check that the declaration type indeed corresponds to a struct type *)
-      add_var env (vname, typ), Helpers.fresh_binder vname typ, translate_fields env typ l
+      add_var env (vname, typ), Helpers.fresh_binder vname typ, translate_initializer_list env typ l
   | Some { desc = Call { callee; args }; _ }
   | Some { desc = Cast { operand = { desc = Call { callee; args }; _ }; _ }; _ }
     when is_calloc callee -> begin
@@ -1953,7 +1962,7 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
       let cond = translate_expr env cond in
 
       (* TODO most likely adjust *)
-      let branches = translate_branches env cond.typ body.desc in
+      let branches = translate_branches env cond.typ body in
       with_type (thd3 (List.hd branches)).typ (EMatch (Unchecked, cond, branches))
   | Case _ -> failwith "case not encapsulated in a switch"
   | Default _ -> failwith "default not encapsulated in a switch"
@@ -1997,8 +2006,8 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
    [t] corresponds to the type of the expression we are pattern-matching on, to
    direct the translation
    *)
-and translate_branches (env : env) (t : typ) (s : stmt_desc) : Krml.Ast.branches =
-  match s with
+and translate_branches (env : env) (t : typ) (s : stmt) : Krml.Ast.branches =
+  match s.desc with
   | Compound [ { desc = Default body; _ } ] ->
       let body = translate_stmt env body.desc in
       (* The last case is a fallback, the pattern corresponds to a wildcard *)
@@ -2006,6 +2015,7 @@ and translate_branches (env : env) (t : typ) (s : stmt_desc) : Krml.Ast.branches
   | Compound ({ desc = Case { lhs; rhs; body }; _ } :: tl) ->
       (* Unsupported GCC extension *)
       assert (rhs = None);
+      (* TODO: translate_pat *)
       let pat = adjust (translate_expr env lhs) t in
       let body = translate_stmt env body.desc in
       (* We only support pattern-matching on constants here.
@@ -2014,10 +2024,18 @@ and translate_branches (env : env) (t : typ) (s : stmt_desc) : Krml.Ast.branches
       begin
         match pat.node with
         | EConstant n -> [], Krml.Ast.with_type pat.typ (PConstant n), body
-        | _ -> failwith "Only constant patterns supported"
+        | EEnum n -> [], Krml.Ast.with_type pat.typ (PEnum n), body
+        | _ ->
+            Format.printf "LHS is: %a\n" Clang.Expr.pp lhs;
+            failwith "Only constant patterns supported"
       end
-      :: translate_branches env t (Compound tl)
-  | _ -> failwith "Ill-formed switch branches: Expected a case or a default"
+      :: translate_branches env t { s with desc = Compound tl }
+  | Compound [] ->
+      (* No default case found at the end -- c'est la vie *)
+      []
+  | _ ->
+      Format.printf "Failure translating switch branch: %a\n" Clang.Stmt.pp s;
+      failwith "Ill-formed switch branches: Expected a case or a default"
 
 let translate_param (p : parameter) : binder =
   let p = p.desc in
