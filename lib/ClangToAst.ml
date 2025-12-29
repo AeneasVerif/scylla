@@ -803,12 +803,12 @@ let mk_binop lhs kind rhs =
              the other operand is implicitly converted as follows:
              integer or real floating type to double  *)
           if wl = Float64 || wr = Float64 then
-            wl, adjust (TInt Float64) lhs, adjust (TInt Float64) rhs
+            Float64, adjust (TInt Float64) lhs, adjust (TInt Float64) rhs
             (* 4) Otherwise, if one operand is float, float complex, or float imaginary(since C99),
              the other operand is implicitly converted as follows: integer type to float (the only
              real type possible is float, which remains as-is) *)
           else if wl = Float32 || wr = Float32 then
-            wl, adjust (TInt Float32) lhs, adjust (TInt Float32) rhs
+            Float32, adjust (TInt Float32) lhs, adjust (TInt Float32) rhs
             (* 5) Otherwise, both operands are integers. Both operands undergo integer promotions;
              then, after integer promotion, one of the following cases applies:
 
@@ -934,11 +934,20 @@ and translate_expr (env : env) ?(must_return_value = false) (e : Clang.Ast.expr)
   if is_null e then
     with_type (TBuf (TAny, false)) EBufNull
   else
+    (* Unclear whether this fix belongs here on in krml *)
+    let avoid_trailing_dot s =
+      if s.[String.length s - 1] = '.' then
+        s ^ "0"
+      else
+        s
+    in
     match e.desc with
     | IntegerLiteral n -> begin
         match typ_from_clang e with
         | TInt w as t ->
-            let signed = K.is_signed w in
+            (* We sometimes get integer constants for float types -- but only if unsigned. Not sure
+               why. *)
+            let signed = match w with Float32 | Float64 -> false | _ -> K.is_signed w in
             with_type t (EConstant (w, Clang.Ast.string_of_integer_literal ~signed n))
         | TBool ->
             let signed = false in
@@ -947,7 +956,7 @@ and translate_expr (env : env) ?(must_return_value = false) (e : Clang.Ast.expr)
       end
     | FloatingLiteral f -> begin
         match typ_from_clang e with
-        | TInt w as t -> with_type t (EConstant (w, Clang.Ast.string_of_floating_literal f))
+        | TInt w as t -> with_type t (EConstant (w, avoid_trailing_dot (Clang.Ast.string_of_floating_literal f)))
         | t -> fatal_error "float literal does not have a float type, it has %a" ptyp t
       end
     | StringLiteral _ -> failwith "translate_expr: string literal"
@@ -2487,7 +2496,6 @@ let split_into_files (lib_dirs : string list) (decls : deduplicated_decls) : gro
           | _ -> failwith "enum typedef is not an enum after all"
           end
     | _ ->
-        Krml.KPrint.bprintf "This is NOT an EnumDecl\n";
         ()
     ; ;
     (* Group this declaration with others that also "belong" to this file *)
