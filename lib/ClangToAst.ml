@@ -1552,6 +1552,7 @@ let translate_vardecl (env : env) (vdecl : var_decl_desc) : env * binder * Krml.
          For instance, uint32[2] = { 0 };
       *)
       let size, size_e = extract_constarray_size vdecl.var_type in
+      let size_e = adjust size_e (TInt SizeT) in
       if List.length l = 1 then
         (* One element initializer, possibly repeated *)
         let e = translate_expr env (List.hd l) in
@@ -1710,6 +1711,7 @@ let translate_vardecl_malloc (env : env) (vdecl : var_decl_desc) (s : stmt list)
     | _ ->
         failwith ("argument of malloc if not of the shape `sizeof(type)` or `e * sizeof(type)` for " ^ vname)
   in
+  let n_elements = adjust n_elements (TInt SizeT) in
 
   (* Try to find a default value; fallback to synthesizing one, if the type permits. *)
   let init_val, rest =
@@ -2058,19 +2060,19 @@ and translate_branches (env : env) (t : typ) (curr_branch: (Krml.Ast.pattern lis
     let curr_branches: Krml.Ast.branches =
       match curr_branch with
       | Some (curr_pats, curr_body) ->
+          let curr_body = with_type TUnit (ESequence (List.rev curr_body)) in
           let curr_body =
-            match curr_body with
-            | { node = EBreak; _ } :: curr_body ->
-                curr_body
-            | { node = EReturn _; _ } :: _ ->
-                curr_body
-            | _ ->
-                error_out "One of the branches does not end with break or return";
+            try
+              FrontendHelpers.assert_branch_is_regular curr_body
+            with FrontendHelpers.NotRegular ->
+              Krml.KPrint.bprintf "expr is: %a\n" pexpr curr_body;
+              Printexc.print_backtrace stdout;
+              error_out "One of the branches does not end with break or return";
           in
           (* We distribute multiple cases/default as multiple branches -- TODO, extend krml to support
              or-patterns without binders in them *)
           List.map (fun p ->
-            [], p, Krml.Ast.(with_type TUnit (ESequence (List.rev curr_body)))
+            [], p, curr_body
           ) curr_pats
       | None -> []
     in
