@@ -1434,42 +1434,53 @@ and translate_initializer_variant env branches (tag : expr) (e : expr option) =
           failwith "Incorrect expression for tagged union")
 
 and translate_initializer_list env t es =
-  match LidMap.find (Helpers.assert_tlid t) !type_def_map with
-  | exception Not_found ->
-      fatal_error "No fields for type %a" ptyp t
-  | CFlat lazy_fields ->
-      let fields = Lazy.force lazy_fields in
-      let field_names_and_types = List.map (fun (f, (t, _)) -> Option.get f, t) fields in
-      if List.length field_names_and_types <> List.length es then
-        fatal_error "TODO: partial initializers (%s but %d initializers)"
-          (String.concat ", " (List.map fst field_names_and_types)) (List.length es);
-      Krml.Ast.with_type t (EFlat (List.map2 (fun e (f, t) ->
-        translate_initializer_field env t e f) es field_names_and_types))
-  | CVariant lazy_branches ->
-      let branches = Lazy.force lazy_branches in
-      begin
-        match es with
-        | [ tag ] -> Krml.Ast.with_type t (translate_initializer_variant env branches tag None)
-        | [ tag; e ] -> Krml.Ast.with_type t (translate_initializer_variant env branches tag (Some e))
-        | _ -> fatal_error "Expected two arguments for tagged union initializer"
+  match t with
+  | TQualified lid ->
+      begin match LidMap.find lid !type_def_map with
+      | exception Not_found ->
+          fatal_error "No fields for type %a" ptyp t
+      | CFlat lazy_fields ->
+          let fields = Lazy.force lazy_fields in
+          let field_names_and_types = List.map (fun (f, (t, _)) -> Option.get f, t) fields in
+          if List.length field_names_and_types <> List.length es then
+            fatal_error "TODO: partial initializers (%s but %d initializers)"
+              (String.concat ", " (List.map fst field_names_and_types)) (List.length es);
+          Krml.Ast.with_type t (EFlat (List.map2 (fun e (f, t) ->
+            translate_initializer_field env t e f) es field_names_and_types))
+      | CVariant lazy_branches ->
+          let branches = Lazy.force lazy_branches in
+          begin
+            match es with
+            | [ tag ] -> Krml.Ast.with_type t (translate_initializer_variant env branches tag None)
+            | [ tag; e ] -> Krml.Ast.with_type t (translate_initializer_variant env branches tag (Some e))
+            | _ -> fatal_error "Expected two arguments for tagged union initializer"
+          end
+      | CTuple lazy_fields ->
+          let fields = Lazy.force lazy_fields in
+          let field_names_and_types = List.map (fun (f, (t, _)) -> Option.get f, t) fields in
+          if List.length field_names_and_types <> List.length es then
+            fatal_error "TODO: partial initializers (%s but %d initializers)"
+              (String.concat ", " (List.map fst field_names_and_types)) (List.length es);
+          (* We go through translate_field_expr to ensure that the order of the
+               fields matches the initializers *)
+          let fields = List.map2 (fun e (f, t) -> translate_initializer_field env t e f) es field_names_and_types in
+          Krml.Ast.with_type t (ETuple (List.map snd fields))
+      | CSlice t_slice ->
+          if List.length es <> 2 then
+            fatal_error "Expected two initializers for slice type for fields elt and len";
+          (* Ensuring the right order and names of initializers *)
+          let fields = List.map2 (fun e (f, t) -> translate_initializer_field env t e f) es [ "elt", Lazy.force t_slice; "len", TInt SizeT ] in
+          snd (List.hd fields)
+      | _ -> failwith "impossible"
       end
-  | CTuple lazy_fields ->
-      let fields = Lazy.force lazy_fields in
-      let field_names_and_types = List.map (fun (f, (t, _)) -> Option.get f, t) fields in
-      if List.length field_names_and_types <> List.length es then
-        fatal_error "TODO: partial initializers (%s but %d initializers)"
-          (String.concat ", " (List.map fst field_names_and_types)) (List.length es);
-      (* We go through translate_field_expr to ensure that the order of the
-           fields matches the initializers *)
-      let fields = List.map2 (fun e (f, t) -> translate_initializer_field env t e f) es field_names_and_types in
-      Krml.Ast.with_type t (ETuple (List.map snd fields))
-  | CSlice t_slice ->
-      if List.length es <> 2 then
-        fatal_error "Expected two initializers for slice type for fields elt and len";
-      (* Ensuring the right order and names of initializers *)
-      let fields = List.map2 (fun e (f, t) -> translate_initializer_field env t e f) es [ "elt", Lazy.force t_slice; "len", TInt SizeT ] in
-      snd (List.hd fields)
-  | _ -> failwith "impossible"
+  | TArray (t_elt, n) ->
+      let n = int_of_string (snd n) in
+      if n <> List.length es then
+        failwith "TODO: zero-initialize the rest of the initializer list";
+      (* FIXME: do we need context to put the proper lifetime here? *)
+      with_type t (EBufCreateL (Stack, List.map (translate_initializer_or_expr env t_elt) es))
+  | _ ->
+      fatal_error "unexpected type for an initializer: neither a struct nor an array %a" ptyp t
 
 let is_tag_check env (cond : expr) =
   match cond.desc with
