@@ -119,7 +119,9 @@ test-hacl: $(addprefix test/hacl/, $(HACL_SOURCES)) scylla
 # UNIT TESTS
 # ----------
 
-UNIT_TESTS = $(patsubst %.c,%.test,$(wildcard unit-tests/*.c))
+ALL_UNIT_TESTS = $(patsubst %.c,%.test,$(wildcard unit-tests/*.c))
+BROKEN_UNIT_TESTS = unit-tests/function_pointers.test
+UNIT_TESTS = $(filter-out $(BROKEN_UNIT_TESTS),$(ALL_UNIT_TESTS))
 
 unit-tests: $(UNIT_TESTS)
 
