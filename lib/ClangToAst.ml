@@ -915,6 +915,8 @@ let mk_binop lhs kind rhs =
       Helpers.etrue
   | _, EQ when rhs.node = EBufNull ->
       Helpers.efalse
+  | _, Comma ->
+      with_type rhs.typ (ESequence [ lhs; rhs ])
   | _ -> apply_op kind lhs rhs
 
 (* Translate expression [e].
@@ -1592,10 +1594,14 @@ let translate_vardecl (env : env) (vdecl : var_decl_desc) : env * binder * Krml.
       let var, _, _ = get_id_name name |> find_var env in
       let e =
         match typ with
-        (* If we have a statement of the shape `let x = y` where y is a pointer,
-         this likely corresponds to taking a slice of y, starting at index 0.
-         We need to explicitly insert the EBufSub node to create a split tree *)
-        | TBuf _ | TArray _ -> with_type typ (EBufSub (var, Helpers.zero_usize))
+        | TBuf (TArrow _, _) ->
+            (* int ( *f)() = g; *)
+            with_type typ (EAddrOf var)
+        | TBuf _ | TArray _ ->
+            (* If we have a statement of the shape `let x = y` where y is a pointer,
+             this likely corresponds to taking a slice of y, starting at index 0.
+             We need to explicitly insert the EBufSub node to create a split tree *)
+            with_type typ (EBufSub (var, Helpers.zero_usize))
         | _ -> var
       in
       add_var env (vname, typ), Helpers.fresh_binder vname typ, e
@@ -2135,7 +2141,10 @@ let translate_params (fdecl : function_decl) =
   | Some params ->
       (* Not handling variadic parameters *)
       assert (not params.variadic);
-      List.map translate_param params.non_variadic
+      if params.non_variadic = [] then
+        [ Helpers.fresh_binder "unit" TUnit ]
+      else
+        List.map translate_param params.non_variadic
 
 let translate_fundecl (fdecl : function_decl) =
   let name = get_id_name fdecl.name in
@@ -2360,7 +2369,7 @@ let prepopulate_type_map ~lib_dirs ignored_dirs (decl : decl) =
     | _ -> None
   in
   Option.iter (fun t ->
-    Krml.KPrint.bprintf "Adding into type map %s --> %a\n" name ptyp t;
+    (* Krml.KPrint.bprintf "Adding into type map %s --> %a\n" name ptyp t; *)
     global_type_map := StringMap.add name (t, `GlobalOrFun) !global_type_map
   ) t
 
