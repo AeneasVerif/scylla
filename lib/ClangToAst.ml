@@ -2137,7 +2137,10 @@ let translate_params (fdecl : function_decl) =
   | Some params ->
       (* Not handling variadic parameters *)
       assert (not params.variadic);
-      List.map translate_param params.non_variadic
+      if params.non_variadic = [] then
+        [ Helpers.fresh_binder "unit" TUnit ]
+      else
+        List.map translate_param params.non_variadic
 
 let translate_fundecl (fdecl : function_decl) =
   let name = get_id_name fdecl.name in
@@ -2362,7 +2365,7 @@ let prepopulate_type_map ~lib_dirs ignored_dirs (decl : decl) =
     | _ -> None
   in
   Option.iter (fun t ->
-    Krml.KPrint.bprintf "Adding into type map %s --> %a\n" name ptyp t;
+    (* Krml.KPrint.bprintf "Adding into type map %s --> %a\n" name ptyp t; *)
     global_type_map := StringMap.add name (t, `GlobalOrFun) !global_type_map
   ) t
 

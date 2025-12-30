@@ -8,8 +8,11 @@
 pub fn _main() -> i32
 {
   init();
+  init2();
   return 0i32
 }
 
 pub fn init() { () }
+
+pub fn init2() { () }
 fn main() { assert_eq!(0, _main()) }
