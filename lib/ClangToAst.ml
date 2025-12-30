@@ -915,6 +915,8 @@ let mk_binop lhs kind rhs =
       Helpers.etrue
   | _, EQ when rhs.node = EBufNull ->
       Helpers.efalse
+  | _, Comma ->
+      with_type rhs.typ (ESequence [ lhs; rhs ])
   | _ -> apply_op kind lhs rhs
 
 (* Translate expression [e].
