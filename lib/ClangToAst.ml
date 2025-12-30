@@ -2330,22 +2330,6 @@ let translate_external_decl (decl : decl) =
         None
   | _ -> None
 
-let translate_file wanted_c_file file =
-  (* Format.printf "Hitting file %s (wanting: %s)\n@." (fst file) wanted_c_file; *)
-  let name, decls = file in
-  (* We extract both the .c and the .h together. However, we will not
-     extract function prototypes without a body, avoiding duplicated definitions *)
-  let basename = Filename.remove_extension (Filename.basename wanted_c_file) in
-  if name = basename then
-    Some (name, List.filter_map translate_decl decls)
-  else
-    (* translate_external_decl will only translate declarations annotated with the
-     `scylla_opaque` attribute.
-     Furthermore, a file that does not contain any definitions will be filtered
-     out in krml during the Rust translation.
-     Hence, we can apply translate_external_decl on any file in the tree *)
-    Some (name, List.filter_map translate_external_decl decls)
-
 (* C guarantees very little in terms of ordering of declarations. To make our translation
    successful, we run a first pass that pre-allocates names and types of functions, and records type
    definitions so that we can have enough type information accessible to generate a well-typed krml
