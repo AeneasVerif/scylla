@@ -1594,10 +1594,14 @@ let translate_vardecl (env : env) (vdecl : var_decl_desc) : env * binder * Krml.
       let var, _, _ = get_id_name name |> find_var env in
       let e =
         match typ with
-        (* If we have a statement of the shape `let x = y` where y is a pointer,
-         this likely corresponds to taking a slice of y, starting at index 0.
-         We need to explicitly insert the EBufSub node to create a split tree *)
-        | TBuf _ | TArray _ -> with_type typ (EBufSub (var, Helpers.zero_usize))
+        | TBuf (TArrow _, _) ->
+            (* int ( *f)() = g; *)
+            with_type typ (EAddrOf var)
+        | TBuf _ | TArray _ ->
+            (* If we have a statement of the shape `let x = y` where y is a pointer,
+             this likely corresponds to taking a slice of y, starting at index 0.
+             We need to explicitly insert the EBufSub node to create a split tree *)
+            with_type typ (EBufSub (var, Helpers.zero_usize))
         | _ -> var
       in
       add_var env (vname, typ), Helpers.fresh_binder vname typ, e
