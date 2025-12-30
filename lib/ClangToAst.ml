@@ -1215,14 +1215,13 @@ and translate_expr (env : env) ?(must_return_value = false) (e : Clang.Ast.expr)
     | Call { callee; args } ->
         (* Format.printf "Trying to translate function call %a@." Clang.Expr.pp callee; *)
         let callee = translate_expr env callee in
-        (* Krml.KPrint.bprintf "callee is %a and has type %a\n" pexpr callee ptyp callee.typ; *)
-        let t, ts =
-          Helpers.flatten_arrow
-            (match callee.typ with
-            | TBuf (t, _) -> t
-            | t -> t)
+        let callee = match callee.typ with
+          | TBuf (TArrow _ as t, _) -> Helpers.mk_deref t callee.node
+          | _ -> callee
         in
-        let args = List.map2 (fun x t -> adjust (translate_expr env x) t) args ts in
+        (* Krml.KPrint.bprintf "callee is %a and has type %a\n" pexpr callee ptyp callee.typ; *)
+        let t, ts = Helpers.flatten_arrow callee.typ in
+        let args = if ts = [ TUnit ] then [ Helpers.eunit ] else List.map2 (fun x t -> adjust (translate_expr env x) t) args ts in
         with_type t (EApp (callee, args))
     | Cast { qual_type; operand; _ } ->
         (* Format.printf "Cast %a@."  Clang.Expr.pp e; *)
@@ -2132,7 +2131,7 @@ let translate_param (p : parameter) : binder =
 
 let translate_params (fdecl : function_decl) =
   match fdecl.function_type.parameters with
-  | None -> []
+  | None -> [ Helpers.fresh_binder "unit" TUnit ]
   | Some params ->
       (* Not handling variadic parameters *)
       assert (not params.variadic);
@@ -2215,8 +2214,8 @@ let filename_of_decl (decl : decl) =
 let has_prefix_in filename lib_dirs =
   List.exists (fun x -> String.starts_with ~prefix:x filename) lib_dirs
 
-let decl_error_handler ?(ignored_dirs = []) (decl : decl) default f =
-  if Krml.Options.debug "Verbose" then
+let decl_error_handler ?(debug="Verbose") ?(ignored_dirs = []) (decl : decl) default f =
+  if Krml.Options.debug debug then
     Format.printf "Visiting declaration %a\n%a@." DeclName.pp (DeclName.of_decl decl) Clang.Decl.pp decl;
   try f ()
   with e ->
@@ -2260,11 +2259,13 @@ let compute_external_type (fdecl : function_decl) : binder list * typ =
         ( List.map2 (fun mut arg -> { arg with typ = set_const arg.typ (not mut) }) muts binders,
           set_const ret_type (not mut_ret) )
   in
+  let binders = if binders = [] then [ Helpers.fresh_binder "unit" TUnit ] else binders in
   binders, ret_type
 
 let translate_external_fundecl (fdecl : function_decl) =
   let name = get_id_name fdecl.name in
   let binders, ret_type = compute_external_type fdecl in
+  let binders = if binders = [] then [ Helpers.fresh_binder "unit" TUnit ] else binders in
   let fn_type = Helpers.fold_arrow (List.map (fun x -> x.typ) binders) ret_type in
   let lid = Option.get (lid_of_ordinary_name name) in
 
@@ -2272,8 +2273,7 @@ let translate_external_fundecl (fdecl : function_decl) =
     DExternal (None, [], 0, 0, lid, fn_type, List.map (fun x -> Krml.Ast.(x.node.name)) binders))
 
 let translate_decl (decl : decl) =
-  (* Format.printf "visiting decl %s\n%a\n@." (name_of_decl decl) Clang.Decl.pp decl; *)
-  decl_error_handler decl None @@ fun () ->
+  decl_error_handler ~debug:"TranslateDecl" decl None @@ fun () ->
   match decl.desc with
   | Function fdecl ->
       if Attributes.has_opaque_attr fdecl.attributes then
@@ -2327,7 +2327,6 @@ let translate_file wanted_c_file file =
   (* We extract both the .c and the .h together. However, we will not
      extract function prototypes without a body, avoiding duplicated definitions *)
   let basename = Filename.remove_extension (Filename.basename wanted_c_file) in
-  (* TODO: Multifile support *)
   if name = basename then
     Some (name, List.filter_map translate_decl decls)
   else
@@ -2360,8 +2359,8 @@ let prepopulate_type_map ~lib_dirs ignored_dirs (decl : decl) =
     | Var vdecl -> Some (translate_typ vdecl.var_type)
     | _ -> None
   in
-  (* Krml.KPrint.bprintf "Adding into type map %s --> %a\n" name ptyp t; *)
   Option.iter (fun t ->
+    Krml.KPrint.bprintf "Adding into type map %s --> %a\n" name ptyp t;
     global_type_map := StringMap.add name (t, `GlobalOrFun) !global_type_map
   ) t
 
