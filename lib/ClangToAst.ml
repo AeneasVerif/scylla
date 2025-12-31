@@ -1828,7 +1828,7 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
             let inc =
               match inc with
               | None -> Helpers.eunit
-              | Some inc -> translate_stmt env inc.desc
+              | Some inc -> adjust (translate_stmt env inc.desc) TUnit
             in
             let body = translate_stmt env body.desc in
             with_type TUnit
@@ -2014,7 +2014,7 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
         | None -> EReturn Helpers.eunit
         | Some e -> EReturn (adjust (translate_expr env e) env.ret_t))
   | Decl _ -> failwith "translate_stmt: decl"
-  | Expr e -> adjust (translate_expr env e) TUnit
+  | Expr e -> translate_expr env e
   | Try _ -> failwith "translate_stmt: try"
   | AttributedStmt _ -> failwith "translate_stmt: AttributedStmt"
   | UnknownStmt _ -> failwith "translate_stmt: UnknownStmt"
