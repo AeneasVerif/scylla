@@ -2293,8 +2293,21 @@ let translate_decl (decl : decl) =
         translate_fundecl fdecl
   | Var vdecl ->
       if vdecl.var_init = None then
-        (* Prototype, e.g. extern int x; *)
-        None
+        match vdecl.storage with
+        | Static ->
+            (* Objects with static storage are zero-initialized. *)
+            let typ = translate_typ vdecl.var_type in
+            let rec zero t =
+              with_type t (match t with
+              | TInt w -> EConstant (w, "0")
+              | TArray (t, n) -> EBufCreate (Eternal, zero t, with_type (TInt (fst n)) (EConstant n))
+              | _ -> failwith "don't know how to synthesize a zero-initializer here"
+              )
+            in
+            let lid = Option.get (lid_of_ordinary_name vdecl.var_name) in
+            Some (DGlobal ([], lid, 0, typ, zero typ))
+        | _ ->
+            None
       else
         let _, _, e = translate_vardecl empty_env vdecl in
         let lid = Option.get (lid_of_ordinary_name vdecl.var_name) in
