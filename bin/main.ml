@@ -87,21 +87,21 @@ Supported options:|}
   Krml.OutputRust.(directives := !directives ^ "\n#![allow(unused_mut)]");
   Krml.Warn.parse_warn_error !Krml.Options.warn_error;
 
-  let files = List.map Scylla.ClangToAst.read_file command_line_args in
-  let deduped_files = Scylla.ClangToAst.pick_most_suitable files in
+  let files = List.map Scylla.Driver.read_file command_line_args in
+  let deduped_files = Scylla.Driver.pick_most_suitable files in
   let lib_dirs = get_sdkroot () @ Clang.default_include_directories () in
-  let files = Scylla.ClangToAst.split_into_files lib_dirs deduped_files in
-  Scylla.ClangToAst.fill_type_maps
-    ~lib_dirs
-    (if !Scylla.Options.ignore_lib_errors then
+  let files = Scylla.Driver.split_into_files lib_dirs deduped_files in
+  let ignored_dirs = 
+    if !Scylla.Options.ignore_lib_errors then
        lib_dirs
      else
-       [])
-    deduped_files;
+       []
+  in
+  Scylla.Driver.fill_type_maps ~lib_dirs ignored_dirs deduped_files;
   Format.printf "%!";
   Format.eprintf "%!";
   let boxed_types, container_types, files =
-    Scylla.ClangToAst.translate_compil_units files command_line_args
+    Scylla.Driver.translate_compil_units ignored_dirs files command_line_args
   in
   (* Needed to handle tuples and slices *)
   let files = Krml.Inlining.inline_type_abbrevs files in
