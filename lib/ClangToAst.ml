@@ -418,7 +418,14 @@ let translate_builtin_typ (t : Clang.Ast.builtin_type) =
 
 let rec translate_typ (typ : qual_type) =
   match typ.desc with
-  | Pointer typ -> TBuf (translate_typ typ, typ.const)
+  | Pointer typ ->
+      let t = TBuf (translate_typ typ, typ.const) in
+      (* We change void* to uint8_t* on-the-fly, on the basis that void* is used to encode
+         polymorphism, but there is no such thing in Rust *)
+      begin match t with
+      | TBuf (TUnit, c) (* a.k.a. void* *) -> TBuf (TInt UInt8, c)
+      | _ -> t
+      end
   | LValueReference _ -> failwith "translate_typ: lvalue reference"
   | RValueReference _ -> failwith "translate_typ: rvalue reference"
   (* ConstantArray is a constant-size array. If we refine the AstToMiniRust analysis,

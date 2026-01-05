@@ -11,6 +11,43 @@ pub
 struct FStar_Pervasives_Native_option___uint8_t_ <'a>
 { pub tag: u8, pub v: &'a [u8] }
 
+pub fn Hacl_MAC_Poly1305_digest(state: &[Hacl_MAC_Poly1305_state_t], output: &mut [u8])
+{
+  let block_state: &[u64] = (state[0usize]).block_state;
+  let buf_: &[u8] = (state[0usize]).buf;
+  let total_len: u64 = (state[0usize]).total_len;
+  let k_: &[u8] = (state[0usize]).p_key;
+  let mut r: u32;
+  if total_len.wrapping_rem(16u32 as u64) == 0u64 && total_len > 0u64
+  { r = 16u32 }
+  else
+  { r = total_len.wrapping_rem(16u32 as u64) as u32 };
+  let buf_1: (&[u8], &[u8]) = buf_.split_at(0usize);
+  let mut r1: [u64; 25] = [0u64; 25usize];
+  let tmp_block_state: (&mut [u64], &mut [u64]) = r1.split_at_mut(0usize);
+  (tmp_block_state.1[0usize..25usize]).copy_from_slice(&block_state[0usize..25usize]);
+  let buf_multi: (&[u8], &[u8]) = (buf_1.1).split_at(0usize);
+  let mut ite: u32;
+  if r.wrapping_rem(16u32) == 0u32 && r > 0u32
+  { ite = 16u32 }
+  else
+  { ite = r.wrapping_rem(16u32) };
+  let buf_last: (&[u8], &[u8]) = (buf_multi.1).split_at((r as usize).wrapping_sub(ite as usize));
+  poly1305_update(tmp_block_state.1, 0u32, buf_last.0);
+  poly1305_update(tmp_block_state.1, r, buf_last.1);
+  let mut tmp: [u64; 25] = [0u64; 25usize];
+  (tmp[0usize..25usize]).copy_from_slice(&tmp_block_state.1[0usize..25usize]);
+  Hacl_MAC_Poly1305_poly1305_finish(output, k_, &mut tmp)
+}
+
+pub fn Hacl_MAC_Poly1305_free(state: &[Hacl_MAC_Poly1305_state_t])
+{
+  let k_: &[u8] = (state[0usize]).p_key;
+  let buf: &[u8] = (state[0usize]).buf;
+  let block_state: &[u64] = (state[0usize]).block_state;
+  ()
+}
+
 pub fn Hacl_MAC_Poly1305_mac(output: &mut [u8], input: &[u8], input_len: u32, key: &[u8])
 {
   let mut ctx: [u64; 25] = [0u64; 25usize];
@@ -183,6 +220,17 @@ pub fn Hacl_MAC_Poly1305_poly1305_init(ctx: &mut [u64], key: &[u8])
   rn_5.1[4usize] = rn.0[4usize]
 }
 
+pub fn Hacl_MAC_Poly1305_reset(state: &mut [Hacl_MAC_Poly1305_state_t], key: &[u8])
+{
+  let block_state: &mut [u64] = (state[0usize]).block_state;
+  let k_: &mut [u8] = (state[0usize]).p_key;
+  Hacl_MAC_Poly1305_poly1305_init(block_state, key);
+  (k_[0usize..32usize]).copy_from_slice(&key[0usize..32usize]);
+  let k_1: (&[u8], &[u8]) = k_.split_at(0usize);
+  let total_len: u64 = 0u32 as u64;
+  (state[0usize]).total_len = total_len
+}
+
 #[derive(PartialEq)]
 #[repr(C)]
 pub
@@ -191,7 +239,7 @@ struct Hacl_MAC_Poly1305_state_t <'a>
   pub block_state: &'a mut [u64],
   pub buf: &'a mut [u8],
   pub total_len: u64,
-  pub p_key: &'a [u8]
+  pub p_key: &'a mut [u8]
 }
 
 pub fn Hacl_MAC_Poly1305_update(
@@ -213,7 +261,6 @@ pub fn Hacl_MAC_Poly1305_update(
   {
     let buf: &mut [u8] = (state[0usize]).buf;
     let total_len1: u64 = (state[0usize]).total_len;
-    let k_1: &[u8] = (state[0usize]).p_key;
     let mut sz1: u32;
     if total_len1.wrapping_rem(16u32 as u64) == 0u64 && total_len1 > 0u64
     { sz1 = 16u32 }
@@ -222,14 +269,12 @@ pub fn Hacl_MAC_Poly1305_update(
     let buf2: (&mut [u8], &mut [u8]) = buf.split_at_mut(sz1 as usize);
     (buf2.1[0usize..chunk_len as usize]).copy_from_slice(&chunk[0usize..chunk_len as usize]);
     let total_len2: u64 = total_len1.wrapping_add(chunk_len as u64);
-    (state[0usize]).total_len = total_len2;
-    (state[0usize]).p_key = k_1
+    (state[0usize]).total_len = total_len2
   }
   else if sz == 0u32
   {
     let buf: &mut [u8] = (state[0usize]).buf;
     let total_len1: u64 = (state[0usize]).total_len;
-    let k_1: &[u8] = (state[0usize]).p_key;
     let mut sz1: u32;
     if total_len1.wrapping_rem(16u32 as u64) == 0u64 && total_len1 > 0u64
     { sz1 = 16u32 }
@@ -249,8 +294,7 @@ pub fn Hacl_MAC_Poly1305_update(
     poly1305_update(block_state, data1_len, data2.0);
     let dst: (&mut [u8], &mut [u8]) = buf.split_at_mut(0usize);
     (dst.1[0usize..data2_len as usize]).copy_from_slice(&data2.1[0usize..data2_len as usize]);
-    (state[0usize]).total_len = total_len1.wrapping_add(chunk_len as u64);
-    (state[0usize]).p_key = k_1
+    (state[0usize]).total_len = total_len1.wrapping_add(chunk_len as u64)
   }
   else
   {
@@ -259,7 +303,6 @@ pub fn Hacl_MAC_Poly1305_update(
     let chunk2: (&[u8], &[u8]) = (chunk1.1).split_at(diff as usize);
     let buf: &mut [u8] = (state[0usize]).buf;
     let total_len10: u64 = (state[0usize]).total_len;
-    let k_1: &[u8] = (state[0usize]).p_key;
     let mut sz10: u32;
     if total_len10.wrapping_rem(16u32 as u64) == 0u64 && total_len10 > 0u64
     { sz10 = 16u32 }
@@ -269,10 +312,8 @@ pub fn Hacl_MAC_Poly1305_update(
     (buf2.1[0usize..diff as usize]).copy_from_slice(&chunk2.0[0usize..diff as usize]);
     let total_len2: u64 = total_len10.wrapping_add(diff as u64);
     (state[0usize]).total_len = total_len2;
-    (state[0usize]).p_key = k_1;
     let buf0: &mut [u8] = (state[0usize]).buf;
     let total_len1: u64 = (state[0usize]).total_len;
-    let k_10: &[u8] = (state[0usize]).p_key;
     let mut sz1: u32;
     if total_len1.wrapping_rem(16u32 as u64) == 0u64 && total_len1 > 0u64
     { sz1 = 16u32 }
@@ -295,8 +336,7 @@ pub fn Hacl_MAC_Poly1305_update(
     poly1305_update(block_state, data1_len, data2.0);
     let dst: (&mut [u8], &mut [u8]) = buf0.split_at_mut(0usize);
     (dst.1[0usize..data2_len as usize]).copy_from_slice(&data2.1[0usize..data2_len as usize]);
-    (state[0usize]).total_len = total_len1.wrapping_add(chunk_len.wrapping_sub(diff) as u64);
-    (state[0usize]).p_key = k_10
+    (state[0usize]).total_len = total_len1.wrapping_add(chunk_len.wrapping_sub(diff) as u64)
   };
   return 0u8
 }

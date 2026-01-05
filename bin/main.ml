@@ -26,13 +26,18 @@ Supported options:|}
   let parse_bundle s =
     let open Krml.Bundle in
     let apis, pats, attrs = Krml.Parsers.bundle s in
-    ( apis,
-      List.map
-        (function
-          | Lid ([], m) -> Module [ m ]
-          | _ -> failwith "no dots in C to Rust bundles")
-        pats,
-      attrs )
+    (* A workaround because the lexer parses "module" names with an uppercase, meaning the bundling
+       syntax needs to use an uppercase as well, until such time as this is fixed. *)
+    let lower_module = function
+      | Lid ([], m) -> Module [ m ] (* hack to allow lowercase if there's a single module *)
+      | Module [ m ] -> Module [ String.lowercase_ascii m ]
+      | _ -> failwith "no dots in C to Rust bundles"
+    in
+    let lower_api = function
+      | [ m ] -> [ String.lowercase_ascii m ]
+      | _ -> failwith "no dots in C to Rust bundles"
+    in
+    List.map lower_api apis, List.map lower_module pats, attrs
   in
   (* Boxed types need to be explicitly annotated *)
   Krml.Options.no_box := true;
@@ -137,7 +142,6 @@ Supported options:|}
     fatal_error "%s:%d: input Ast is ill-typed, aborting" __FILE__ __LINE__;
 
   let files = Scylla.Simplify.materialize_casts#visit_files () files in
-  let files = Krml.Bundles.topological_sort files in
   let files = Krml.Bundles.make_bundles files in
 
   let files = Krml.Simplify.sequence_to_let#visit_files () files in
@@ -145,12 +149,12 @@ Supported options:|}
   (* To obtain correct visibility after bundling *)
   let files = Krml.Inlining.cross_call_analysis files in
 
+  if Krml.Options.debug "AstOptim" then
+    debug_ast files;
+
   let had_errors, files = Krml.Checker.check_everything ~warn:true files in
   if had_errors then
     fatal_error "%s:%d: input Ast is ill-typed (after optimizations), aborting" __FILE__ __LINE__;
-
-  if Krml.Options.debug "AstOptim" then
-    debug_ast files;
 
   Krml.Options.contained := Scylla.ClangToAst.LidSet.elements container_types |> List.map snd;
 
