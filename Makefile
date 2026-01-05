@@ -38,9 +38,7 @@ build: lib/DataModel.ml
 scylla: build
 
 .PHONY: test
-test: regen-outputs test-cbor test-symcrypt test-pqcrypto test-bzip2 unit-tests
-	cd out/hacl && cargo test
-	cd out/cbor && cargo test
+test: regen-outputs test-cbor test-symcrypt test-pqcrypto test-bzip2 test-hacl unit-tests
 
 # SYMCRYPT
 # --------
@@ -94,6 +92,7 @@ $(BZIP2_HOME)/bzip2-rs/target/release/libbzip2_rs.a: $(wildcard $(BZIP2_HOME)/*.
 .PHONY: test-cbor
 test-cbor: test/cbor/CBORDet.c test/cbor/CBORDet.h scylla
 	./scylla $(CBOR_OPTS) $(SCYLLA_OPTS) test/cbor/CBORDet.c --output out/cbor/src
+	cd out/cbor && cargo test
 
 # HACL
 # ----
@@ -115,6 +114,7 @@ regen-outputs: test-hacl
 .PHONY: test-hacl
 test-hacl: $(addprefix test/hacl/, $(HACL_SOURCES)) scylla
 	./scylla $(HACL_OPTS) $(SCYLLA_OPTS) $(addprefix test/hacl/, $(HACL_SOURCES)) --output out/hacl/src/
+	cd out/hacl && cargo test
 
 # UNIT TESTS
 # ----------
