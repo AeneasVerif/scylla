@@ -16,7 +16,7 @@ pub fn Hacl_Curve25519_51_ecdh(out: &mut [u8], r#priv: &[u8], r#pub: &[u8]) -> b
     res = (uu____0 as u32 & res as u32) as u8
   };
   let z: u8 = res;
-  let r: bool = z as u32 == 255u32;
+  let r: bool = z as i32 as u32 == 255u32;
   return ! r
 }
 

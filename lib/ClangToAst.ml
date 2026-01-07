@@ -777,6 +777,13 @@ let mk_binop lhs kind rhs =
   let apply_op kind lhs rhs =
     let kind = translate_binop kind in
 
+    let integer_promotion w e =
+      if rank (Helpers.assert_tint_or_tbool e.typ) < rank w then
+        adjust e (TInt w)
+      else
+        e
+    in
+
     (* "Note: integer promotions are applied only (...)
 
       to the operand of the unary arithmetic operators + and -, TODO
@@ -785,13 +792,9 @@ let mk_binop lhs kind rhs =
     let lhs, rhs =
       match kind with
       | BShiftL | BShiftR ->
-          let integer_promotion w e =
-            if rank (Helpers.assert_tint_or_tbool e.typ) < rank w then
-              adjust e (TInt w)
-            else
-              e
-          in
           integer_promotion Int32 lhs, integer_promotion UInt32 rhs (* krml wants u32 here *)
+      | Add | Sub ->
+          integer_promotion Int32 lhs, integer_promotion Int32 rhs
       | _ -> lhs, rhs
     in
 
@@ -819,43 +822,47 @@ let mk_binop lhs kind rhs =
              real type possible is float, which remains as-is) *)
           else if wl = Float32 || wr = Float32 then
             Float32, adjust (TInt Float32) lhs, adjust (TInt Float32) rhs
+          else
             (* 5) Otherwise, both operands are integers. Both operands undergo integer promotions;
-             then, after integer promotion, one of the following cases applies:
+             *)
+            let lhs = integer_promotion Int32 lhs in
+            let rhs = integer_promotion Int32 rhs in
+            let wl = Helpers.assert_tint_or_tbool lhs.typ in
+            let wr = Helpers.assert_tint_or_tbool rhs.typ in
+            (* then, after integer promotion, one of the following cases applies:
 
              "If the types are the same, that type is the common type. " *)
-          else if wl = wr then
-            wl, lhs, rhs
-            (*  "If the types have the same signedness (both signed or both unsigned), the operand
-              whose type has the lesser conversion rank is implicitly converted to the
-              other type." *)
-          else if is_signed wl = is_signed wr then
-            if rank wl < rank wr then
-              wr, adjust (TInt wr) lhs, rhs
-            else
-              wl, lhs, adjust (TInt wl) rhs
-          else if
+            if wl = wr then
+              wl, lhs, rhs
+              (*  "If the types have the same signedness (both signed or both unsigned), the operand
+                whose type has the lesser conversion rank is implicitly converted to the
+                other type." *)
+            else if is_signed wl = is_signed wr then
+              if rank wl < rank wr then
+                wr, adjust (TInt wr) lhs, rhs
+              else
+                wl, lhs, adjust (TInt wl) rhs
             (* "If the unsigned type has conversion rank greater than or equal to the rank of the
                signed type, then the operand with the signed type is implicitly converted to the
                unsigned type." *)
-            is_unsigned wl && rank wl >= rank wr
-          then
-            wl, lhs, adjust (TInt wl) rhs
-          else if is_unsigned wr && rank wr >= rank wl then
-            wr, adjust (TInt wr) lhs, rhs
-          else
-            (* "If the signed type can represent all values of the unsigned type, then the operand
-                 with the unsigned type is implicitly converted to the signed type."
-                 ^^^ This doesn't happen here -- I presume this is for the case where e.g. long and
-                 long long have the same size. *)
-            (* "Else, both operands undergo implicit conversion to the unsigned type counterpart of
-                 the signed operand's type." *)
-            let w =
-              if is_signed wl then
-                unsigned_of_signed wl
-              else
-                unsigned_of_signed wr
-            in
-            w, adjust (TInt w) lhs, adjust (TInt w) rhs
+            else if is_unsigned wl && rank wl >= rank wr then
+              wl, lhs, adjust (TInt wl) rhs
+            else if is_unsigned wr && rank wr >= rank wl then
+              wr, adjust (TInt wr) lhs, rhs
+            else
+              (* "If the signed type can represent all values of the unsigned type, then the operand
+                   with the unsigned type is implicitly converted to the signed type."
+                   ^^^ This doesn't happen here -- I presume this is for the case where e.g. long and
+                   long long have the same size. *)
+              (* "Else, both operands undergo implicit conversion to the unsigned type counterpart of
+                   the signed operand's type." *)
+              let w =
+                if is_signed wl then
+                  unsigned_of_signed wl
+                else
+                  unsigned_of_signed wr
+              in
+              w, adjust (TInt w) lhs, adjust (TInt w) rhs
       | _ -> Helpers.assert_tint_or_tbool lhs.typ, lhs, rhs
     in
 
@@ -916,6 +923,7 @@ let mk_binop lhs kind rhs =
           | _ -> EBufDiff (lhs, rhs)
         end
   | _, (EQ | NE) when lhs.typ = rhs.typ ->
+      (* NOTE: this skips arithmetic conversions and does generate slightly better code *)
       let applied_typ = Helpers.fold_arrow [ lhs.typ; rhs.typ ] TBool in
       let poly_op = match kind with EQ -> Krml.Constant.PEq | NE -> PNeq | _ -> assert false in
       let op = with_type applied_typ (EPolyComp (poly_op, lhs.typ)) in
