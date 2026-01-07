@@ -652,6 +652,7 @@ let translate_binop (kind : Clang.Ast.binary_operator_kind) : K.op =
   | PtrMemD | PtrMemI -> failwith "translate_binop: ptr mem"
   (* Disambiguation for pointer arithmetic must be done when calling translate_binop:
      This is a deeper rewriting than just disambiguating between two K.op *)
+  (* FIXME this ought to be AddW for unsigned types *)
   | Add -> Add
   | Sub -> Sub
   | Mul -> Mult
@@ -2001,14 +2002,13 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
         let body = translate_stmt env body.desc in
         with_type TUnit (EWhile (cond, body))
   | Do { body; cond } ->
-      (* The do statements first executes the body before behaving as a while loop.
-       We thus translate it as a sequence of the body and the corresponding while loop *)
       let body = translate_stmt env body.desc in
       let cond = adjust (translate_expr env cond) TBool in
       if is_trivial_false cond then
         body
       else
-        with_type TUnit (ESequence [ body; Krml.Ast.with_type TUnit (EWhile (cond, body)) ])
+        (* Rust is an expression language *)
+        with_type TUnit (EWhile (with_type TBool (ESequence [ body; cond ]), Helpers.eunit))
   | Label _ -> failwith "translate_stmt: label"
   | Goto _ -> failwith "translate_stmt: goto"
   | IndirectGoto _ -> failwith "translate_stmt: indirect goto"
