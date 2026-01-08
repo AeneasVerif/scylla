@@ -18,8 +18,8 @@ pub fn Hacl_Hash_SHA2_copy_256 <'a>(
   let mut b: Box<[u32]> = vec![0u32; 8usize].into_boxed_slice();
   let block_state: crate::hacl::streaming_types::Hacl_Streaming_Types_optional_32 =
       crate::hacl::streaming_types::Hacl_Streaming_Types_optional_32 { tag: 1u8, v: &mut b };
-  if block_state.tag as i32 as u32 == 0u32 { return [].into() };
-  if block_state.tag as i32 as u32 == 1u32
+  if block_state.tag as i32 == 0i32 { return [].into() };
+  if block_state.tag as i32 == 1i32
   {
     let block_state1: &mut [u32] = block_state.v;
     let block_state2: (&mut [u32], &mut [u32]) = block_state1.split_at_mut(0usize);
@@ -56,8 +56,8 @@ pub fn Hacl_Hash_SHA2_copy_512 <'a>(
   let mut b: Box<[u64]> = vec![0u64; 8usize].into_boxed_slice();
   let block_state: crate::hacl::streaming_types::Hacl_Streaming_Types_optional_64 =
       crate::hacl::streaming_types::Hacl_Streaming_Types_optional_64 { tag: 1u8, v: &mut b };
-  if block_state.tag as i32 as u32 == 0u32 { return [].into() };
-  if block_state.tag as i32 as u32 == 1u32
+  if block_state.tag as i32 == 0i32 { return [].into() };
+  if block_state.tag as i32 == 1i32
   {
     let block_state1: &mut [u64] = block_state.v;
     let block_state2: (&mut [u64], &mut [u64]) = block_state1.split_at_mut(0usize);
@@ -387,8 +387,8 @@ pub fn Hacl_Hash_SHA2_malloc_224 <'a>() ->
   let mut b: Box<[u32]> = vec![0u32; 8usize].into_boxed_slice();
   let block_state: crate::hacl::streaming_types::Hacl_Streaming_Types_optional_32 =
       crate::hacl::streaming_types::Hacl_Streaming_Types_optional_32 { tag: 1u8, v: &mut b };
-  if block_state.tag as i32 as u32 == 0u32 { return [].into() };
-  if block_state.tag as i32 as u32 == 1u32
+  if block_state.tag as i32 == 0i32 { return [].into() };
+  if block_state.tag as i32 == 1i32
   {
     let block_state1: &mut [u32] = block_state.v;
     let block_state2: (&mut [u32], &mut [u32]) = block_state1.split_at_mut(0usize);
@@ -424,8 +424,8 @@ pub fn Hacl_Hash_SHA2_malloc_256 <'a>() ->
   let mut b: Box<[u32]> = vec![0u32; 8usize].into_boxed_slice();
   let block_state: crate::hacl::streaming_types::Hacl_Streaming_Types_optional_32 =
       crate::hacl::streaming_types::Hacl_Streaming_Types_optional_32 { tag: 1u8, v: &mut b };
-  if block_state.tag as i32 as u32 == 0u32 { return [].into() };
-  if block_state.tag as i32 as u32 == 1u32
+  if block_state.tag as i32 == 0i32 { return [].into() };
+  if block_state.tag as i32 == 1i32
   {
     let block_state1: &mut [u32] = block_state.v;
     let block_state2: (&mut [u32], &mut [u32]) = block_state1.split_at_mut(0usize);
@@ -461,8 +461,8 @@ pub fn Hacl_Hash_SHA2_malloc_384 <'a>() ->
   let mut b: Box<[u64]> = vec![0u64; 8usize].into_boxed_slice();
   let block_state: crate::hacl::streaming_types::Hacl_Streaming_Types_optional_64 =
       crate::hacl::streaming_types::Hacl_Streaming_Types_optional_64 { tag: 1u8, v: &mut b };
-  if block_state.tag as i32 as u32 == 0u32 { return [].into() };
-  if block_state.tag as i32 as u32 == 1u32
+  if block_state.tag as i32 == 0i32 { return [].into() };
+  if block_state.tag as i32 == 1i32
   {
     let block_state1: &mut [u64] = block_state.v;
     let block_state2: (&mut [u64], &mut [u64]) = block_state1.split_at_mut(0usize);
@@ -498,8 +498,8 @@ pub fn Hacl_Hash_SHA2_malloc_512 <'a>() ->
   let mut b: Box<[u64]> = vec![0u64; 8usize].into_boxed_slice();
   let block_state: crate::hacl::streaming_types::Hacl_Streaming_Types_optional_64 =
       crate::hacl::streaming_types::Hacl_Streaming_Types_optional_64 { tag: 1u8, v: &mut b };
-  if block_state.tag as i32 as u32 == 0u32 { return [].into() };
-  if block_state.tag as i32 as u32 == 1u32
+  if block_state.tag as i32 == 0i32 { return [].into() };
+  if block_state.tag as i32 == 1i32
   {
     let block_state1: &mut [u64] = block_state.v;
     let block_state2: (&mut [u64], &mut [u64]) = block_state1.split_at_mut(0usize);

@@ -38,7 +38,7 @@ pub fn Hacl_AEAD_Chacha20Poly1305_decrypt(
     res = (uu____0 as u32 & res as u32) as u8
   };
   let z: u8 = res;
-  if z as i32 as u32 == 255u32
+  if z as u32 == 255u32
   {
     crate::hacl::chacha20::Hacl_Chacha20_chacha20_encrypt(
       input_len,

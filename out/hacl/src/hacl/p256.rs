@@ -378,7 +378,7 @@ pub fn Hacl_P256_raw_to_uncompressed(pk_raw: &[u8], pk: &mut [u8])
 pub fn Hacl_P256_uncompressed_to_raw(pk: &[u8], pk_raw: &mut [u8]) -> bool
 {
   let pk0: u8 = pk[0usize];
-  if pk0 as i32 as u32 != 4u32 { return false };
+  if pk0 as u32 != 4u32 { return false };
   (pk_raw[0usize..64usize]).copy_from_slice(&(&pk[1usize..])[0usize..64usize]);
   return true
 }
@@ -402,12 +402,12 @@ pub fn Hacl_P256_validate_public_key(public_key: &[u8]) -> bool
 {
   let s0: u8 = s[0usize];
   let s01: u8 = s0;
-  if ! (s01 as i32 as u32 == 2u32 || s01 as i32 as u32 == 3u32) { return false };
+  if ! (s01 as u32 == 2u32 || s01 as u32 == 3u32) { return false };
   let xb: (&[u8], &[u8]) = s.split_at(1usize);
   bn_from_bytes_be4(x, xb.1);
   let is_x_valid: u64 = bn_is_lt_prime_mask4(x);
   let is_x_valid1: bool = is_x_valid == 18446744073709551615u64;
-  let is_y_odd: bool = s01 as i32 as u32 == 3u32;
+  let is_y_odd: bool = s01 as u32 == 3u32;
   if ! is_x_valid1 { return false };
   let mut y2M: [u64; 4] = [0u64; 4usize];
   let mut xM: [u64; 4] = [0u64; 4usize];
