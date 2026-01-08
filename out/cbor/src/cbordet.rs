@@ -12,7 +12,7 @@ pub fn CBOR_Pulse_Raw_Compare_impl_cbor_compare(x1: cbor_raw, x2: cbor_raw) -> i
   let c: i16 = impl_uint8_compare(ty1, ty2);
   if c == 0i32 as i16
   {
-    if ty1 as u32 == 0u32 || ty1 as u32 == 1u32
+    if ty1 as i32 as u32 == 0u32 || ty1 as i32 as u32 == 1u32
     {
       let mut c_: cbor_int = Default::default();
       match x1 { cbor_raw::case_CBOR_Case_Int { v } => c_ = v, _ => panic!("") };
@@ -24,7 +24,7 @@ pub fn CBOR_Pulse_Raw_Compare_impl_cbor_compare(x1: cbor_raw, x2: cbor_raw) -> i
           CBOR_Spec_Raw_Base_raw_uint64 { size: c_0.cbor_int_size, value: c_0.cbor_int_value };
       return impl_raw_uint64_compare(i1, i2)
     }
-    else if ty1 as u32 == 2u32 || ty1 as u32 == 3u32
+    else if ty1 as i32 as u32 == 2u32 || ty1 as i32 as u32 == 3u32
     {
       let mut c_: cbor_string =
           cbor_string { cbor_string_type: 0u8, cbor_string_size: 0u8, cbor_string_ptr: &[] };
@@ -57,7 +57,7 @@ pub fn CBOR_Pulse_Raw_Compare_impl_cbor_compare(x1: cbor_raw, x2: cbor_raw) -> i
       else
       { return c1 }
     }
-    else if ty1 as u32 == 6u32
+    else if ty1 as i32 as u32 == 6u32
     {
       let mut tag1: CBOR_Spec_Raw_Base_raw_uint64 = Default::default();
       match x1
@@ -108,7 +108,7 @@ pub fn CBOR_Pulse_Raw_Compare_impl_cbor_compare(x1: cbor_raw, x2: cbor_raw) -> i
       else
       { return c1 }
     }
-    else if ty1 as u32 == 4u32
+    else if ty1 as i32 as u32 == 4u32
     {
       let mut len1: CBOR_Spec_Raw_Base_raw_uint64 = Default::default();
       match x1
@@ -398,7 +398,7 @@ pub fn CBOR_Pulse_Raw_Compare_impl_cbor_compare(x1: cbor_raw, x2: cbor_raw) -> i
       else
       { return c1 }
     }
-    else if ty1 as u32 == 5u32
+    else if ty1 as i32 as u32 == 5u32
     {
       let mut len1: CBOR_Spec_Raw_Base_raw_uint64 = Default::default();
       match x1
@@ -744,7 +744,7 @@ pub fn CBOR_Pulse_Raw_Format_Serialize_ser_(x_: cbor_raw, out: &mut [u8], offset
   let res1: usize = write_header(xh1, out, offset);
   let b0: initial_byte_t = xh1.fst;
   let mut res2: usize;
-  if b0.major_type as u32 == 2u32 || b0.major_type as u32 == 3u32
+  if b0.major_type as i32 as u32 == 2u32 || b0.major_type as i32 as u32 == 3u32
   {
     let scrut: cbor_raw = x_;
     let mut c_: cbor_string =
@@ -773,7 +773,7 @@ pub fn CBOR_Pulse_Raw_Format_Serialize_ser_(x_: cbor_raw, out: &mut [u8], offset
   else
   {
     let b: initial_byte_t = xh1.fst;
-    if b.major_type as u32 == 4u32
+    if b.major_type as i32 as u32 == 4u32
     {
       let mut ite: bool;
       match x_ { cbor_raw::case_CBOR_Case_Array { v } => ite = true, _ => ite = false };
@@ -861,7 +861,7 @@ pub fn CBOR_Pulse_Raw_Format_Serialize_ser_(x_: cbor_raw, out: &mut [u8], offset
     else
     {
       let b1: initial_byte_t = xh1.fst;
-      if b1.major_type as u32 == 5u32
+      if b1.major_type as i32 as u32 == 5u32
       {
         let mut ite: bool;
         match x_ { cbor_raw::case_CBOR_Case_Map { v } => ite = true, _ => ite = false };
@@ -955,7 +955,7 @@ pub fn CBOR_Pulse_Raw_Format_Serialize_ser_(x_: cbor_raw, out: &mut [u8], offset
       else
       {
         let b2: initial_byte_t = xh1.fst;
-        if b2.major_type as u32 == 6u32
+        if b2.major_type as i32 as u32 == 6u32
         {
           let mut ite: bool;
           match x_ { cbor_raw::case_CBOR_Case_Tagged { v } => ite = true, _ => ite = false };
@@ -1028,7 +1028,7 @@ pub fn CBOR_Pulse_Raw_Format_Serialize_siz_(x_: cbor_raw, out: &mut [usize]) -> 
   {
     let b0: initial_byte_t = xh1.fst;
     let mut res2: bool;
-    if b0.major_type as u32 == 2u32 || b0.major_type as u32 == 3u32
+    if b0.major_type as i32 as u32 == 2u32 || b0.major_type as i32 as u32 == 3u32
     {
       let scrut: cbor_raw = x_;
       let mut c_: cbor_string =
@@ -1052,7 +1052,7 @@ pub fn CBOR_Pulse_Raw_Format_Serialize_siz_(x_: cbor_raw, out: &mut [usize]) -> 
     else
     {
       let b: initial_byte_t = xh1.fst;
-      if b.major_type as u32 == 4u32
+      if b.major_type as i32 as u32 == 4u32
       {
         let mut ite: bool;
         match x_ { cbor_raw::case_CBOR_Case_Array { v } => ite = true, _ => ite = false };
@@ -1140,7 +1140,7 @@ pub fn CBOR_Pulse_Raw_Format_Serialize_siz_(x_: cbor_raw, out: &mut [usize]) -> 
       else
       {
         let b1: initial_byte_t = xh1.fst;
-        if b1.major_type as u32 == 5u32
+        if b1.major_type as i32 as u32 == 5u32
         {
           let mut ite: bool;
           match x_ { cbor_raw::case_CBOR_Case_Map { v } => ite = true, _ => ite = false };
@@ -1240,7 +1240,7 @@ pub fn CBOR_Pulse_Raw_Format_Serialize_siz_(x_: cbor_raw, out: &mut [usize]) -> 
         else
         {
           let b2: initial_byte_t = xh1.fst;
-          if b2.major_type as u32 == 6u32
+          if b2.major_type as i32 as u32 == 6u32
           {
             let mut ite: bool;
             match x_ { cbor_raw::case_CBOR_Case_Tagged { v } => ite = true, _ => ite = false };
@@ -1760,7 +1760,7 @@ pub fn cbor_det_map_get <'a>(x: cbor_raw <'a>, k: cbor_raw <'a>) ->
       pres = FStar_Pervasives_Native_option__CBOR_Pulse_Raw_Type_cbor_raw::v { v: value };
       pcont = false
     }
-    else if comp as i32 > 0i32 as i32
+    else if comp as i32 > 0i32 as i16 as i32
     { pcont = false }
     else
     {
@@ -2328,7 +2328,7 @@ pub fn cbor_raw_ints_optimal(a: &[u8]) -> bool
         v
       };
   let h: header = read_header(input10);
-  if get_header_major_type(h) as u32 == 7u32
+  if get_header_major_type(h) as i32 as u32 == 7u32
   { return true }
   else
   {
@@ -2426,7 +2426,7 @@ pub fn cbor_raw_sort_aux(a: &mut [cbor_map_entry], lo: usize, hi: usize) -> bool
           let comp: i16 = cbor_map_entry_raw_compare(x1, x2);
           if comp == 0i32 as i16
           { pres = false }
-          else if (comp as i32) < 0i32 as i32
+          else if (comp as i32) < 0i32 as i16 as i32
           {
             let i1_: usize = i1.wrapping_add(1u32 as usize);
             pi1 = i1_
@@ -2549,7 +2549,7 @@ pub fn cbor_raw_sorted(a: &[u8]) -> bool
         v
       };
   let h: header = read_header(ah);
-  if get_header_major_type(h) as u32 == 5u32
+  if get_header_major_type(h) as i32 as u32 == 5u32
   {
     let b: initial_byte_t = h.fst;
     let l: long_argument = h.snd;
@@ -2742,7 +2742,7 @@ pub fn cbor_read <'a>(input: &'a [u8]) -> cbor_raw <'a>
   let pc: &[u8] = outc;
   let h: header = ph;
   let typ: u8 = h.fst.major_type;
-  if typ as u32 == 0u32 || typ as u32 == 1u32
+  if typ as i32 as u32 == 0u32 || typ as i32 as u32 == 1u32
   {
     let b: initial_byte_t = h.fst;
     let l: long_argument = h.snd;
@@ -2795,7 +2795,7 @@ pub fn cbor_read <'a>(input: &'a [u8]) -> cbor_raw <'a>
         cbor_int { cbor_int_type: typ, cbor_int_size: i.size, cbor_int_value: i.value };
     return cbor_raw::case_CBOR_Case_Int { v: resi }
   }
-  else if typ as u32 == 3u32 || typ as u32 == 2u32
+  else if typ as i32 as u32 == 3u32 || typ as i32 as u32 == 2u32
   {
     let b: initial_byte_t = h.fst;
     let l: long_argument = h.snd;
@@ -2848,7 +2848,7 @@ pub fn cbor_read <'a>(input: &'a [u8]) -> cbor_raw <'a>
         cbor_string { cbor_string_type: typ, cbor_string_size: i.size, cbor_string_ptr: pc };
     return cbor_raw::case_CBOR_Case_String { v: ress }
   }
-  else if typ as u32 == 6u32
+  else if typ as i32 as u32 == 6u32
   {
     let b: initial_byte_t = h.fst;
     let l: long_argument = h.snd;
@@ -2901,7 +2901,7 @@ pub fn cbor_read <'a>(input: &'a [u8]) -> cbor_raw <'a>
         cbor_serialized { cbor_serialized_header: tag, cbor_serialized_payload: pc };
     return cbor_raw::case_CBOR_Case_Serialized_Tagged { v: rest }
   }
-  else if typ as u32 == 4u32
+  else if typ as i32 as u32 == 4u32
   {
     let b: initial_byte_t = h.fst;
     let l: long_argument = h.snd;
@@ -2954,7 +2954,7 @@ pub fn cbor_read <'a>(input: &'a [u8]) -> cbor_raw <'a>
         cbor_serialized { cbor_serialized_header: len, cbor_serialized_payload: pc };
     return cbor_raw::case_CBOR_Case_Serialized_Array { v: resa }
   }
-  else if typ as u32 == 5u32
+  else if typ as i32 as u32 == 5u32
   {
     let b: initial_byte_t = h.fst;
     let l: long_argument = h.snd;
@@ -3528,7 +3528,7 @@ pub fn cbor_validate_det_(input: &[u8]) -> usize
         let x: header = res100;
         let b0: initial_byte_t = x.fst;
         let mut i: usize;
-        if b0.major_type as u32 == 2u32 || b0.major_type as u32 == 3u32
+        if b0.major_type as i32 as u32 == 2u32 || b0.major_type as i32 as u32 == 3u32
         {
           let b: initial_byte_t = x.fst;
           let l: long_argument = x.snd;
@@ -3693,7 +3693,7 @@ pub fn cbor_validate_det_(input: &[u8]) -> usize
           let x: header = res100;
           let b0: initial_byte_t = x.fst;
           let mut i: usize;
-          if b0.major_type as u32 == 2u32 || b0.major_type as u32 == 3u32
+          if b0.major_type as i32 as u32 == 2u32 || b0.major_type as i32 as u32 == 3u32
           {
             let b: initial_byte_t = x.fst;
             let l: long_argument = x.snd;
@@ -3902,7 +3902,7 @@ pub fn impl_deterministically_encoded_cbor_map_key_order(a1: &[u8], a2: &[u8]) -
         v
       };
   let res3: i16 = lex_compare_bytes(k1, k2);
-  return (res3 as i32) < 0i32 as i32
+  return (res3 as i32) < 0i32 as i16 as i32
 }
 
 pub fn impl_major_type(x: cbor_raw) -> u8
@@ -3978,13 +3978,13 @@ pub fn impl_raw_uint64_compare(
 
 pub fn impl_raw_uint64_optimal(x: CBOR_Spec_Raw_Base_raw_uint64) -> bool
 {
-  if (x.value <= 23u32 as u64) == (x.size as u32 == 0u32)
+  if (x.value <= 23u32 as u64) == (x.size as i32 as u32 == 0u32)
   {
-    if (x.size as u32) <= 1u32
+    if (x.size as i32 as u32) <= 1u32
     { return true }
-    else if x.size as u32 == 2u32
+    else if x.size as i32 as u32 == 2u32
     { return 256u64 <= x.value }
-    else if x.size as u32 == 3u32
+    else if x.size as i32 as u32 == 3u32
     { return 65536u64 <= x.value }
     else
     { return 4294967296u64 <= x.value }
@@ -4059,13 +4059,13 @@ pub fn jump_header(input: &[u8], offset: usize) -> usize
   let res0: initial_byte_t = x;
   let res1: initial_byte_t = res0;
   let x0: initial_byte_t = res1;
-  if x0.additional_info as u32 == 24u32
+  if x0.additional_info as i32 as u32 == 24u32
   { return off1.wrapping_add(1u32 as usize) }
-  else if x0.additional_info as u32 == 25u32
+  else if x0.additional_info as i32 as u32 == 25u32
   { return off1.wrapping_add(2u32 as usize) }
-  else if x0.additional_info as u32 == 26u32
+  else if x0.additional_info as i32 as u32 == 26u32
   { return off1.wrapping_add(4u32 as usize) }
-  else if x0.additional_info as u32 == 27u32
+  else if x0.additional_info as i32 as u32 == 27u32
   { return off1.wrapping_add(8u32 as usize) }
   else
   { return off1.wrapping_add(0u32 as usize) }
@@ -4132,7 +4132,7 @@ pub fn jump_raw_data_item(input: &[u8], offset: usize) -> usize
     let x: header = res0;
     let b0: initial_byte_t = x.fst;
     let mut off1: usize;
-    if b0.major_type as u32 == 2u32 || b0.major_type as u32 == 3u32
+    if b0.major_type as i32 as u32 == 2u32 || b0.major_type as i32 as u32 == 3u32
     {
       let b: initial_byte_t = x.fst;
       let l: long_argument = x.snd;
@@ -4231,14 +4231,14 @@ pub fn jump_recursive_step_count_leaf(a: &[u8]) -> usize
       };
   let h: header = read_header(input10);
   let typ: u8 = get_header_major_type(h);
-  if typ as u32 == 4u32
+  if typ as i32 as u32 == 4u32
   {
     let b: initial_byte_t = h.fst;
     let l: long_argument = h.snd;
     let arg64: u64 = argument_as_uint64(b, l);
     return arg64 as usize
   }
-  else if typ as u32 == 5u32
+  else if typ as i32 as u32 == 5u32
   {
     let b: initial_byte_t = h.fst;
     let l: long_argument = h.snd;
@@ -4246,7 +4246,7 @@ pub fn jump_recursive_step_count_leaf(a: &[u8]) -> usize
     let arg: usize = arg64 as usize;
     return arg.wrapping_add(arg)
   }
-  else if typ as u32 == 6u32 { return 1u32 as usize } else { return 0u32 as usize }
+  else if typ as i32 as u32 == 6u32 { return 1u32 as usize } else { return 0u32 as usize }
 }
 
 pub fn len__CBOR_Pulse_Raw_Type_cbor_map_entry(
@@ -4380,7 +4380,7 @@ pub enum option__LowParse_Pulse_Base_with_perm__CBOR_Pulse_Raw_Type_cbor_raw_ <'
 
 pub fn raw_uint64_as_argument(t: u8, x: CBOR_Spec_Raw_Base_raw_uint64) -> header
 {
-  if x.size as u32 == 0u32
+  if x.size as i32 as u32 == 0u32
   {
     return
     header
@@ -4389,7 +4389,7 @@ pub fn raw_uint64_as_argument(t: u8, x: CBOR_Spec_Raw_Base_raw_uint64) -> header
       snd: long_argument::case_LongArgumentOther
     }
   }
-  else if x.size as u32 == 1u32
+  else if x.size as i32 as u32 == 1u32
   {
     return
     header
@@ -4398,7 +4398,7 @@ pub fn raw_uint64_as_argument(t: u8, x: CBOR_Spec_Raw_Base_raw_uint64) -> header
       snd: long_argument::case_LongArgumentU8 { v: x.value as u8 }
     }
   }
-  else if x.size as u32 == 2u32
+  else if x.size as i32 as u32 == 2u32
   {
     return
     header
@@ -4407,7 +4407,7 @@ pub fn raw_uint64_as_argument(t: u8, x: CBOR_Spec_Raw_Base_raw_uint64) -> header
       snd: long_argument::case_LongArgumentU16 { v: x.value as u16 }
     }
   }
-  else if x.size as u32 == 3u32
+  else if x.size as i32 as u32 == 3u32
   {
     return
     header
@@ -4467,9 +4467,9 @@ pub fn read_header(input: &[u8]) -> header
   let res0: initial_byte_t = x;
   let x1: initial_byte_t = res0;
   let mut x2: long_argument = long_argument::case_LongArgumentOther;
-  if x1.additional_info as u32 == 24u32
+  if x1.additional_info as i32 as u32 == 24u32
   {
-    if x1.major_type as u32 == 7u32
+    if x1.major_type as i32 as u32 == 7u32
     {
       let last: u8 = op_Array_Access__uint8_t(input2, 0u32 as usize);
       let res1: u8 = last;
@@ -4489,7 +4489,7 @@ pub fn read_header(input: &[u8]) -> header
       x2 = res10
     }
   }
-  else if x1.additional_info as u32 == 25u32
+  else if x1.additional_info as i32 as u32 == 25u32
   {
     let pos_: usize = 1u32 as usize;
     let last: u8 = op_Array_Access__uint8_t(input2, pos_);
@@ -4502,7 +4502,7 @@ pub fn read_header(input: &[u8]) -> header
     let res10: long_argument = res00;
     x2 = res10
   }
-  else if x1.additional_info as u32 == 26u32
+  else if x1.additional_info as i32 as u32 == 26u32
   {
     let pos_: usize = 3u32 as usize;
     let last: u8 = op_Array_Access__uint8_t(input2, pos_);
@@ -4523,7 +4523,7 @@ pub fn read_header(input: &[u8]) -> header
     let res10: long_argument = res00;
     x2 = res10
   }
-  else if x1.additional_info as u32 == 27u32
+  else if x1.additional_info as i32 as u32 == 27u32
   {
     let pos_: usize = 7u32 as usize;
     let last: u8 = op_Array_Access__uint8_t(input2, pos_);
@@ -4612,7 +4612,7 @@ pub fn set_bitfield_gen8(x: u8, lo: u32, hi: u32, v: u8) -> u8
 
 pub fn simple_value_as_argument(x: u8) -> header
 {
-  if (x as u32) <= 23u32
+  if (x as i32 as u32) <= 23u32
   {
     return
     header
@@ -4660,7 +4660,7 @@ pub fn size_header(x: header, out: &mut [usize]) -> bool
         dsnd__CBOR_Spec_Raw_EverParse_initial_byte_t_CBOR_Spec_Raw_EverParse_long_argument(x);
     crate::lowstar::ignore::ignore::<long_argument>(x2_);
     let mut res00: bool;
-    if xh1.additional_info as u32 == 24u32
+    if xh1.additional_info as i32 as u32 == 24u32
     {
       let capacity: usize = out[0usize];
       let mut res: bool;
@@ -4673,7 +4673,7 @@ pub fn size_header(x: header, out: &mut [usize]) -> bool
       };
       res00 = res
     }
-    else if xh1.additional_info as u32 == 25u32
+    else if xh1.additional_info as i32 as u32 == 25u32
     {
       let capacity: usize = out[0usize];
       let mut res: bool;
@@ -4686,7 +4686,7 @@ pub fn size_header(x: header, out: &mut [usize]) -> bool
       };
       res00 = res
     }
-    else if xh1.additional_info as u32 == 26u32
+    else if xh1.additional_info as i32 as u32 == 26u32
     {
       let capacity: usize = out[0usize];
       let mut res: bool;
@@ -4699,7 +4699,7 @@ pub fn size_header(x: header, out: &mut [usize]) -> bool
       };
       res00 = res
     }
-    else if xh1.additional_info as u32 == 27u32
+    else if xh1.additional_info as i32 as u32 == 27u32
     {
       let capacity: usize = out[0usize];
       let mut res: bool;
@@ -4866,11 +4866,11 @@ pub fn validate_header(input: &[u8], poffset: &mut [usize]) -> bool
     let res0: initial_byte_t = read_initial_byte_t(input_);
     let x: initial_byte_t = res0;
     let mut ite: bool;
-    if x.major_type as u32 == 7u32
-    { ite = (x.additional_info as u32) <= 24u32 }
+    if x.major_type as i32 as u32 == 7u32
+    { ite = (x.additional_info as i32 as u32) <= 24u32 }
     else
     { ite = true };
-    is_valid1 = ite && (x.additional_info as u32) < 28u32
+    is_valid1 = ite && (x.additional_info as i32 as u32) < 28u32
   }
   else
   { is_valid1 = false };
@@ -4927,9 +4927,9 @@ pub fn validate_header(input: &[u8], poffset: &mut [usize]) -> bool
     let res0: initial_byte_t = x;
     let res1: initial_byte_t = res0;
     let x0: initial_byte_t = res1;
-    if x0.additional_info as u32 == 24u32
+    if x0.additional_info as i32 as u32 == 24u32
     {
-      if x0.major_type as u32 == 7u32
+      if x0.major_type as i32 as u32 == 7u32
       {
         let offset20: usize = poffset[0usize];
         let offset3: usize = poffset[0usize];
@@ -4994,7 +4994,7 @@ pub fn validate_header(input: &[u8], poffset: &mut [usize]) -> bool
           let res00: u8 = last;
           let res10: u8 = res00;
           let x1: u8 = res10;
-          return 32u32 <= x1 as u32
+          return 32u32 <= x1 as i32 as u32
         }
         else
         { return false }
@@ -5011,7 +5011,7 @@ pub fn validate_header(input: &[u8], poffset: &mut [usize]) -> bool
         }
       }
     }
-    else if x0.additional_info as u32 == 25u32
+    else if x0.additional_info as i32 as u32 == 25u32
     {
       let offset20: usize = poffset[0usize];
       if (len__uint8_t(input)).wrapping_sub(offset20) < 2u32 as usize
@@ -5022,7 +5022,7 @@ pub fn validate_header(input: &[u8], poffset: &mut [usize]) -> bool
         return true
       }
     }
-    else if x0.additional_info as u32 == 26u32
+    else if x0.additional_info as i32 as u32 == 26u32
     {
       let offset20: usize = poffset[0usize];
       if (len__uint8_t(input)).wrapping_sub(offset20) < 4u32 as usize
@@ -5033,7 +5033,7 @@ pub fn validate_header(input: &[u8], poffset: &mut [usize]) -> bool
         return true
       }
     }
-    else if x0.additional_info as u32 == 27u32
+    else if x0.additional_info as i32 as u32 == 27u32
     {
       let offset20: usize = poffset[0usize];
       if (len__uint8_t(input)).wrapping_sub(offset20) < 8u32 as usize
@@ -5122,7 +5122,7 @@ pub fn validate_raw_data_item(input: &[u8], poffset: &mut [usize]) -> bool
         let res00: header = read_header(input_);
         let x: header = res00;
         let b0: initial_byte_t = x.fst;
-        if b0.major_type as u32 == 2u32 || b0.major_type as u32 == 3u32
+        if b0.major_type as i32 as u32 == 2u32 || b0.major_type as i32 as u32 == 3u32
         {
           let offset2: usize = poffset[0usize];
           let b: initial_byte_t = x.fst;
@@ -5250,7 +5250,7 @@ pub fn validate_recursive_step_count_leaf(a: &[u8], bound: usize, prem: &mut [us
       };
   let h: header = read_header(input10);
   let typ: u8 = get_header_major_type(h);
-  if typ as u32 == 4u32
+  if typ as i32 as u32 == 4u32
   {
     let b: initial_byte_t = h.fst;
     let l: long_argument = h.snd;
@@ -5258,7 +5258,7 @@ pub fn validate_recursive_step_count_leaf(a: &[u8], bound: usize, prem: &mut [us
     prem[0usize] = arg64 as usize;
     return false
   }
-  else if typ as u32 == 5u32
+  else if typ as i32 as u32 == 5u32
   {
     let b: initial_byte_t = h.fst;
     let l: long_argument = h.snd;
@@ -5274,7 +5274,7 @@ pub fn validate_recursive_step_count_leaf(a: &[u8], bound: usize, prem: &mut [us
       return false
     }
   }
-  else if typ as u32 == 6u32
+  else if typ as i32 as u32 == 6u32
   {
     prem[0usize] = 1u32 as usize;
     return false
@@ -5303,9 +5303,9 @@ pub fn write_header(x: header, out: &mut [u8], offset: usize) -> usize
   let x2_: long_argument =
       dsnd__CBOR_Spec_Raw_EverParse_initial_byte_t_CBOR_Spec_Raw_EverParse_long_argument(x);
   let mut res: usize;
-  if xh1.additional_info as u32 == 24u32
+  if xh1.additional_info as i32 as u32 == 24u32
   {
-    if xh1.major_type as u32 == 7u32
+    if xh1.major_type as i32 as u32 == 7u32
     {
       let pos_0: usize = res1.wrapping_add(1u32 as usize);
       let mut n_0: u8;
@@ -5322,7 +5322,7 @@ pub fn write_header(x: header, out: &mut [u8], offset: usize) -> usize
       res = pos_0
     }
   }
-  else if xh1.additional_info as u32 == 25u32
+  else if xh1.additional_info as i32 as u32 == 25u32
   {
     let pos_0: usize = res1.wrapping_add(2u32 as usize);
     let mut ite0: u16;
@@ -5337,7 +5337,7 @@ pub fn write_header(x: header, out: &mut [u8], offset: usize) -> usize
     out[pos_1] = lo;
     res = pos_0
   }
-  else if xh1.additional_info as u32 == 26u32
+  else if xh1.additional_info as i32 as u32 == 26u32
   {
     let pos_0: usize = res1.wrapping_add(4u32 as usize);
     let mut ite0: u32;
@@ -5360,7 +5360,7 @@ pub fn write_header(x: header, out: &mut [u8], offset: usize) -> usize
     out[pos_1] = lo;
     res = pos_0
   }
-  else if xh1.additional_info as u32 == 27u32
+  else if xh1.additional_info as i32 as u32 == 27u32
   {
     let pos_0: usize = res1.wrapping_add(8u32 as usize);
     let mut ite0: u64;

@@ -687,21 +687,6 @@ let translate_binop (kind : Clang.Ast.binary_operator_kind) : K.op =
   | Comma -> failwith "translate_binop: comma"
   | InvalidBinaryOperator -> failwith "translate_binop: invalid binop"
 
-(* A function that behaves like compare, but implements C's notion of rank
-   See https://en.cppreference.com/w/c/language/conversion#Integer_promotions *)
-let rank (w : Krml.Constant.width) =
-  match w with
-  | Bool -> 1
-  | UInt8 | Int8 -> 8
-  | UInt16 | Int16 -> 16
-  | UInt32 | Int32 -> 32
-  | UInt64 | Int64 -> 64
-  | SizeT | PtrdiffT -> 8 * DataModel.size_size
-  | _ -> invalid_arg "rank"
-
-let has_rank w =
-  not (Krml.Constant.is_float w)
-
 (* Adjust the type of expression `e` to be `t`. We synthesize types bottom-up, but sometimes, the
    context provides an expected type. So far, this happens in three situations:
    - condition expressions, which krml wants to be booleans, but which in C are integers
@@ -712,8 +697,6 @@ let adjust e t =
   match e.node, e.typ, t with
   (* Conversions to integers: we rewrite constants on the fly, or emit a cast. *)
   | EConstant (_, c), _, TInt w -> with_type t (EConstant (w, c))
-  | ECast (e, TInt w1), _, TInt w2 when has_rank w1 && has_rank w2 && rank w1 <= rank w2 ->
-      with_type t (ECast (e, t))
   | _, _, TInt _ ->
       if e.typ <> t then
         with_type t (ECast (e, t))
@@ -769,6 +752,18 @@ let mark_mut_if_variable env e =
   match e.node with
   | EBound i -> (List.nth env.vars i).mut := true
   | _ -> ()
+
+(* A function that behaves like compare, but implements C's notion of rank
+   See https://en.cppreference.com/w/c/language/conversion#Integer_promotions *)
+let rank (w : Krml.Constant.width) =
+  match w with
+  | Bool -> 1
+  | UInt8 | Int8 -> 8
+  | UInt16 | Int16 -> 16
+  | UInt32 | Int32 -> 32
+  | UInt64 | Int64 -> 64
+  | SizeT | PtrdiffT -> 8 * DataModel.size_size
+  | _ -> invalid_arg "rank"
 
 (* Deal with various discrepancies between C (arithmetic operations work for pointers, too) vs. krml
    AST (arithmetic operations are distinguished) *)
