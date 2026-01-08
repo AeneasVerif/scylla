@@ -793,8 +793,6 @@ let mk_binop lhs kind rhs =
       match kind with
       | BShiftL | BShiftR ->
           integer_promotion Int32 lhs, integer_promotion UInt32 rhs (* krml wants u32 here *)
-      | Add | Sub ->
-          integer_promotion Int32 lhs, integer_promotion Int32 rhs
       | _ -> lhs, rhs
     in
 
