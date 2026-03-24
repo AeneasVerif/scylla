@@ -2014,7 +2014,14 @@ let rec translate_stmt (env : env) (s : Clang.Ast.stmt_desc) : Krml.Ast.expr =
         body
       else
         (* Rust is an expression language *)
-        with_type TUnit (EWhile (with_type TBool (ESequence [ body; cond ]), Helpers.eunit))
+        with_type TUnit (EWhile (Helpers.etrue, with_type TUnit (ESequence [
+          body;
+          with_type TUnit (
+            EIfThenElse (Helpers.mk_not cond,
+              with_type TUnit EBreak,
+              Helpers.eunit
+            ))
+        ])))
   | Label _ -> failwith "translate_stmt: label"
   | Goto _ -> failwith "translate_stmt: goto"
   | IndirectGoto _ -> failwith "translate_stmt: indirect goto"
