@@ -19,7 +19,7 @@
         pkgs = import inputs.nixpkgs { inherit system overlays; };
 
         # LLVM version to use for clang bindings
-        llvmPackages = pkgs.llvmPackages_15;
+        llvmPackages = pkgs.llvmPackages_18;
         rustToolchain = pkgs.rust-bin.stable.latest.default;
 
         karamel = inputs.karamel.packages.${system}.default.override { ocamlPackages = pkgs.ocamlPackages; };
