@@ -78,7 +78,7 @@ git clone git@github.com:aeneasverif/scylla
 (cd scylla && opam install clangml refl sedlex visitors)
 
 # Step 4: misc. setup steps
-(cd karamel && make lib/AutoConfig.ml)
+(cd karamel && make lib/Version.ml)
 (cd scylla/lib && ln -s ../../karamel/lib krml)
 
 # Step 5: ready!
