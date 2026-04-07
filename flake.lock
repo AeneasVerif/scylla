@@ -20,14 +20,15 @@
     "fstar": {
       "inputs": {
         "flake-utils": "flake-utils",
+        "karamel-src": "karamel-src",
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1766107476,
-        "narHash": "sha256-6UPT64+5jez1ScmmHtliYmixns5Ss1I/JNdvLhj2vX4=",
+        "lastModified": 1775491517,
+        "narHash": "sha256-edY+8aR7EyLM5xJVC1UVYgA2oCBV0E/7gbPSdG9vAxM=",
         "owner": "fstarlang",
         "repo": "fstar",
-        "rev": "deeb29491622e92fc7c25eb6db1b61ac13f04460",
+        "rev": "52e424aa3f7fef3aec9cd506fe6a91556712aa9d",
         "type": "github"
       },
       "original": {
@@ -49,15 +50,32 @@
         ]
       },
       "locked": {
-        "lastModified": 1767827833,
-        "narHash": "sha256-ros0u+hskr/q0eDQmQZjW8PvAZVjH6a5wGd8nm6AEzo=",
+        "lastModified": 1775510260,
+        "narHash": "sha256-tnnaE7hEJIQBt7t5OYcMCvwZNI5wGjfWY8RtLlAE4OU=",
         "owner": "fstarlang",
         "repo": "karamel",
-        "rev": "e87771eb12d62b618402df692cab937b9d3cbacd",
+        "rev": "7fa3e2feda508eddd89bf7d7b91bad9c99e1984a",
         "type": "github"
       },
       "original": {
         "owner": "FStarLang",
+        "repo": "karamel",
+        "type": "github"
+      }
+    },
+    "karamel-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1774904518,
+        "narHash": "sha256-bwooU4bmESYnUA+O43r0yJsIHWFSz5AGEbz/7F5h/+A=",
+        "owner": "FStarLang",
+        "repo": "karamel",
+        "rev": "7bdb6cb2fd7661f4a0dade9ccae810451cb51746",
+        "type": "github"
+      },
+      "original": {
+        "owner": "FStarLang",
+        "ref": "fstar2",
         "repo": "karamel",
         "type": "github"
       }
